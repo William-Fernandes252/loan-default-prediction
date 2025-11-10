@@ -1,10 +1,10 @@
-# experimentos
+# Experiments
 
 <a target="_blank" href="https://cookiecutter-data-science.drivendata.org/">
     <img src="https://img.shields.io/badge/CCDS-Project%20template-328F97?logo=cookiecutter" />
 </a>
 
-Experimentos do projeto.
+Loan default prediction training and analysis.
 
 ## Project Organization
 

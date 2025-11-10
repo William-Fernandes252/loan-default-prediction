@@ -1,3 +1,3 @@
-# Comparativo de estratégias para lidar com desbalanceamento de dados na avaliação de risco de crédito
+# Loan Default Prediction - Comparing strategies for dealing with data imbalance in credit risk assessment
 
-Projeto de graduação em Ciência da Computação.
+My project for a Bachelor's degree in Computer Science.
