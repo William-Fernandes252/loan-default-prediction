@@ -34,7 +34,7 @@ A escolha das métricas de desempenho é determinante para uma avaliação preci
 
 Para o uso das métricas qualitativas, a contagem dos erros e acertos é representada com uma matriz \(M\), chamada de Matriz de confusão. Nesta matriz, cada elemento \(M_{ij}\) corresponde ao número de vezes com que uma instância da classe \(i\) foram identificados como pertencentes à classe \(j\).
 
-Em problemas de classificação binária desbalanceada, a classe mais frequente é chamada de majoritária, e a classe menos frequente é chamada de minoritária~\cite{Seiffert2008,Batuwita2010}. Com base nisso, a matriz de confusão para esses casos pode ser vista na Tabela~\ref{tab:matriz-confusao}.
+Em problemas de classificação binária desbalanceada, a classe mais frequente é chamada de majoritária, e a classe menos frequente é chamada de minoritária~\cite{Seiffert2008,Batuwita2010}. Com base nisso, a matriz de confusão para esse caso pode ser vista na Tabela~\ref{tab:matriz-confusao}.
 
 \begin{table}[htbp]
   \centering
@@ -49,10 +49,65 @@ Em problemas de classificação binária desbalanceada, a classe mais frequente 
   \label{tab:matriz-confusao}
 \end{table}
 
+A partir dessas contagens é possível definir algumas das métricas fundamentais para avaliação de modelos de classificação, as quais servem como base para a obtenção de indicadores de desempenho mais robustos~\cite{Naidu2023}.
+
+A \textbf{acurácia} de um modelo é definida como a taxa de acertos das previsões:
+\begin{center}
+  Acurácia = $\frac{TP + TN}{TP + FP + TN + FN}$
+  \label{eq:acuracia}
+\end{center}
+
+A \textbf{sensibilidade} (ou \textbf{\textit{recall}}) mede a capacidade do modelo de identificar corretamente os casos positivos, sendo definida como a taxa de verdadeiros positivos:
+\begin{center}
+  Sensibilidade = $\frac{TP}{TP + FN}$
+  \label{eq:sensibilidade}
+\end{center}
+
+A \textbf{precisão} mede a proporção de acertos entre as previsões positivas:
+\begin{center}
+  Precisão = $\frac{TP}{TP + FP}$
+  \label{eq:precisao}
+\end{center}
+
+A \textbf{especificidade} é oposto da sensibilidade, medindo a capacidade do modelo de prever corretamente instâncias negativas:
+\begin{center}
+  Especificidade = $\frac{TN}{TN + FP}$
+  \label{eq:especificidade}
+\end{center}
+
+Analisando estas definições, fica claro porque elas não são suficientes para avaliar a performance de forma assertiva em um cenário de desbalanceamento entre as classes. Se um modelo simplesmente classificasse todas as instâncias de um conjunto como negativas, onde essa classe representasse, por exemplo, \(99\%\), a acurácia seria \(99\%\). Apesar de parecer promissor, tal modelo seria inútil na prática, pois não identifica nenhum caso de interesse~\cite{Naidu2023}. A sua sensibilidade nula e precisão indefinida (por conta de uma divisão por \(0\)) torna isso evidente. Métricas compostas, como \textit{F1-score}, acurácia balanceada, \textit{G-mean}, combinam as métricas básicas para possibilitar uma análise mais equilibrada e assertiva nesse contexto.
+
+O \textbf{\textit{F1-score}} foi criado para balancear a sensibilidade e a precisão de um modelo, sendo definido como a média harmônica entre estes dois indicadores~\cite{Grandini2020}:
+\begin{center}
+  \textit{F1-score} = $\frac{Precisão \cdot Sensibilidade}{Precisão + Sensibilidade}$
+  \label{eq:f1-score}
+\end{center}
+
+A \textbf{acurácia balanceada} é uma das correções mais diretas e robustas para o problema da acurácia padrão. Em vez de considerar a média de todas as previsões, a acurácia balanceada calcula o desempenho médio de cada classe individualmente e depois faz uma média. Isso garante que um modelo bem avaliado por essa métrica é eficaz em todas as classes~\cite{Grandini2020}. No caso binário, ela é definida como a média entre a sensibilidade e a especificidade do modelo, que representam, respectivamente, os acertos nas classes positiva e negativa:
+\begin{center}
+  Acurácia balanceada = $\frac{Sensibilidade + Especificidade}{2}$
+  \label{eq:acuracia-balanceada}
+\end{center}
+
+O \textbf{\textit{G-mean}} também sumariza o desempenho do modelo nas classes de forma isolada, porém diferente da acurácia balanceada, que aplica uma média aritmética, a média geométrica é utilizada. Para a classificação binária, a sua definição é dada por:
+\begin{center}
+  \textit{G-mean} = $\sqrt{Sensibilidade \cdot Especificidade}$
+  \label{g-mean}
+\end{center}
+O \textit{G-mean} tem sido priorizado em problemas com conjuntos de dados altamente desbalanceados, principalmente por ser pouco influenciado pela distribuição das classes, e exigir que o modelo apresente um bom desempenho em todas as classes simultaneamente~~\cite{Namvar2018,Ri2020}.
+
+Por fim, a área sob a curva \textit{Receiver Operating Characteristic} (ROC), ou \textbf{AUC}, revela a capacidade do modelo em separar as instâncias das classes positiva e negativa, através de uma análise da relação entre a Taxa de Verdadeiros Positivos (TPR) e a Taxa de Falsos Positivos (FPR) para diferentes limiares de decisão~\cite{Naidu2023}. Essa métrica pode ser interpretada da seguinte maneira:
+\begin{itemize}
+  \item $\textbf{AUC = 1}$: indica que todas as amostras positivas tem maior probabilidade de serem classificadas corretamente, ou seja, um modelo ideal;
+  \item $\textbf{AUC = 0.5}$: um modelo com desempenho igual a uma previsão aleatória. A curva ROC segue a linha diagonal do gráfico;
+  \item $\textbf{0.5 < AUC <= 1}$: um modelo com poder de discriminação.
+\end{itemize}
+
+Por depender apenas da sensibilidade e da especificidade do modelo, a AUC não é afetada pela distribuição das classes. Naidu, Zuva e Sibanda (\citeyear{Naidu2023}) mostraram que, embora métricas como acurácia, precisão e \textit{recall} e \textit{F1-score} sejam mais utilizadas na prática, a AUC é mais perspicaz quanto a adequação da eficácia de um algoritmo.
+
 \section{Técnicas de re-amostragem}
 
 Considerando a perda de desempenho que muitos algoritmos apresentam diante de dados desbalanceados, alguns métodos foram desenvolvidos para mitigar a discrepância entre as classes e evitar o surgimento de viés a favor da classe majoritária. Esse processo, conhecido de re-amostragem, altera o conjunto de dados adicionando ou removendo instâncias seguindo algum critério~\cite{Chakravarthy2019}. Essas abordagens são amplamente aplicadas devido a sua versatilidade: como envolvem apenas os dados, o seu uso independe de qualquer modelo específico ou contexto de classificação~\cite{Carvalho2025}. As técnicas de re-amostragem podem ser divididas em três tipos~\cite{Haixiang2017}:
-
 \begin{itemize}
   \item sobre-amostragem, (ou \textit{oversampling}) consiste em criar novas instâncias da classe minoritária, reduzindo o grau de desbalanceamento do conjunto de dados;
   \item sub-amostragem (ou \textit{under-sampling}), que remove amostras da classe majoritária~\cite{Mohammed2020};
