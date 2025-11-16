@@ -204,84 +204,84 @@ def preprocess_corporate_credit_data(raw_data: pl.DataFrame) -> pl.DataFrame:
 @Dataset.TAIWAN_CREDIT.register_dataset_processor()
 def preprocess_taiwan_credit_data(raw_data: pl.DataFrame) -> pl.DataFrame:
     """
-    Pré-processa o conjunto de dados de Cartão de Crédito de Taiwan.
+    Preprocesses the Taiwan Credit Card dataset.
 
-    Esta função realiza as seguintes etapas com base na descrição do dataset
-    e na metodologia do PGC:
-    1.  Renomeia a variável-alvo 'default.payment.next.month' para 'target'
-        para consistência.
-    2.  Remove a coluna 'ID' por não ser preditiva.
-    3.  Limpa e agrupa as features categóricas 'EDUCATION' e 'MARRIAGE'
-        para remover valores "desconhecidos" ou "outros" e simplificar.
-    4.  Mapeia 'SEX' para strings ('Male', 'Female') para clareza.
-    5.  Normaliza as colunas 'PAY_0' a 'PAY_6', tratando "pagamento em dia"
-        (valores <= 0) como 0 e mantendo os meses de atraso (1-9).
-    6.  Converte as colunas categóricas limpas para one-hot encoding.
+    This function performs the following steps based on the dataset description
+    and the PGC methodology:
+    1.  Renames the target variable 'default.payment.next.month' to 'target'
+        for consistency.
+    2.  Removes the 'ID' column as it is not predictive.
+    3.  Cleans and groups the categorical features 'EDUCATION' and 'MARRIAGE'
+        to remove "unknown" or "other" values and simplify.
+    4.  Maps 'SEX' to strings ('Male', 'Female') for clarity.
+    5.  Normalizes the columns 'PAY_0' to 'PAY_6', treating "on-time payment"
+        (values <= 0) as 0 and keeping the months of delay (1-9).
+    6.  Converts the cleaned categorical columns to one-hot encoding.
 
     Args:
-        df: O DataFrame Polars bruto do Taiwan Credit.
+        df: The raw Polars DataFrame of Taiwan Credit.
 
     Returns:
-        Um DataFrame Polars limpo e pronto para o pipeline de ML.
+        A clean Polars DataFrame ready for the ML pipeline.
     """
 
-    # --- 1. Definição de Mapeamentos ---
+    # --- 1. Definition of Mappings ---
 
-    # Colunas de status de pagamento
+    # Payment status columns
     pay_cols = [
         col
         for col in raw_data.columns
         if any([col.startswith("PAY_"), col.startswith("BILL_"), col.startswith("PAY_AMT_")])
     ]
 
-    # --- 2. Início do Pré-processamento (Lazy) ---
+    # --- 2. Start of Preprocessing (Lazy) ---
     df_processed = (
         raw_data.lazy()
         .with_columns(
-            # Renomear o alvo para consistência
+            # Rename target for consistency
             pl.col("default.payment.next.month").alias("target"),
-            # Limpar EDUCATION
+            # Clean EDUCATION
             pl.when(pl.col("EDUCATION") <= 3)
             .then(pl.col("EDUCATION"))
             .otherwise(4)
-            .cast(pl.String)  # Converte para string antes do to_dummies
+            .cast(pl.String)  # Convert to string before to_dummies
             .alias("EDUCATION_CAT"),
-            # Limpar MARRIAGE
+            # Clean MARRIAGE
             pl.when(pl.col("MARRIAGE") <= 2)
             .then(pl.col("MARRIAGE"))
             .otherwise(3)
             .cast(pl.String)
             .alias("MARRIAGE_CAT"),
-            # Mapear SEX
+            # Map SEX
             pl.col("SEX").cast(pl.String).alias("SEX_CAT"),
         )
         .with_columns(
             [
-                # Limpar colunas PAY_*:
-                # Mapeia valores <= 0 (pago em dia, adiantado, etc.) para 0.
-                # Mantém 1-9 (meses em atraso)
+                # Clean PAY_* columns:
+                # Maps values <= 0 (on-time payment, early, etc.) to 0.
+                # Keeps 1-9 (months of delay)
                 pl.when(pl.col(c) <= 0).then(pl.lit(0)).otherwise(pl.col(c)).alias(c)
                 for c in pay_cols
             ]
         )
     )
 
-    # --- 3. Seleção Final e One-Hot Encoding ---
+    # --- 3. Final Selection and One-Hot Encoding ---
 
-    # Colunas categóricas que acabamos de criar
+    # Categorical columns we just created
     categorical_to_encode = ["EDUCATION_CAT", "MARRIAGE_CAT", "SEX_CAT"]
 
-    # Colunas originais para descartar
+    # Original columns to drop
     cols_to_drop = ["ID", "default.payment.next.month", "EDUCATION", "MARRIAGE", "SEX"]
 
-    # Coletar (executar) o plano lazy e aplicar to_dummies
+    # Collect (execute) the lazy plan and apply to_dummies
     final_df_with_dummies = (
         df_processed.drop(cols_to_drop)
         .collect()
         .to_dummies(columns=categorical_to_encode, separator="_", drop_first=False)
     )
 
-    # Limpar nomes das colunas para compatibilidade
+    # Clean column names for compatibility
     final_df_with_dummies.columns = [
         re.sub(r"[^A-Za-z0-9_]+", "", col) for col in final_df_with_dummies.columns
     ]
@@ -293,10 +293,10 @@ def preprocess_taiwan_credit_data(raw_data: pl.DataFrame) -> pl.DataFrame:
 def main(
     dataset: Annotated[
         Dataset,
-        typer.Argument(..., help="Conjunto de dados a ser processado."),
+        typer.Argument(..., help="The identifier of the dataset to process."),
     ],
 ):
-    """Processa o conjunto de dados especificado e salva o resultado."""
+    """Processes the specified dataset and saves the result."""
     logger.info(f"Processing dataset {dataset}...")
 
     raw_data_path = dataset.get_raw_data_path()
