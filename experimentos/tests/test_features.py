@@ -106,7 +106,7 @@ def test_main_processes_all_datasets_when_argument_missing(parallel_spy, monkeyp
 
 
 def test_main_skips_dataset_when_user_declines_overwrite(parallel_spy, monkeypatch, tmp_path):
-    artifact = tmp_path / f"{Dataset.LENDING_CLUB.value}_preprocessor.joblib"
+    artifact = tmp_path / f"{Dataset.LENDING_CLUB.value}_X.parquet"
     artifact.touch()
 
     monkeypatch.setattr(features_module, "_BASE_PATH", tmp_path)
@@ -119,11 +119,8 @@ def test_main_skips_dataset_when_user_declines_overwrite(parallel_spy, monkeypat
 
 def test_main_force_overwrites_without_prompt(parallel_spy, monkeypatch, tmp_path):
     for suffix in [
-        "_preprocessor.joblib",
-        "_X_train_processed.parquet",
-        "_X_test_processed.parquet",
-        "_y_train.parquet",
-        "_y_test.parquet",
+        "_X.parquet",
+        "_y.parquet",
     ]:
         (tmp_path / f"{Dataset.CORPORATE_CREDIT_RATING.value}{suffix}").touch()
 

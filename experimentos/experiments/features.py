@@ -1,6 +1,7 @@
 from pathlib import Path
 import sys
 
+from joblib import Parallel, cpu_count, delayed
 from loguru import logger
 import numpy as np
 import polars as pl
@@ -44,7 +45,12 @@ def _filter_datasets_for_processing(
     return filter_items_for_processing(
         datasets,
         exists_fn=_artifacts_exist,
-        prompt_fn=lambda ds: (f"Processed features for '{ds.value}' already exist. Overwrite?"),
+        prompt_fn=lambda ds: (
+            "Processed features for '{name}' already exist ({paths}). Overwrite?".format(
+                name=ds.value,
+                paths=", ".join(str(path) for path in _get_artifact_paths(ds).values()),
+            )
+        ),
         force=force,
         on_skip=lambda ds: logger.info(f"Skipping dataset {ds} per user choice."),
     )
@@ -111,6 +117,18 @@ def main(
         bool,
         typer.Option("--force", "-f", help="Overwrite existing files."),
     ] = False,
+    jobs: Annotated[
+        int | None,
+        typer.Option(
+            "--jobs",
+            "-j",
+            min=1,
+            help=(
+                "Number of parallel workers. Defaults to detected CPUs. "
+                "Values above the dataset count are clamped."
+            ),
+        ),
+    ] = None,
 ):
     """
     Prepares full X matrices and y vectors for training.
@@ -123,9 +141,36 @@ def main(
         logger.info("No dataset selected.")
         return
 
-    for ds in datasets:
-        _process_single_dataset(ds)
+    dataset_names = ", ".join(ds.value for ds in datasets)
+    logger.info(f"Scheduling feature preparation for {len(datasets)} dataset(s): {dataset_names}")
+
+    available_cpus = cpu_count() or 1
+    requested_jobs = jobs if jobs is not None else available_cpus
+    n_jobs = min(len(datasets), max(1, requested_jobs))
+
+    if jobs is not None:
+        logger.info(f"Using {n_jobs} parallel job(s) (user requested {jobs}).")
+    else:
+        logger.info(f"Using {n_jobs} parallel job(s) (detected {available_cpus} CPU(s)).")
+
+    results = Parallel(n_jobs=n_jobs, prefer="processes")(
+        delayed(_process_single_dataset)(ds) for ds in datasets
+    )
+
+    failed = [ds for ds, success, _ in results if not success]
+    if failed:
+        failed_names = ", ".join(ds.value for ds in failed)
+        logger.error(f"Feature preparation failed for the following dataset(s): {failed_names}")
+        raise typer.Exit(code=1)
+
+    logger.success("All requested feature artifacts generated successfully.")
 
 
 if __name__ == "__main__":
+    for _func in [
+        _process_single_dataset,
+        main,
+    ]:
+        _func.__module__ = MODULE_NAME
+
     app()
