@@ -5,6 +5,7 @@ import typer
 
 from experiments import dataset as dataset_module
 from experiments.config import Dataset
+from experiments.utils import overwrites as overwrites_module
 
 
 @pytest.fixture
@@ -62,15 +63,14 @@ def test_process_single_dataset_success(monkeypatch, tmp_path):
 
     monkeypatch.setattr(
         Dataset,
-        "get_raw_data_path",
+        "get_path",
         lambda self: raw_path,
         raising=False,
     )
     monkeypatch.setattr(
-        Dataset,
-        "get_processed_data_path",
-        lambda self: processed_path,
-        raising=False,
+        dataset_module,
+        "get_processed_path",
+        lambda ds: processed_path,
     )
     monkeypatch.setattr(
         Dataset,
@@ -88,7 +88,11 @@ def test_process_single_dataset_success(monkeypatch, tmp_path):
     result = dataset_module._process_single_dataset(dataset)
 
     assert result == (dataset, True, None)
-    read_csv_mock.assert_called_once_with(raw_path, **extra_params)
+    read_csv_mock.assert_called_once()
+    args, kwargs = read_csv_mock.call_args
+    assert args == (raw_path,)
+    expected_kwargs = {"low_memory": False, "use_pyarrow": True, **extra_params}
+    assert kwargs == expected_kwargs
     processed_df.write_parquet.assert_called_once_with(processed_path)
 
 
@@ -97,13 +101,8 @@ def test_process_single_dataset_failure_returns_error_message(monkeypatch, tmp_p
     raw_path = tmp_path / "corp.csv"
     processed_path = tmp_path / "corp.parquet"
 
-    monkeypatch.setattr(Dataset, "get_raw_data_path", lambda self: raw_path, raising=False)
-    monkeypatch.setattr(
-        Dataset,
-        "get_processed_data_path",
-        lambda self: processed_path,
-        raising=False,
-    )
+    monkeypatch.setattr(Dataset, "get_path", lambda self: raw_path, raising=False)
+    monkeypatch.setattr(dataset_module, "get_processed_path", lambda ds: processed_path)
     monkeypatch.setattr(Dataset, "get_extra_params", lambda self: {}, raising=False)
     monkeypatch.setattr(dataset_module.pl, "read_csv", Mock(return_value=object()))
 
@@ -120,10 +119,10 @@ def test_process_single_dataset_failure_returns_error_message(monkeypatch, tmp_p
 
 
 def _mock_processed_path(monkeypatch, tmp_path):
-    def fake_path(self):
-        return tmp_path / f"{self.value}.parquet"
+    def fake_path(dataset):
+        return tmp_path / f"{dataset.value}.parquet"
 
-    monkeypatch.setattr(Dataset, "get_processed_data_path", fake_path, raising=False)
+    monkeypatch.setattr(dataset_module, "get_processed_path", fake_path)
 
 
 def test_main_processes_specific_dataset_in_parallel(parallel_spy, monkeypatch, tmp_path):
@@ -136,7 +135,7 @@ def test_main_processes_specific_dataset_in_parallel(parallel_spy, monkeypatch, 
     monkeypatch.setattr(dataset_module, "_process_single_dataset", fake_process)
     monkeypatch.setattr(dataset_module, "cpu_count", lambda: 4)
     _mock_processed_path(monkeypatch, tmp_path)
-    monkeypatch.setattr(dataset_module.typer, "confirm", lambda *args, **kwargs: True)
+    monkeypatch.setattr(overwrites_module.typer, "confirm", lambda *args, **kwargs: True)
 
     dataset_module.main(Dataset.LENDING_CLUB)
 
@@ -156,7 +155,7 @@ def test_main_processes_all_datasets_when_argument_missing(parallel_spy, monkeyp
     monkeypatch.setattr(dataset_module, "_process_single_dataset", fake_process)
     monkeypatch.setattr(dataset_module, "cpu_count", lambda: 2)
     _mock_processed_path(monkeypatch, tmp_path)
-    monkeypatch.setattr(dataset_module.typer, "confirm", lambda *args, **kwargs: True)
+    monkeypatch.setattr(overwrites_module.typer, "confirm", lambda *args, **kwargs: True)
 
     dataset_module.main(dataset=None)
 
@@ -189,7 +188,7 @@ def test_main_raises_exit_when_any_dataset_fails(monkeypatch, tmp_path):
     monkeypatch.setattr(dataset_module, "cpu_count", lambda: 1)
     monkeypatch.setattr(dataset_module, "_process_single_dataset", lambda ds: (ds, True, None))
     _mock_processed_path(monkeypatch, tmp_path)
-    monkeypatch.setattr(dataset_module.typer, "confirm", lambda *args, **kwargs: True)
+    monkeypatch.setattr(overwrites_module.typer, "confirm", lambda *args, **kwargs: True)
 
     with pytest.raises(typer.Exit) as excinfo:
         dataset_module.main(dataset=None)
@@ -201,11 +200,11 @@ def test_main_skips_dataset_when_user_declines_overwrite(parallel_spy, monkeypat
     processed_path = tmp_path / "lending_club.parquet"
     processed_path.touch()
 
-    def fake_path(self):
+    def fake_path(dataset):
         return processed_path
 
-    monkeypatch.setattr(Dataset, "get_processed_data_path", fake_path, raising=False)
-    monkeypatch.setattr(dataset_module.typer, "confirm", lambda *args, **kwargs: False)
+    monkeypatch.setattr(dataset_module, "get_processed_path", fake_path)
+    monkeypatch.setattr(overwrites_module.typer, "confirm", lambda *args, **kwargs: False)
 
     dataset_module.main(Dataset.LENDING_CLUB)
 
@@ -222,16 +221,35 @@ def test_main_force_overwrites_without_prompt(parallel_spy, monkeypatch, tmp_pat
     monkeypatch.setattr(dataset_module, "_process_single_dataset", fake_process)
     monkeypatch.setattr(dataset_module, "cpu_count", lambda: 2)
 
-    def existing_path(self):
-        path = tmp_path / f"{self.value}.parquet"
+    def existing_path(dataset):
+        path = tmp_path / f"{dataset.value}.parquet"
         path.touch()
         return path
 
-    monkeypatch.setattr(Dataset, "get_processed_data_path", existing_path, raising=False)
+    monkeypatch.setattr(dataset_module, "get_processed_path", existing_path)
     confirm_mock = Mock(return_value=False)
-    monkeypatch.setattr(dataset_module.typer, "confirm", confirm_mock)
+    monkeypatch.setattr(overwrites_module.typer, "confirm", confirm_mock)
 
     dataset_module.main(dataset=None, force=True)
 
     assert confirm_mock.call_count == 0
     assert calls == list(Dataset)
+
+
+def test_main_respects_jobs_override(parallel_spy, monkeypatch, tmp_path):
+    calls: list[Dataset] = []
+
+    def fake_process(dataset: Dataset):
+        calls.append(dataset)
+        return (dataset, True, None)
+
+    monkeypatch.setattr(dataset_module, "_process_single_dataset", fake_process)
+    monkeypatch.setattr(dataset_module, "cpu_count", lambda: 8)
+    _mock_processed_path(monkeypatch, tmp_path)
+    monkeypatch.setattr(overwrites_module.typer, "confirm", lambda *args, **kwargs: True)
+
+    dataset_module.main(dataset=None, jobs=1)
+
+    assert calls == list(Dataset)
+    assert parallel_spy.constructor.call_count == 1
+    assert parallel_spy.kwargs["n_jobs"] == 1

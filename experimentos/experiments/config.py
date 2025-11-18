@@ -28,15 +28,15 @@ _Processor = TypeVar("_Processor", bound=Callable[[DataFrame], DataFrame])
 
 
 class Dataset(enum.Enum):
-    """Conjuntos de dados utilizados."""
+    """Datasets used."""
 
     __dataset_processors: dict[str, Callable[[DataFrame], DataFrame]] = {}
-    """Dicionário de processadores de conjunto de dados registrados."""
+    """Dictionary of registered dataset processors."""
 
     __feature_extractors: dict[str, Callable[[DataFrame], DataFrame]] = {}
-    """Dicionário de extratores de características registrados."""
+    """Dictionary of registered feature extractors."""
 
-    """Configuração do experimento."""
+    """Experiment configuration."""
     CORPORATE_CREDIT_RATING = "corporate_credit_rating"
     LENDING_CLUB = "lending_club"
     TAIWAN_CREDIT = "taiwan_credit"
@@ -44,16 +44,12 @@ class Dataset(enum.Enum):
     def __str__(self) -> str:
         return self.value
 
-    def get_raw_data_path(self) -> Path:
-        """Retorna o caminho do arquivo de dados brutos para o conjunto de dados."""
+    def get_path(self) -> Path:
+        """Returns the raw data file path for the dataset."""
         return RAW_DATA_DIR / f"{self.value}.csv"
 
-    def get_processed_data_path(self) -> Path:
-        """Retorna o caminho do arquivo de dados processados para o conjunto de dados."""
-        return PROCESSED_DATA_DIR / f"{self.value}_processed.parquet"
-
     def get_extra_params(self) -> dict[str, Any]:
-        """Retorna parâmetros extras específicos do conjunto de dados, se houver."""
+        """Returns extra parameters specific to the dataset, if any."""
         extra_params: dict[Dataset, dict[str, Any]] = {
             Dataset.LENDING_CLUB: {"schema_overrides": {"id": datatypes.Utf8}},
             Dataset.TAIWAN_CREDIT: {"infer_schema_length": None},
@@ -92,47 +88,15 @@ class Dataset(enum.Enum):
 
         return decorator
 
-    @overload
-    def register_feature_extractor(
-        self,
-        extractor: Callable[[DataFrame], DataFrame],
-    ) -> Callable[[DataFrame], DataFrame]: ...
-
-    @overload
-    def register_feature_extractor(
-        self,
-    ) -> Callable[[Callable[[DataFrame], DataFrame]], Callable[[DataFrame], DataFrame]]: ...
-
-    def register_feature_extractor(
-        self,
-        extractor: Callable[[DataFrame], DataFrame] | None = None,
-    ) -> (
-        Callable[[Callable[[DataFrame], DataFrame]], Callable[[DataFrame], DataFrame]]
-        | Callable[
-            [DataFrame],
-            DataFrame,
-        ]
-    ):
-        """Permite registrar extratores via chamada direta ou com sintaxe de decorator."""
-
-        def decorator(func: _Processor) -> _Processor:
-            self.__feature_extractors[self.value] = func
-            return func
-
-        if extractor is not None:
-            return decorator(extractor)
-
-        return decorator
-
     def process_data(self, raw_data: DataFrame) -> DataFrame:
-        """Processa os dados brutos utilizando o processador registrado para o conjunto de dados."""
+        """Processes raw data using the registered processor for the dataset."""
         processor = self.__dataset_processors.get(self.value)
         if processor is None:
             raise ValueError(f"No processor registered for dataset {self.value}")
         return processor(raw_data)
 
     def extract_features(self, processed_data: DataFrame) -> DataFrame:
-        """Extrai características dos dados processados utilizando o extrator registrado para o conjunto de dados."""
+        """Extracts features from processed data using the registered extractor for the dataset."""
         extractor = self.__feature_extractors.get(self.value)
         if extractor is None:
             raise ValueError(f"No feature extractor registered for dataset {self.value}")

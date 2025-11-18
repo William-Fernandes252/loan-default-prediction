@@ -1,14 +1,18 @@
+from pathlib import Path
 import re
 import sys
+from typing import Any
 
 from joblib import Parallel, cpu_count, delayed
 from loguru import logger
 import polars as pl
 from polars import datatypes
+from polars import selectors as cs
 import typer
 from typing_extensions import Annotated
 
-from experiments.config import Dataset
+from experiments.config import INTERIM_DATA_DIR, Dataset
+from experiments.utils.overwrites import filter_items_for_processing
 
 MODULE_NAME = "experiments.dataset"
 
@@ -22,11 +26,9 @@ if __name__ == "__main__":
 app = typer.Typer()
 
 
-def _confirm_overwrite(processed_path) -> bool:
-    """Ask the user if an existing processed file should be overwritten."""
-
-    prompt = f"Processed file '{processed_path}' already exists. Overwrite it?"
-    return typer.confirm(prompt, default=False)
+def get_processed_path(dataset: Dataset) -> Path:
+    """Returns the processed data file path for the given dataset."""
+    return INTERIM_DATA_DIR / f"{dataset.value}.parquet"
 
 
 def _filter_datasets_for_processing(
@@ -36,18 +38,44 @@ def _filter_datasets_for_processing(
 ) -> list[Dataset]:
     """Return the subset of datasets approved for processing."""
 
-    ready: list[Dataset] = []
-    for dataset in datasets:
-        processed_path = dataset.get_processed_data_path()
-        if processed_path.exists() and not force:
-            if _confirm_overwrite(processed_path):
-                ready.append(dataset)
-            else:
-                logger.info(f"Skipping dataset {dataset} per user choice.")
-        else:
-            ready.append(dataset)
+    return filter_items_for_processing(
+        datasets,
+        exists_fn=lambda ds: get_processed_path(ds).exists(),
+        prompt_fn=lambda ds: f"Processed file '{get_processed_path(ds)}' already exists. Overwrite it?",
+        force=force,
+        on_skip=lambda ds: logger.info(f"Skipping dataset {ds} per user choice."),
+    )
 
-    return ready
+
+def _sanitize_processed_data(data: pl.DataFrame) -> pl.DataFrame:
+    """Replace +/-inf values with nulls using a vectorized expression."""
+
+    if not isinstance(data, pl.DataFrame):
+        return data
+
+    schema: pl.Schema | None = getattr(data, "schema", None)
+    if not schema or not hasattr(schema, "values"):
+        return data
+
+    try:
+        has_float_columns = any(dtype in {pl.Float32, pl.Float64} for dtype in schema.values())
+    except Exception:  # pragma: no cover - defensive against mocks
+        return data
+
+    if not has_float_columns:
+        return data
+
+    float_selector = cs.by_dtype(pl.Float32, pl.Float64)
+
+    try:
+        return data.with_columns(
+            pl.when(float_selector.is_infinite()).then(None).otherwise(float_selector)
+        )
+    except Exception:  # pragma: no cover - avoid breaking processing due to sanitization
+        logger.warning(
+            "Could not sanitize infinite values in processed data; keeping original frame."
+        )
+        return data
 
 
 def _process_single_dataset(dataset: Dataset) -> tuple[Dataset, bool, str | None]:
@@ -56,18 +84,21 @@ def _process_single_dataset(dataset: Dataset) -> tuple[Dataset, bool, str | None
     try:
         logger.info(f"Processing dataset {dataset}...")
 
-        raw_data_path = dataset.get_raw_data_path()
-        processed_data_path = dataset.get_processed_data_path()
+        raw_data_path = dataset.get_path()
+        output_path = get_processed_path(dataset)
 
         logger.info(f"Loading raw data from {raw_data_path}...")
-        raw_data = pl.read_csv(raw_data_path, **dataset.get_extra_params())
+        read_csv_kwargs: dict[str, Any] = {"low_memory": False, "use_pyarrow": True}
+        read_csv_kwargs.update(dataset.get_extra_params())
+        raw_data = pl.read_csv(raw_data_path, **read_csv_kwargs)
         logger.info("Raw data loaded.")
 
         processed_data = dataset.process_data(raw_data)
+        processed_data = _sanitize_processed_data(processed_data)
 
-        processed_data_path.parent.mkdir(parents=True, exist_ok=True)
-        logger.info(f"Saving processed data to {processed_data_path}...")
-        processed_data.write_parquet(processed_data_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Saving processed data to {output_path}...")
+        processed_data.write_parquet(output_path)
 
         logger.success(f"Processing dataset {dataset} complete.")
         return dataset, True, None
@@ -370,6 +401,18 @@ def main(
             help="Overwrite existing processed files without prompting.",
         ),
     ] = False,
+    jobs: Annotated[
+        int | None,
+        typer.Option(
+            "--jobs",
+            "-j",
+            min=1,
+            help=(
+                "Number of parallel workers. Defaults to the available CPU count. "
+                "Values greater than the number of datasets are clamped."
+            ),
+        ),
+    ] = None,
 ):
     """Processes one or all datasets using joblib to manage workloads."""
 
@@ -389,8 +432,15 @@ def main(
     )
 
     available_cpus = cpu_count() or 1
-    n_jobs = min(len(datasets_to_process), max(1, available_cpus))
-    logger.info(f"Using {n_jobs} parallel job(s) managed by joblib.")
+    requested_jobs = jobs if jobs is not None else available_cpus
+    n_jobs = min(len(datasets_to_process), max(1, requested_jobs))
+
+    if jobs is not None:
+        logger.info(f"Using {n_jobs} parallel job(s) managed by joblib (user requested {jobs}).")
+    else:
+        logger.info(
+            f"Using {n_jobs} parallel job(s) managed by joblib (detected {available_cpus} CPU(s))."
+        )
 
     results = Parallel(n_jobs=n_jobs, prefer="processes")(
         delayed(_process_single_dataset)(ds) for ds in datasets_to_process

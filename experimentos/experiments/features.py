@@ -1,8 +1,13 @@
 from pathlib import Path
+import sys
 
 import joblib
+from joblib import Parallel, cpu_count, delayed
 from loguru import logger
+import numpy as np
+import pandas as pd
 import polars as pl
+from polars import selectors as cs
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.model_selection import train_test_split
@@ -11,11 +16,77 @@ from sklearn.preprocessing import StandardScaler
 import typer
 from typing_extensions import Annotated
 
-from experiments.config import Dataset
+from experiments.config import PROCESSED_DATA_DIR, Dataset
+from experiments.dataset import get_processed_path
+from experiments.utils.overwrites import filter_items_for_processing
+
+MODULE_NAME = "experiments.features"
+
+if __name__ == "__main__":
+    sys.modules.setdefault(MODULE_NAME, sys.modules[__name__])
 
 app = typer.Typer()
 
 # --- Specific Pipeline Functions ---
+
+
+_BASE_PATH = PROCESSED_DATA_DIR
+
+
+def _get_artifact_paths(dataset: Dataset) -> dict[str, Path]:
+    """Return all output artifact paths for a dataset."""
+
+    return {
+        "pipeline": _BASE_PATH / f"{dataset.value}_preprocessor.joblib",
+        "X_train": _BASE_PATH / f"{dataset.value}_X_train_processed.parquet",
+        "X_test": _BASE_PATH / f"{dataset.value}_X_test_processed.parquet",
+        "y_train": _BASE_PATH / f"{dataset.value}_y_train.parquet",
+        "y_test": _BASE_PATH / f"{dataset.value}_y_test.parquet",
+    }
+
+
+def _artifacts_exist(dataset: Dataset) -> bool:
+    return any(path.exists() for path in _get_artifact_paths(dataset).values())
+
+
+def _filter_datasets_for_processing(
+    datasets: list[Dataset],
+    *,
+    force: bool,
+) -> list[Dataset]:
+    return filter_items_for_processing(
+        datasets,
+        exists_fn=_artifacts_exist,
+        prompt_fn=lambda ds: (
+            f"Processed feature artifacts for '{ds.value}' already exist. Overwrite them?"
+        ),
+        force=force,
+        on_skip=lambda ds: logger.info(f"Skipping dataset {ds} per user choice."),
+    )
+
+
+def _ensure_artifact_directories(artifacts: dict[str, Path]) -> None:
+    for path in artifacts.values():
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def _sanitize_features(df: pl.DataFrame) -> pl.DataFrame:
+    # Sanitization of numerical infinities should happen during dataset processing
+    # (data cleaning/parsing). This function is kept for backward compatibility but
+    # is now a no-op here.
+    return df
+
+
+def _should_stratify(y: pd.Series) -> bool:
+    counts = y.value_counts()
+    if counts.empty:
+        return False
+    if counts.min() < 2:
+        logger.warning(
+            "Skipping stratified split because at least one class has fewer than 2 samples."
+        )
+        return False
+    return True
 
 
 def get_preprocessor(df: pl.DataFrame) -> ColumnTransformer:
@@ -29,8 +100,7 @@ def get_preprocessor(df: pl.DataFrame) -> ColumnTransformer:
 
     # Identify all numeric columns (except the 'target')
     # At this point, all features are already numeric (original or one-hot)
-    numeric_features = df.select(pl.col(pl.NUMERIC_DTYPES).exclude("target")).columns
-
+    numeric_features = df.select(cs.numeric().exclude("target")).columns
     logger.info(f"Identified {len(numeric_features)} numeric features for imputation and scaling.")
 
     # Create the preprocessing pipeline
@@ -53,96 +123,146 @@ def get_preprocessor(df: pl.DataFrame) -> ColumnTransformer:
 # --- Main Command (Typer) ---
 
 
+def _process_single_dataset(dataset: Dataset) -> tuple[Dataset, bool, str | None]:
+    try:
+        logger.info(f"Loading features for dataset: {dataset.value}")
+
+        input_path = get_processed_path(dataset)
+        if not input_path.exists():
+            msg = f"File not found: {input_path}. Run the dataset processing command first."
+            raise FileNotFoundError(msg)
+
+        logger.info(f"Loading data from {input_path}")
+        df = pl.read_parquet(input_path, use_pyarrow=True)
+        df = _sanitize_features(df)
+
+        feature_df = df.drop("target")
+        target_series = df.get_column("target")
+        X = feature_df.to_pandas()
+        X.replace([np.inf, -np.inf], np.nan, inplace=True)
+        y = target_series.to_pandas()
+
+        logger.info("Splitting data into training (70%) and testing (30%) with stratification...")
+        stratify_labels = y if _should_stratify(y) else None
+        X_train, X_test, y_train, y_test = train_test_split(
+            X,
+            y,
+            test_size=0.3,
+            random_state=42,
+            stratify=stratify_labels,
+        )
+
+        logger.info("Defining the preprocessing pipeline (Imputer + Scaler)...")
+        preprocessor = get_preprocessor(feature_df)
+
+        logger.info("Fitting the preprocessing pipeline ONLY on the training data...")
+        X_train_processed = preprocessor.fit_transform(X_train)
+
+        logger.info("Applying (transform) the pipeline to the test data...")
+        X_test_processed = preprocessor.transform(X_test)
+
+        feature_names = preprocessor.get_feature_names_out()
+
+        artifacts = _get_artifact_paths(dataset)
+        _ensure_artifact_directories(artifacts)
+
+        joblib.dump(preprocessor, artifacts["pipeline"])
+        logger.success(f"Preprocessing pipeline saved to: {artifacts['pipeline']}")
+
+        pl.DataFrame(X_train_processed, schema=feature_names.tolist()).write_parquet(
+            artifacts["X_train"]
+        )
+        pl.DataFrame(X_test_processed, schema=feature_names.tolist()).write_parquet(
+            artifacts["X_test"]
+        )
+        pl.DataFrame({"target": y_train.reset_index(drop=True).tolist()}).write_parquet(
+            artifacts["y_train"]
+        )
+        pl.DataFrame({"target": y_test.reset_index(drop=True).tolist()}).write_parquet(
+            artifacts["y_test"]
+        )
+
+        logger.success("Processed train/test data saved in 'data/processed/'")
+        return dataset, True, None
+    except Exception as exc:  # noqa: BLE001
+        logger.exception(f"Failed to process features for {dataset}: {exc}")
+        return dataset, False, str(exc)
+
+
 @app.command()
 def main(
     dataset: Annotated[
-        Dataset,
-        typer.Argument(..., help="Dataset to be processed."),
-    ],
+        Dataset | None,
+        typer.Argument(
+            help=(
+                "Dataset whose features should be processed. "
+                "When omitted, all datasets are processed in parallel."
+            ),
+        ),
+    ] = None,
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force",
+            "-f",
+            help="Overwrite existing feature artifacts without prompting.",
+        ),
+    ] = False,
+    jobs: Annotated[
+        int | None,
+        typer.Option(
+            "--jobs",
+            "-j",
+            min=1,
+            help=(
+                "Number of parallel workers. Defaults to the available CPU count. "
+                "Values greater than the number of datasets are clamped."
+            ),
+        ),
+    ] = None,
 ):
-    """
-    Performs splitting and processing (Imputation/Scaling).
+    """Splits data, fits preprocessing pipelines, and saves artifacts in parallel."""
 
-    Loads data from 'data/processed/', splits it into train/test,
-    applies imputation and scaling ONLY to the training set, and saves the results
-    back to 'data/processed/'.
-    """
-    logger.info(f"Starting Step 3 (Features) for dataset: {dataset.value}")
+    datasets = [dataset] if dataset is not None else list(Dataset)
+    datasets = _filter_datasets_for_processing(datasets, force=force)
 
-    # 1. Load processed data from Step 2
-    input_path = Path("data") / "processed" / f"{dataset.value}_processed.parquet"
-    if not input_path.exists():
-        logger.error(f"File not found: {input_path}")
-        logger.error("Did you run 'dataset.py' for this dataset first?")
+    if not datasets:
+        logger.info("No datasets selected for feature processing. Exiting.")
+        return
+
+    dataset_names = ", ".join(ds.value for ds in datasets)
+    logger.info(f"Scheduling feature processing for {len(datasets)} dataset(s): {dataset_names}")
+
+    available_cpus = cpu_count() or 1
+    requested_jobs = jobs if jobs is not None else available_cpus
+    n_jobs = min(len(datasets), max(1, requested_jobs))
+
+    if jobs is not None:
+        logger.info(f"Using {n_jobs} parallel job(s) managed by joblib (user requested {jobs}).")
+    else:
+        logger.info(
+            f"Using {n_jobs} parallel job(s) managed by joblib (detected {available_cpus} CPU(s))."
+        )
+
+    results = Parallel(n_jobs=n_jobs, prefer="processes")(
+        delayed(_process_single_dataset)(ds) for ds in datasets
+    )
+
+    failed = [ds for ds, success, _ in results if not success]
+    if failed:
+        failed_names = ", ".join(ds.value for ds in failed)
+        logger.error(f"Feature processing failed for the following dataset(s): {failed_names}")
         raise typer.Exit(code=1)
 
-    logger.info(f"Loading data from {input_path}")
-    df = pl.read_parquet(input_path)
-
-    # 2. Separate X (features) and y (target)
-    # We convert to pandas/numpy here, as it's the format Scikit-learn expects
-    X = df.drop("target").to_pandas()
-    y = df.select("target").to_series().to_pandas()
-
-    # 3. Train/Test Split (70/30, stratified)
-    # [cite_start]As defined in your methodology [cite: 3094, 3095]
-    logger.info("Splitting data into training (70%) and testing (30%) with stratification...")
-    X_train, X_test, y_train, y_test = train_test_split(
-        X,
-        y,
-        test_size=0.3,
-        random_state=42,  # For reproducibility
-        stratify=y,  # Essential for imbalanced data [cite: 3094]
-    )
-
-    # 4. Create and "fit" the preprocessing pipeline
-    logger.info("Defining the preprocessing pipeline (Imputer + Scaler)...")
-    # We pass the 'df' DataFrame (without the target) just to extract column names
-    preprocessor = get_preprocessor(df.drop("target"))
-
-    logger.info("Fitting the preprocessing pipeline ONLY on the training data...")
-    # NOTE: We use .fit_transform() on the training set...
-    X_train_processed = preprocessor.fit_transform(X_train)
-
-    logger.info("Applying (transform) the pipeline to the test data...")
-    # ...and ONLY .transform() on the test set. This prevents data leakage!
-    X_test_processed = preprocessor.transform(X_test)
-
-    # Retrieve column names after transformation
-    feature_names = preprocessor.get_feature_names_out()
-
-    # 5. Save the results
-
-    # Save the "trained" pipeline (containing medians and scales)
-    pipeline_path = Path("data") / "processed" / f"{dataset.value}_preprocessor.joblib"
-    joblib.dump(preprocessor, pipeline_path)
-    logger.success(f"Preprocessing pipeline saved to: {pipeline_path}")
-
-    # Save the processed and split data as Polars/Parquet DataFrames
-    # (Converting from numpy arrays back to Polars)
-    (
-        pl.DataFrame(X_train_processed, schema=feature_names.tolist()).write_parquet(
-            Path("data") / "processed" / f"{dataset.value}_X_train_processed.parquet"
-        )
-    )
-    (
-        pl.DataFrame(X_test_processed, schema=feature_names.tolist()).write_parquet(
-            Path("data") / "processed" / f"{dataset.value}_X_test_processed.parquet"
-        )
-    )
-    (
-        pl.DataFrame(y_train, schema={"target": pl.Int64}).write_parquet(
-            Path("data") / "processed" / f"{dataset.value}_y_train.parquet"
-        )
-    )
-    (
-        pl.DataFrame(y_test, schema={"target": pl.Int64}).write_parquet(
-            Path("data") / "processed" / f"{dataset.value}_y_test.parquet"
-        )
-    )
-
-    logger.success("Processed train/test data saved in 'data/processed/'")
+    logger.success("All requested feature pipelines processed successfully.")
 
 
 if __name__ == "__main__":
+    for _func in [
+        get_preprocessor,
+        _process_single_dataset,
+        main,
+    ]:
+        _func.__module__ = MODULE_NAME
+
     app()

@@ -24,6 +24,7 @@ dependencies = [
     "pandas>=2.3.2",
     "pip",
     "polars[gpu]>=1.32.3",
+    "pyarrow>=22.0.0",
     "pytest",
     "python-dotenv",
     "ruff",
