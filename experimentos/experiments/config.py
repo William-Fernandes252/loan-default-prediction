@@ -11,7 +11,6 @@ load_dotenv()
 
 # Paths
 PROJ_ROOT = Path(__file__).resolve().parents[1]
-logger.info(f"PROJ_ROOT path is: {PROJ_ROOT}")
 
 DATA_DIR = PROJ_ROOT / "data"
 RAW_DATA_DIR = DATA_DIR / "raw"
@@ -47,10 +46,6 @@ class Dataset(enum.Enum):
     __dataset_processors: dict[str, Callable[[DataFrame], DataFrame]] = {}
     """Dictionary of registered dataset processors."""
 
-    __feature_extractors: dict[str, Callable[[DataFrame], DataFrame]] = {}
-    """Dictionary of registered feature extractors."""
-
-    """Experiment configuration."""
     CORPORATE_CREDIT_RATING = "corporate_credit_rating"
     LENDING_CLUB = "lending_club"
     TAIWAN_CREDIT = "taiwan_credit"
@@ -61,6 +56,13 @@ class Dataset(enum.Enum):
     def get_path(self) -> Path:
         """Returns the raw data file path for the dataset."""
         return RAW_DATA_DIR / f"{self.value}.csv"
+
+    def get_size_gb(self) -> float:
+        """Returns the size of the raw data file in GB."""
+        path = self.get_path()
+        size_bytes = path.stat().st_size
+        size_gb = size_bytes / (1024**3)
+        return size_gb
 
     def get_extra_params(self) -> dict[str, Any]:
         """Returns extra parameters specific to the dataset, if any."""
@@ -108,13 +110,6 @@ class Dataset(enum.Enum):
         if processor is None:
             raise ValueError(f"No processor registered for dataset {self.value}")
         return processor(raw_data)
-
-    def extract_features(self, processed_data: DataFrame) -> DataFrame:
-        """Extracts features from processed data using the registered extractor for the dataset."""
-        extractor = self.__feature_extractors.get(self.value)
-        if extractor is None:
-            raise ValueError(f"No feature extractor registered for dataset {self.value}")
-        return extractor(processed_data)
 
 
 class ModelType(enum.Enum):
