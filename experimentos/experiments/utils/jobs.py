@@ -25,3 +25,16 @@ def get_safe_jobs(dataset_size_gb: float, safety_factor: float = 3.5) -> int:
     # Ensure at least 1 job and don't exceed CPU count
     cpu_count = psutil.cpu_count(logical=False) or 1
     return max(1, min(safe_jobs, cpu_count))
+
+
+def get_jobs_from_available_cpus(requested_jobs: int | None) -> int:
+    """
+    Determines the number of jobs to use based on available CPU cores.
+
+    Args:
+        requested_jobs: The number of jobs requested by the user. If None, use all available CPUs.
+    """
+    available_cpus = psutil.cpu_count(logical=False) or 1
+    if requested_jobs is None:
+        return available_cpus
+    return min(requested_jobs, available_cpus)

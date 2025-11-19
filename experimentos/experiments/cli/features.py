@@ -2,7 +2,7 @@
 
 import sys
 
-from joblib import Parallel, cpu_count, delayed
+from joblib import Parallel, delayed
 import polars as pl
 import typer
 from typing_extensions import Annotated
@@ -10,6 +10,7 @@ from typing_extensions import Annotated
 from experiments.context import Context
 from experiments.core.data import Dataset
 from experiments.core.modeling.features import extract_features_and_target
+from experiments.utils.jobs import get_jobs_from_available_cpus
 from experiments.utils.overwrites import filter_items_for_processing
 
 MODULE_NAME = "experiments.cli.features"
@@ -103,9 +104,7 @@ def main(
     dataset_names = ", ".join(ds.value for ds in datasets)
     ctx.logger.info(f"Scheduling feature preparation for: {dataset_names}")
 
-    available_cpus = cpu_count() or 1
-    requested_jobs = jobs if jobs is not None else available_cpus
-    n_jobs = min(len(datasets), max(1, requested_jobs))
+    n_jobs = get_jobs_from_available_cpus(jobs)
 
     results = Parallel(n_jobs=n_jobs, prefer="processes")(
         delayed(_process_single_dataset)(ctx, ds) for ds in datasets

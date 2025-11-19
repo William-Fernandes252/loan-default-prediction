@@ -3,13 +3,14 @@
 import sys
 from typing import Any
 
-from joblib import Parallel, cpu_count, delayed
+from joblib import Parallel, delayed
 import polars as pl
 import typer
 from typing_extensions import Annotated
 
 from experiments.context import Context
 from experiments.core.data import Dataset, get_processor
+from experiments.utils.jobs import get_jobs_from_available_cpus
 from experiments.utils.overwrites import filter_items_for_processing
 
 MODULE_NAME = "experiments.cli.data"
@@ -108,9 +109,7 @@ def main(
     dataset_names = ", ".join(ds.value for ds in datasets_to_process)
     ctx.logger.info(f"Scheduling preprocessing for: {dataset_names}")
 
-    available_cpus = cpu_count() or 1
-    requested_jobs = jobs if jobs is not None else available_cpus
-    n_jobs = min(len(datasets_to_process), max(1, requested_jobs))
+    n_jobs = get_jobs_from_available_cpus(jobs)
 
     # Pass ctx to workers
     results = Parallel(n_jobs=n_jobs, prefer="processes")(
