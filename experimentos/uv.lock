@@ -166,11 +166,13 @@ dependencies = [
     { name = "polars", extra = ["gpu"] },
     { name = "pyarrow" },
     { name = "pytest" },
+    { name = "pytest-camel-collect" },
     { name = "python-dotenv" },
     { name = "ruff" },
     { name = "scikit-learn" },
     { name = "tqdm" },
     { name = "typer" },
+    { name = "uuid7" },
 ]
 
 [package.metadata]
@@ -186,11 +188,13 @@ requires-dist = [
     { name = "polars", extras = ["gpu"], specifier = ">=1.32.3" },
     { name = "pyarrow", specifier = ">=22.0.0" },
     { name = "pytest" },
+    { name = "pytest-camel-collect", specifier = ">=1.0.2" },
     { name = "python-dotenv" },
     { name = "ruff" },
     { name = "scikit-learn", specifier = ">=1.7.2" },
     { name = "tqdm" },
     { name = "typer" },
+    { name = "uuid7", specifier = ">=0.1.0" },
 ]
 
 [[package]]
@@ -220,6 +224,12 @@ sdist = { url = "https://files.pythonhosted.org/packages/7b/5a/ad42e366914abfea7
 wheels = [
     { url = "https://files.pythonhosted.org/packages/65/60/103dc71019ec2fa987f42f9dbe88641a74edc57f8499fac8896955b66065/imbalanced_learn-0.14.0-py3-none-any.whl", hash = "sha256:8a8700c02ca185e113064815513f990fbf84eb4e7701f1d4e944ce67fb259a60", size = 239958, upload-time = "2025-08-14T14:15:30.174Z" },
 ]
+
+[[package]]
+name = "inflection"
+version = "0.3.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d5/35/a6eb45b4e2356fe688b21570864d4aa0d0a880ce387defe9c589112077f8/inflection-0.3.1.tar.gz", hash = "sha256:18ea7fb7a7d152853386523def08736aa8c32636b047ade55f7578c4edeb16ca", size = 8715, upload-time = "2015-05-03T08:08:12.824Z" }
 
 [[package]]
 name = "iniconfig"
@@ -799,6 +809,19 @@ wheels = [
 ]
 
 [[package]]
+name = "pytest-camel-collect"
+version = "1.0.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "inflection" },
+    { name = "pytest" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/dc/ac/f7bf8eb7b41bf73a235c885c05bba0cd211c27318566690896adc1ed89dd/pytest-camel-collect-1.0.2.tar.gz", hash = "sha256:de4d2a54db3f5dd743ab90c350f9481b19cd713684e4feae893121c728b0f09c", size = 5600, upload-time = "2020-08-02T00:11:24.455Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ed/20/21a8093330ab5c4bb421d647bc8dc698031a38f7404d05a4c6efa789919d/pytest_camel_collect-1.0.2-py3-none-any.whl", hash = "sha256:d119d4908616d4999bc7b440d7aa71057d89334646ffc17f656c8977c619e945", size = 6484, upload-time = "2020-08-02T00:11:23.363Z" },
+]
+
+[[package]]
 name = "python-dateutil"
 version = "2.9.0.post0"
 source = { registry = "https://pypi.org/simple" }
@@ -1093,6 +1116,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/95/32/1a225d6164441be760d75c2c42e2780dc0873fe382da3e98a2e1e48361e5/tzdata-2025.2.tar.gz", hash = "sha256:b60a638fcc0daffadf82fe0f57e53d06bdec2f36c4df66280ae79bce6bd6f2b9", size = 196380, upload-time = "2025-03-23T13:54:43.652Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/5c/23/c7abc0ca0a1526a0774eca151daeb8de62ec457e77262b66b359c3c7679e/tzdata-2025.2-py2.py3-none-any.whl", hash = "sha256:1a403fada01ff9221ca8044d701868fa132215d84beb92242d9acd2147f667a8", size = 347839, upload-time = "2025-03-23T13:54:41.845Z" },
+]
+
+[[package]]
+name = "uuid7"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/5c/19/7472bd526591e2192926247109dbf78692e709d3e56775792fec877a7720/uuid7-0.1.0.tar.gz", hash = "sha256:8c57aa32ee7456d3cc68c95c4530bc571646defac01895cfc73545449894a63c", size = 14052, upload-time = "2021-12-29T01:38:21.897Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b5/77/8852f89a91453956582a85024d80ad96f30a41fed4c2b3dce0c9f12ecc7e/uuid7-0.1.0-py2.py3-none-any.whl", hash = "sha256:5e259bb63c8cb4aded5927ff41b444a80d0c7124e8a0ced7cf44efa1f5cccf61", size = 7477, upload-time = "2021-12-29T01:38:20.418Z" },
 ]
 
 [[package]]
