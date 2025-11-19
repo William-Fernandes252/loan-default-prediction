@@ -109,7 +109,7 @@ def get_params_for_technique(
     model_type: ModelType,
     technique: Technique,
     base_params: dict,
-    cost_matrix: dict[str, Any] | None = None,
+    cost_matrix: dict[str, Any] | list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Adjusts the parameter grid based on the technique."""
     new_params = base_params.copy()

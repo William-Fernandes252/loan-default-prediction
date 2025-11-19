@@ -2,99 +2,65 @@
 
 import gc
 import os
-from pathlib import Path
 import sys
 import tempfile
-from typing import Optional, Tuple
+from typing import Optional
 
 import joblib
 from joblib import Parallel, delayed
-from loguru import logger
 import pandas as pd
 import polars as pl
 import typer
 from typing_extensions import Annotated
 
-from experiments.config import (
-    COST_GRIDS,
-    CV_FOLDS,
-    NUM_SEEDS,
-    PROCESSED_DATA_DIR,
-    RAW_DATA_DIR,
-    RESULTS_DIR,
-)
+from experiments.context import Context
 from experiments.core.data import Dataset
 from experiments.core.modeling import ModelType, Technique, run_experiment_task
-from experiments.utils.jobs import get_safe_jobs
-
-# --- Environment Configuration ---
-# Limit thread usage per worker to prevent thread explosion in parallel execution
-os.environ["OMP_NUM_THREADS"] = "1"
-os.environ["MKL_NUM_THREADS"] = "1"
-os.environ["OPENBLAS_NUM_THREADS"] = "1"
-os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
-os.environ["NUMEXPR_NUM_THREADS"] = "1"
 
 MODULE_NAME = "experiments.cli.train"
 
 if __name__ == "__main__":
-    # Fix for joblib pickling when running as __main__
     sys.modules.setdefault(MODULE_NAME, sys.modules[__name__])
 
 app = typer.Typer()
 
 
-def _get_training_artifact_paths(dataset: Dataset) -> Tuple[Path, Path]:
-    x_path = PROCESSED_DATA_DIR / f"{dataset.value}_X.parquet"
-    y_path = PROCESSED_DATA_DIR / f"{dataset.value}_y.parquet"
-    return x_path, y_path
+def _artifacts_exist(ctx: Context, dataset: Dataset) -> bool:
+    paths = ctx.get_feature_paths(dataset.value)
+    return paths["X"].exists() and paths["y"].exists()
 
 
-def _get_checkpoint_path(
-    dataset: Dataset, model: ModelType, technique: Technique, seed: int
-) -> Path:
-    ckpt_dir = RESULTS_DIR / "checkpoints" / dataset.value
-    ckpt_dir.mkdir(parents=True, exist_ok=True)
-    return ckpt_dir / f"{model.value}_{technique.value}_seed{seed}.parquet"
-
-
-def _artifacts_exist(dataset: Dataset) -> bool:
-    x_path, y_path = _get_training_artifact_paths(dataset)
-    return x_path.exists() and y_path.exists()
-
-
-def _get_safe_jobs_for_dataset(dataset: Dataset) -> int:
-    """Determines safe number of parallel jobs for the dataset based on its size."""
-    size_gb = dataset.get_size_gb(RAW_DATA_DIR)
-    safe_jobs = get_safe_jobs(size_gb)
-    return safe_jobs
-
-
-def _consolidate_results(dataset: Dataset):
+def _consolidate_results(ctx: Context, dataset: Dataset):
     """Combines all checkpoint files into a single results file."""
-    ckpt_dir = RESULTS_DIR / "checkpoints" / dataset.value
+    # We use the context helper to find the directory
+    # We can infer the directory from a sample checkpoint path
+    sample_ckpt = ctx.get_checkpoint_path(dataset.value, "x", "y", 0)
+    ckpt_dir = sample_ckpt.parent
+
     all_files = list(ckpt_dir.glob("*.parquet"))
 
     if all_files:
-        logger.info(f"Consolidating {len(all_files)} results for {dataset.value}...")
+        ctx.logger.info(f"Consolidating {len(all_files)} results for {dataset.value}...")
         df_final = pd.read_parquet(ckpt_dir)
-        final_output = RESULTS_DIR / f"{dataset.value}_results.parquet"
+        final_output = ctx.get_consolidated_results_path(dataset.value)
         df_final.to_parquet(final_output)
-        logger.success(f"Saved consolidated results to {final_output}")
+        ctx.logger.success(f"Saved consolidated results to {final_output}")
     else:
-        logger.warning(f"No results found for {dataset.value}")
+        ctx.logger.warning(f"No results found for {dataset.value}")
 
 
-def run_dataset_experiments(dataset: Dataset, jobs: int):
+def run_dataset_experiments(ctx: Context, dataset: Dataset, jobs: int):
     """
     Prepares data and launches parallel experiment tasks for a dataset.
     """
-    x_path, y_path = _get_training_artifact_paths(dataset)
+    paths = ctx.get_feature_paths(dataset.value)
+    x_path, y_path = paths["X"], paths["y"]
+
     if not x_path.exists() or not y_path.exists():
-        logger.error(f"Data missing for {dataset}")
+        ctx.logger.error(f"Data missing for {dataset}")
         return
 
-    logger.info(f"Loading data for {dataset.value}...")
+    ctx.logger.info(f"Loading data for {dataset.value}...")
 
     # Load original data
     X_df = pl.read_parquet(x_path).to_pandas()
@@ -110,43 +76,44 @@ def run_dataset_experiments(dataset: Dataset, jobs: int):
         joblib.dump(X_df.to_numpy(), X_mmap_path)
         joblib.dump(y_df.to_numpy(), y_mmap_path)
 
-        # Load back briefly to get shapes/dtypes (sanity check)
-        # and to ensure the file is ready
+        # Load back briefly to check
         _ = joblib.load(X_mmap_path, mmap_mode="r")
 
-        # Free the original RAM immediately
+        # Free the original RAM
         del X_df, y_df
         gc.collect()
 
         # Generate Task List
         tasks = []
-        for seed in range(NUM_SEEDS):
+        # Access settings via Context
+        for seed in range(ctx.cfg.num_seeds):
             for model_type in ModelType:
                 for technique in Technique:
                     # Skip invalid combinations
                     if technique == Technique.CS_SVM and model_type != ModelType.SVM:
                         continue
 
-                    ckpt_path = _get_checkpoint_path(dataset, model_type, technique, seed)
+                    # Context resolves paths, but we only need to pass the context
+                    # to the runner, which will resolve it again internally.
+                    # However, the runner needs to know if it exists to skip efficiently.
+                    # Here we just append the task params.
                     tasks.append(
                         (
+                            ctx,
                             dataset.value,
                             X_mmap_path,
                             y_mmap_path,
                             model_type,
                             technique,
-                            COST_GRIDS,
-                            CV_FOLDS,
-                            ckpt_path,
                             seed,
                         )
                     )
 
-        logger.info(
+        ctx.logger.info(
             f"Dataset {dataset.value}: Launching {len(tasks)} tasks with {jobs} workers..."
         )
 
-        # Execute Parallel using the core runner
+        # Execute Parallel
         Parallel(
             n_jobs=jobs,
             verbose=5,
@@ -154,7 +121,7 @@ def run_dataset_experiments(dataset: Dataset, jobs: int):
         )(delayed(run_experiment_task)(*t) for t in tasks)
 
     # Consolidate results
-    _consolidate_results(dataset)
+    _consolidate_results(ctx, dataset)
 
 
 @app.command()
@@ -171,23 +138,41 @@ def main(
             "--jobs",
             "-j",
             min=1,
-            help="Number of parallel jobs to run. If not specified, a safe number based on dataset size will be used.",
+            help="Number of parallel jobs. Defaults to safe number based on RAM.",
         ),
     ] = None,
 ):
-    """
-    Runs the training experiments.
-    """
+    """Runs the training experiments."""
+
+    # Initialize Context
+    ctx = Context()
+
     datasets = [dataset] if dataset is not None else list(Dataset)
 
     for ds in datasets:
-        if not _artifacts_exist(ds):
-            logger.warning(f"Artifacts not found for {ds}. Skipping.")
+        if not _artifacts_exist(ctx, ds):
+            ctx.logger.warning(f"Artifacts not found for {ds}. Skipping.")
             continue
 
         gc.collect()
-        n_jobs = jobs if jobs is not None else _get_safe_jobs_for_dataset(ds)
-        run_dataset_experiments(ds, n_jobs)
+
+        # Calculate jobs using Context helper
+        if jobs is None:
+            # We need dataset size to calculate safe jobs.
+            # We can approximate it from the raw file or the parquet file.
+            # Using Raw CSV size is a safe conservative proxy.
+            # (Assuming RAW_DATA_DIR is still available via config or we can pass it)
+            raw_path = ctx.get_raw_data_path(ds.value)
+            if raw_path.exists():
+                size_gb = raw_path.stat().st_size / (1024**3)
+            else:
+                size_gb = 1.0  # Default fallback
+
+            n_jobs = ctx.compute_safe_jobs(size_gb)
+        else:
+            n_jobs = jobs
+
+        run_dataset_experiments(ctx, ds, n_jobs)
 
 
 if __name__ == "__main__":
