@@ -3,23 +3,31 @@ import sys
 
 from joblib import Parallel, cpu_count, delayed
 from loguru import logger
-import numpy as np
 import polars as pl
 import typer
 from typing_extensions import Annotated
 
-from experiments.config import PROCESSED_DATA_DIR, Dataset
-from experiments.dataset import get_processed_path
+from experiments.config import INTERIM_DATA_DIR, PROCESSED_DATA_DIR, Dataset
+from experiments.core.modeling.features import extract_features_and_target
 from experiments.utils.overwrites import filter_items_for_processing
 
-MODULE_NAME = "experiments.features"
+MODULE_NAME = "experiments.cli.features"
 
 if __name__ == "__main__":
+    # Fix for joblib pickling when running via `python -m experiments.cli.features`
     sys.modules.setdefault(MODULE_NAME, sys.modules[__name__])
 
 app = typer.Typer()
 
 _BASE_PATH = PROCESSED_DATA_DIR
+
+
+def get_processed_input_path(dataset: Dataset) -> Path:
+    """
+    Reconstructs the path to the processed data (output of the data command).
+    We define it here or import from config to avoid dependencies on other CLI scripts.
+    """
+    return INTERIM_DATA_DIR / f"{dataset.value}.parquet"
 
 
 def _get_artifact_paths(dataset: Dataset) -> dict[str, Path]:
@@ -62,36 +70,26 @@ def _ensure_artifact_directories(artifacts: dict[str, Path]) -> None:
 
 
 def _process_single_dataset(dataset: Dataset) -> tuple[Dataset, bool, str | None]:
+    """
+    Orchestrates the feature extraction for a single dataset.
+    Loads data -> Calls Core Logic -> Saves data.
+    """
     try:
         logger.info(f"Preparing features (X/y) for: {dataset.value}")
 
-        input_path = get_processed_path(dataset)
+        input_path = get_processed_input_path(dataset)
         if not input_path.exists():
-            msg = f"File not found: {input_path}. Run 'dataset.py' first."
+            msg = f"File not found: {input_path}. Run 'experiments.cli.data' first."
             raise FileNotFoundError(msg)
 
         # 1. Load Intermediate Data
         logger.info(f"Loading data from {input_path}")
         df = pl.read_parquet(input_path, use_pyarrow=True)
 
-        # 2. Split X and y
-        if "target" not in df.columns:
-            raise ValueError(f"Column 'target' not found in {dataset.value}")
+        # 2. Core Logic: Split X and y and Sanitize
+        X_final, y_final = extract_features_and_target(df)
 
-        target_series = df.get_column("target")
-        feature_df = df.drop("target")
-
-        # 3. Sanity Check and Conversion
-        # Ensure that there are no infinite values that would break Scikit-Learn
-        # (dataset.py should already handle this, but we ensure it before saving)
-        X_pd = feature_df.to_pandas().replace([np.inf, -np.inf], np.nan)
-        y_pd = target_series.to_pandas()
-
-        # Convert back to Polars to save efficiently in Parquet
-        X_final = pl.from_pandas(X_pd)
-        y_final = pl.from_pandas(y_pd.to_frame(name="target"))
-
-        # 4. Save Artifacts
+        # 3. Save Artifacts
         artifacts = _get_artifact_paths(dataset)
         _ensure_artifact_directories(artifacts)
 
