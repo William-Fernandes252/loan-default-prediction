@@ -106,7 +106,10 @@ def build_pipeline(model_type: ModelType, technique: Technique, random_state: in
 
 
 def get_params_for_technique(
-    model_type: ModelType, technique: Technique, base_params: dict, cost_grids: dict[str, Any]
+    model_type: ModelType,
+    technique: Technique,
+    base_params: dict,
+    cost_matrix: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Adjusts the parameter grid based on the technique."""
     new_params = base_params.copy()
@@ -118,9 +121,9 @@ def get_params_for_technique(
         and technique != Technique.META_COST
     ):
         if technique == Technique.CS_SVM and model_type == ModelType.SVM:
-            new_params["clf__class_weight"] = cost_grids
+            new_params["clf__class_weight"] = cost_matrix
 
     # Handle MetaCost
     if technique == Technique.META_COST:
-        return [{"clf__cost_matrix": cost_grids}]
+        return [{"clf__cost_matrix": cost_matrix}]
     return [new_params]

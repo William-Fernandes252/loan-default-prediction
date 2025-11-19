@@ -15,7 +15,14 @@ import polars as pl
 import typer
 from typing_extensions import Annotated
 
-from experiments.config import NUM_SEEDS, PROCESSED_DATA_DIR, RAW_DATA_DIR, RESULTS_DIR
+from experiments.config import (
+    COST_GRIDS,
+    CV_FOLDS,
+    NUM_SEEDS,
+    PROCESSED_DATA_DIR,
+    RAW_DATA_DIR,
+    RESULTS_DIR,
+)
 from experiments.core.data import Dataset
 from experiments.core.modeling import ModelType, Technique, run_experiment_task
 from experiments.utils.jobs import get_safe_jobs
@@ -41,6 +48,14 @@ def _get_training_artifact_paths(dataset: Dataset) -> Tuple[Path, Path]:
     x_path = PROCESSED_DATA_DIR / f"{dataset.value}_X.parquet"
     y_path = PROCESSED_DATA_DIR / f"{dataset.value}_y.parquet"
     return x_path, y_path
+
+
+def _get_checkpoint_path(
+    dataset: Dataset, model: ModelType, technique: Technique, seed: int
+) -> Path:
+    ckpt_dir = RESULTS_DIR / "checkpoints" / dataset.value
+    ckpt_dir.mkdir(parents=True, exist_ok=True)
+    return ckpt_dir / f"{model.value}_{technique.value}_seed{seed}.parquet"
 
 
 def _artifacts_exist(dataset: Dataset) -> bool:
@@ -112,6 +127,7 @@ def run_dataset_experiments(dataset: Dataset, jobs: int):
                     if technique == Technique.CS_SVM and model_type != ModelType.SVM:
                         continue
 
+                    ckpt_path = _get_checkpoint_path(dataset, model_type, technique, seed)
                     tasks.append(
                         (
                             dataset.value,
@@ -119,6 +135,9 @@ def run_dataset_experiments(dataset: Dataset, jobs: int):
                             y_mmap_path,
                             model_type,
                             technique,
+                            COST_GRIDS,
+                            CV_FOLDS,
+                            ckpt_path,
                             seed,
                         )
                     )

@@ -29,15 +29,6 @@ from experiments.core.modeling import (
 )
 
 
-def get_checkpoint_path(
-    dataset: Dataset, model: ModelType, technique: Technique, seed: int, results_dir: Path
-) -> Path:
-    """Generates the path for saving experiment results."""
-    temp_dir = results_dir / "checkpoints" / dataset.value
-    temp_dir.mkdir(parents=True, exist_ok=True)
-    return temp_dir / f"{model.value}_{technique.value}_seed{seed}.parquet"
-
-
 def run_experiment_task(
     dataset_val: str,
     X_mmap_path: str,
@@ -46,7 +37,7 @@ def run_experiment_task(
     technique: Technique,
     cost_grids: dict[str, Any],
     cv_folds: int,
-    results_dir: Path,
+    checkpoint_path: Path,
     seed: int,
 ) -> Optional[str]:
     """
@@ -54,6 +45,17 @@ def run_experiment_task(
 
     This function is designed to be memory-efficient by using memory-mapped files
     and aggressively clearing memory after training.
+
+    Args:
+        dataset_val (str): The dataset identifier as a string.
+        X_mmap_path (str): Path to the memory-mapped feature data.
+        y_mmap_path (str): Path to the memory-mapped target data.
+        model_type (ModelType): The type of model to use.
+        technique (Technique): The technique to apply (e.g., cost-sensitive).
+        cost_grids (dict[str, Any]): Cost grids for cost-sensitive techniques.
+        cv_folds (int): Number of cross-validation folds.
+        checkpoint_path (Path): Path to save the experiment checkpoint.
+        seed (int): Random seed for reproducibility.
     """
     # Reconstruct Enum from string (for pickling safety)
     dataset = Dataset(dataset_val)
@@ -63,8 +65,7 @@ def run_experiment_task(
     )
 
     # 1. Checkpoint Check
-    ckpt_path = get_checkpoint_path(dataset, model_type, technique, seed, results_dir)
-    if ckpt_path.exists():
+    if checkpoint_path.exists():
         return None
 
     try:
@@ -160,7 +161,7 @@ def run_experiment_task(
 
         # 9. Save Checkpoint
         df_res = pd.DataFrame([metrics])
-        df_res.to_parquet(ckpt_path)
+        df_res.to_parquet(checkpoint_path)
 
         # 10. Final Cleanup
         del grid, best_model, X_test, y_test, X_mmap, y_mmap
