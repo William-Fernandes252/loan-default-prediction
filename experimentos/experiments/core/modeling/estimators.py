@@ -1,3 +1,5 @@
+"""Custom estimators for cost-sensitive classification."""
+
 from typing import Any, Dict, Optional
 
 import numpy as np

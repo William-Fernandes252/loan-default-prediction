@@ -1,11 +1,15 @@
+"""Data processing modules for various datasets.
+
+Includes dataset definitions and factory methods to obtain appropriate data processors, that does the feature engineering for each dataset.
+"""
+
 import enum
 from pathlib import Path
 from typing import Any
 
 from polars import datatypes
 
-from experiments.core.data.base import DataProcessor
-
+from .base import DataProcessor
 from .corporate_credit import CorporateCreditProcessor
 from .lending_club import LendingClubProcessor
 from .taiwan_credit import TaiwanCreditProcessor
@@ -49,3 +53,9 @@ def get_processor(dataset: Dataset) -> DataProcessor:
         Dataset.TAIWAN_CREDIT: TaiwanCreditProcessor(),
     }
     return PROCESSORS[dataset]
+
+
+__all__ = [
+    "Dataset",
+    "get_processor",
+]

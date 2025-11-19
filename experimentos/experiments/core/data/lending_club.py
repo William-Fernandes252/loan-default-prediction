@@ -1,3 +1,5 @@
+"""Data processor for the Lending Club dataset."""
+
 import re
 
 import polars as pl

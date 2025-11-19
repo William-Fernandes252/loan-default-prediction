@@ -1,4 +1,4 @@
-from __future__ import annotations
+"""Utilities for handling overwrite confirmations and item filtering."""
 
 from typing import Callable, Iterable, Sequence, TypeVar
 

@@ -1,3 +1,5 @@
+"""CLI for features and data split tasks."""
+
 from pathlib import Path
 import sys
 
@@ -7,7 +9,8 @@ import polars as pl
 import typer
 from typing_extensions import Annotated
 
-from experiments.config import INTERIM_DATA_DIR, PROCESSED_DATA_DIR, Dataset
+from experiments.config import INTERIM_DATA_DIR, PROCESSED_DATA_DIR
+from experiments.core.data import Dataset
 from experiments.core.modeling.features import extract_features_and_target
 from experiments.utils.overwrites import filter_items_for_processing
 
@@ -33,7 +36,7 @@ def get_processed_input_path(dataset: Dataset) -> Path:
 def _get_artifact_paths(dataset: Dataset) -> dict[str, Path]:
     """
     Returns the output paths for the complete data (without split).
-    Splitting will be done dynamically during training to support the 30 runs.
+    Splitting will be done dynamically during training to support the runs.
     """
     return {
         "X": _BASE_PATH / f"{dataset.value}_X.parquet",

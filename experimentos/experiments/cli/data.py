@@ -1,3 +1,5 @@
+"""CLI for data processing tasks."""
+
 from pathlib import Path
 import sys
 from typing import Any
@@ -8,8 +10,8 @@ import polars as pl
 import typer
 from typing_extensions import Annotated
 
-from experiments.config import INTERIM_DATA_DIR, Dataset
-from experiments.core.data import get_processor
+from experiments.config import INTERIM_DATA_DIR, RAW_DATA_DIR
+from experiments.core.data import Dataset, get_processor
 from experiments.utils.overwrites import filter_items_for_processing
 
 MODULE_NAME = "experiments.cli.data"
@@ -46,7 +48,7 @@ def _process_single_dataset(dataset: Dataset) -> tuple[Dataset, bool, str | None
     try:
         logger.info(f"Processing dataset {dataset}...")
 
-        raw_data_path = dataset.get_path()
+        raw_data_path = dataset.get_path(RAW_DATA_DIR)
         output_path = get_processed_path(dataset)
 
         # 1. Load Data

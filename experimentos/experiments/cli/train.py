@@ -1,3 +1,5 @@
+"""CLI for training models."""
+
 import gc
 import os
 from pathlib import Path

@@ -1,3 +1,5 @@
+"""Data processor for the Taiwan Credit dataset."""
+
 import re
 
 import polars as pl

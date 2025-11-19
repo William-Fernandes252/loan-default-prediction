@@ -1,3 +1,5 @@
+"""Custom metrics for model evaluation."""
+
 import numpy as np
 from sklearn.metrics import (
     confusion_matrix,

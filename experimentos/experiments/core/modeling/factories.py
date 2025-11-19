@@ -1,3 +1,5 @@
+"""Factory functions and pipeline builders for machine learning models and techniques."""
+
 import enum
 from typing import Any
 

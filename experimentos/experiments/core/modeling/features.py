@@ -1,3 +1,5 @@
+"""Feature extraction and target separation utilities."""
+
 import numpy as np
 import polars as pl
 

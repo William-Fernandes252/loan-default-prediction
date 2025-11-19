@@ -1,3 +1,5 @@
+"""Data processor for the Corporate Credit dataset."""
+
 import re
 
 import polars as pl
