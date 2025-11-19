@@ -60,7 +60,7 @@ def _process_single_dataset(ctx: Context, dataset: Dataset) -> tuple[Dataset, bo
         return dataset, False, str(exc)
 
 
-@app.command()
+@app.command(name="prepare")
 def main(
     dataset: Annotated[
         Dataset | None,

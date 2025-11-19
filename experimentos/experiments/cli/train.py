@@ -124,7 +124,7 @@ def run_dataset_experiments(ctx: Context, dataset: Dataset, jobs: int):
     _consolidate_results(ctx, dataset)
 
 
-@app.command()
+@app.command("experiment")
 def main(
     dataset: Annotated[
         Optional[Dataset],
