@@ -8,8 +8,14 @@ import polars as pl
 import typer
 from typing_extensions import Annotated
 
-from experiments.context import Context
-from experiments.core.data import Dataset, get_processor
+from experiments.context import AppConfig, Context
+from experiments.core.data import (
+    CorporateCreditProcessor,
+    DataProcessor,
+    Dataset,
+    LendingClubProcessor,
+    TaiwanCreditProcessor,
+)
 from experiments.utils.jobs import get_jobs_from_available_cpus
 from experiments.utils.overwrites import filter_items_for_processing
 
@@ -19,6 +25,16 @@ if __name__ == "__main__":
     sys.modules.setdefault(MODULE_NAME, sys.modules[__name__])
 
 app = typer.Typer()
+
+
+# Factory pattern to get the right processor
+def get_processor(ctx: Context, dataset: Dataset) -> DataProcessor:
+    PROCESSORS = {
+        Dataset.LENDING_CLUB: LendingClubProcessor(use_gpu=ctx.cfg.use_gpu),
+        Dataset.CORPORATE_CREDIT_RATING: CorporateCreditProcessor(use_gpu=ctx.cfg.use_gpu),
+        Dataset.TAIWAN_CREDIT: TaiwanCreditProcessor(use_gpu=ctx.cfg.use_gpu),
+    }
+    return PROCESSORS[dataset]
 
 
 def _process_single_dataset(ctx: Context, dataset: Dataset) -> tuple[Dataset, bool, str | None]:
@@ -37,7 +53,7 @@ def _process_single_dataset(ctx: Context, dataset: Dataset) -> tuple[Dataset, bo
         ctx.logger.info("Raw data loaded.")
 
         # Get Strategy via Factory
-        processor = get_processor(dataset)
+        processor = get_processor(ctx, dataset)
 
         # Run transformations
         processed_data = processor.process(raw_data)
@@ -87,9 +103,17 @@ def main(
             ),
         ),
     ] = None,
+    use_gpu: Annotated[
+        bool,
+        typer.Option(
+            "--use-gpu",
+            "-g",
+            help="Utilize GPU acceleration if available during processing.",
+        ),
+    ] = False,
 ):
     """Processes one or all datasets."""
-    ctx = Context()
+    ctx = Context(AppConfig(use_gpu=use_gpu))
 
     datasets_to_process = [dataset] if dataset is not None else list(Dataset)
 

@@ -85,7 +85,7 @@ class TaiwanCreditProcessor(DataProcessor):
         # Collect (execute) the lazy plan and apply to_dummies
         final_df_with_dummies = (
             df_processed.drop(cols_to_drop)
-            .collect(engine="gpu")
+            .collect(engine=self._get_engine())
             .to_dummies(columns=categorical_to_encode, separator="_", drop_first=False)
         )
 

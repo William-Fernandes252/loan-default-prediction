@@ -45,17 +45,10 @@ class Dataset(enum.Enum):
         return extra_params.get(self, {})
 
 
-# Factory pattern to get the right processor
-def get_processor(dataset: Dataset) -> DataProcessor:
-    PROCESSORS = {
-        Dataset.LENDING_CLUB: LendingClubProcessor(),
-        Dataset.CORPORATE_CREDIT_RATING: CorporateCreditProcessor(),
-        Dataset.TAIWAN_CREDIT: TaiwanCreditProcessor(),
-    }
-    return PROCESSORS[dataset]
-
-
 __all__ = [
     "Dataset",
-    "get_processor",
+    "DataProcessor",
+    "LendingClubProcessor",
+    "CorporateCreditProcessor",
+    "TaiwanCreditProcessor",
 ]

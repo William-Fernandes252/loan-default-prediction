@@ -34,6 +34,7 @@ class AppConfig:
 
     # Environment
     max_threads: str = "1"
+    use_gpu: bool = False
 
 
 class Context:

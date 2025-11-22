@@ -132,7 +132,7 @@ class LendingClubProcessor(DataProcessor):
 
         # --- 6. One-Hot Encoding ---
         # Convert categorical columns to dummy (binary) columns
-        final_df_with_dummies = final_features_df.collect(engine="gpu").to_dummies(
+        final_df_with_dummies = final_features_df.collect(engine=self._get_engine()).to_dummies(
             columns=categorical_cols,
             separator="_",
             drop_first=False,  # Keep all categories
