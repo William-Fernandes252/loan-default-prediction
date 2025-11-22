@@ -119,11 +119,11 @@ def run_experiment_task(
         # Fit the model
         grid.fit(X_train, y_train)
 
-        # 6. CRITICAL MEMORY SAVER
+        # 6. Cleanup train set from memory
         del X_train, y_train
         gc.collect()
 
-        # 7. MATERIALIZE TEST SET
+        # 7. Materialize test set
         X_test = X_mmap[test_idx]
         y_test = y_mmap[test_idx]
 
