@@ -141,11 +141,19 @@ def main(
             help="Number of parallel jobs. Defaults to safe number based on RAM.",
         ),
     ] = None,
+    discard_checkpoints: Annotated[
+        bool,
+        typer.Option(
+            "--discard-checkpoints",
+            help="Delete checkpoint files so every task is rerun from scratch.",
+            is_flag=True,
+        ),
+    ] = False,
 ):
     """Runs the training experiments."""
 
     # Initialize Context
-    ctx = Context()
+    ctx = Context(discard_checkpoints=discard_checkpoints)
 
     datasets = [dataset] if dataset is not None else list(Dataset)
 

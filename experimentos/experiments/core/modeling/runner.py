@@ -63,7 +63,11 @@ def run_experiment_task(
 
     # 1. Checkpoint Check
     if checkpoint_path.exists():
-        return None
+        if ctx.discard_checkpoints:
+            ctx.logger.info(f"Discarding checkpoint at {checkpoint_path}")
+            checkpoint_path.unlink(missing_ok=True)
+        else:
+            return None
 
     try:
         # 2. Load Data (Memory Mapped)

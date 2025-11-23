@@ -44,9 +44,15 @@ class Context:
     Acts as a facade for configuration, logging, and system interactions.
     """
 
-    def __init__(self, cfg: AppConfig | None = None):
+    def __init__(
+        self,
+        cfg: AppConfig | None = None,
+        *,
+        discard_checkpoints: bool = False,
+    ):
         self.cfg = cfg or AppConfig()
         self.logger = logger
+        self.discard_checkpoints = discard_checkpoints
         self._configure_environment()
 
     def _configure_environment(self) -> None:
