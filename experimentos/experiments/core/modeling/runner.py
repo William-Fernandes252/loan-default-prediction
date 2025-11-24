@@ -75,7 +75,7 @@ def run_experiment_task(
         y_mmap = joblib.load(y_mmap_path, mmap_mode="r")
 
         # 3. Validation Checks
-        unique, counts = np.unique(y_mmap, return_counts=True)
+        _, counts = np.unique(y_mmap, return_counts=True)
         min_class_count = counts.min()
 
         stratify_y = y_mmap
