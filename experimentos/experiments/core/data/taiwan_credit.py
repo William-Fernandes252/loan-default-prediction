@@ -36,11 +36,7 @@ class TaiwanCreditProcessor(DataProcessor):
         # --- 1. Definition of Mappings ---
 
         # Payment status columns
-        pay_cols = [
-            col
-            for col in df.columns
-            if any([col.startswith("PAY_"), col.startswith("BILL_"), col.startswith("PAY_AMT_")])
-        ]
+        pay_cols = [col for col in df.columns if re.match(r"PAY_[0-6]", col)]
 
         # --- 2. Start of Preprocessing (Lazy) ---
         df_processed = (
