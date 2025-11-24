@@ -146,6 +146,7 @@ def main(
         bool,
         typer.Option(
             "--discard-checkpoints",
+            "-d",
             help="Delete checkpoint files so every task is rerun from scratch.",
             is_flag=True,
         ),
