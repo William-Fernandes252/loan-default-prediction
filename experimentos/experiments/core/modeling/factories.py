@@ -55,7 +55,7 @@ def get_hyperparameters(model_type: ModelType) -> dict:
         },
         ModelType.ADA_BOOST: {
             "clf__n_estimators": [50, 100, 200],
-            "clf__learning_rate": [0.01, 0.1, 1.0],
+            "clf__learning_rate": [0.01, 0.05, 0.1, 0.5],
         },
         ModelType.MLP: {
             "clf__hidden_layer_sizes": [(50,), (100,), (50, 50)],
