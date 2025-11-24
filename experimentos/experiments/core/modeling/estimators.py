@@ -1,10 +1,12 @@
 """Custom estimators for cost-sensitive classification."""
 
-from typing import Any, Dict, Optional
+from typing import Any, Optional, cast
 
 import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
+from sklearn.dummy import DummyClassifier
 from sklearn.ensemble import BaggingClassifier
+from sklearn.utils.class_weight import compute_class_weight
 
 
 class MetaCostClassifier(ClassifierMixin, BaseEstimator):
@@ -21,9 +23,9 @@ class MetaCostClassifier(ClassifierMixin, BaseEstimator):
     def __init__(
         self,
         base_estimator: BaseEstimator,
-        cost_matrix: Optional[Dict[int, Any]] = None,
+        cost_matrix: dict[int, Any] | str | None = None,
         n_estimators: int = 50,
-        random_state: Optional[int] = None,
+        random_state: int | None = None,
     ):
         self.base_estimator = base_estimator
         self.cost_matrix = cost_matrix
@@ -36,10 +38,27 @@ class MetaCostClassifier(ClassifierMixin, BaseEstimator):
         if len(self.classes_) > 2:
             raise ValueError("MetaCostClassifier only supports binary classification.")
 
+        # 1. Handle "balanced" or None explicitly
         if self.cost_matrix is None:
             self.final_estimator_ = clone(self.base_estimator).fit(X, y)
             return self
 
+        # Calculate costs dynamically if "balanced" is requested
+        if self.cost_matrix == "balanced":
+            # Compute weights: class 0 gets weight w0, class 1 gets weight w1
+            weights = compute_class_weight(class_weight="balanced", classes=self.classes_, y=y)
+            # Normalize so C_FP (cost of error on class 0) = 1.0
+            # C_FN (cost of error on class 1) = w1 / w0
+            w0, w1 = weights[0], weights[1]
+            C_FP = 1.0
+            C_FN = w1 / w0
+        else:
+            # Assume dict {class_label: cost_of_misclassifying_this_class}
+            self.cost_matrix = cast(dict[int, Any], self.cost_matrix)
+            C_FP = self.cost_matrix.get(0, 1)
+            C_FN = self.cost_matrix.get(1, 1)
+
+        # 2. Bagging for probability estimation
         if not hasattr(self.base_estimator, "predict_proba") and not hasattr(
             self.base_estimator, "decision_function"
         ):
@@ -61,27 +80,31 @@ class MetaCostClassifier(ClassifierMixin, BaseEstimator):
             and bagging.oob_decision_function_ is not None
         ):
             probas = bagging.oob_decision_function_
-            # Fallback if OOB score fails (e.g., small sample size)
-            if np.any(np.sum(probas, axis=1) == 0):
+            # Fallback if OOB score fails (NaNs or zeros)
+            if np.any(np.isnan(probas)) or np.any(np.sum(probas, axis=1) == 0):
                 probas = bagging.predict_proba(X)
         else:
             probas = bagging.predict_proba(X)
 
-        # Relabel based on expected cost
-        # Cost matrix structure: {actual_class: cost_of_error}
-        # Assuming binary classification: 0 and 1
-        C_FP = self.cost_matrix.get(0, 1)  # Cost of False Positive (predicting 1 when 0)
-        C_FN = self.cost_matrix.get(1, 1)  # Cost of False Negative (predicting 0 when 1)
-
-        # Risk of predicting 0: P(1|x) * C_FN
+        # 3. Relabeling logic
+        # Risk of predicting 0: P(1|x) * Cost(FN)
         risk_0 = probas[:, 1] * C_FN
-        # Risk of predicting 1: P(0|x) * C_FP
+        # Risk of predicting 1: P(0|x) * Cost(FP)
         risk_1 = probas[:, 0] * C_FP
 
         # Choose class with lower risk
         y_new_np = np.where(risk_1 < risk_0, 1, 0)
 
-        self.final_estimator_ = clone(self.base_estimator).fit(X, y_new_np)
+        # 4. SAFETY CHECK: Prevent AdaBoost Crash
+        # If relabeling makes the dataset single-class (e.g., all 1s), AdaBoost crashes.
+        if len(np.unique(y_new_np)) < 2:
+            # Fallback: Train a DummyClassifier to handle this gracefully
+            # This effectively predicts the single class for everything.
+            self.final_estimator_ = DummyClassifier(strategy="constant", constant=y_new_np[0])
+            self.final_estimator_.fit(X, y_new_np)
+        else:
+            self.final_estimator_ = clone(self.base_estimator).fit(X, y_new_np)
+
         self.classes_ = self.final_estimator_.classes_
         return self
 
