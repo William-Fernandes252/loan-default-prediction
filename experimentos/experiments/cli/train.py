@@ -16,6 +16,7 @@ from typing_extensions import Annotated
 from experiments.context import Context
 from experiments.core.data import Dataset
 from experiments.core.modeling import ModelType, Technique, run_experiment_task
+from experiments.utils.git_state import GitStateTracker
 
 MODULE_NAME = "experiments.cli.train"
 
@@ -151,36 +152,48 @@ def main(
     ] = False,
 ):
     """Runs the training experiments."""
+    tracker = GitStateTracker("train_cli")
+    changed, previous_commit, current_commit = tracker.has_new_commit()
 
-    # Initialize Context
-    ctx = Context(discard_checkpoints=discard_checkpoints)
+    try:
+        if not discard_checkpoints and changed:
+            prev_short = (previous_commit or "none")[:7]
+            curr_short = (current_commit or "unknown")[:7]
+            prompt = (
+                "New commits detected since the last run "
+                f"({prev_short} -> {curr_short}).\n"
+                "Do you want to discard checkpoints to rerun all experiments?"
+            )
+            if typer.confirm(prompt, default=True):
+                discard_checkpoints = True
 
-    datasets = [dataset] if dataset is not None else list(Dataset)
+        # Initialize Context
+        ctx = Context(discard_checkpoints=discard_checkpoints)
 
-    for ds in datasets:
-        if not _artifacts_exist(ctx, ds):
-            ctx.logger.warning(f"Artifacts not found for {ds}. Skipping.")
-            continue
+        datasets = [dataset] if dataset is not None else list(Dataset)
 
-        gc.collect()
+        for ds in datasets:
+            if not _artifacts_exist(ctx, ds):
+                ctx.logger.warning(f"Artifacts not found for {ds}. Skipping.")
+                continue
 
-        # Calculate jobs using Context helper
-        if jobs is None:
-            # We need dataset size to calculate safe jobs.
-            # We can approximate it from the raw file or the parquet file.
-            # Using Raw CSV size is a safe conservative proxy.
-            # (Assuming RAW_DATA_DIR is still available via config or we can pass it)
-            raw_path = ctx.get_raw_data_path(ds.value)
-            if raw_path.exists():
-                size_gb = raw_path.stat().st_size / (1024**3)
+            gc.collect()
+
+            # Calculate jobs using Context helper
+            if jobs is None:
+                raw_path = ctx.get_raw_data_path(ds.value)
+                if raw_path.exists():
+                    size_gb = raw_path.stat().st_size / (1024**3)
+                else:
+                    size_gb = 1.0  # Default fallback
+
+                n_jobs = ctx.compute_safe_jobs(size_gb)
             else:
-                size_gb = 1.0  # Default fallback
+                n_jobs = jobs
 
-            n_jobs = ctx.compute_safe_jobs(size_gb)
-        else:
-            n_jobs = jobs
-
-        run_dataset_experiments(ctx, ds, n_jobs)
+            run_dataset_experiments(ctx, ds, n_jobs)
+    finally:
+        tracker.record_current_commit()
 
 
 if __name__ == "__main__":

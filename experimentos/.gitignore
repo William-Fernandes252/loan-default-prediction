@@ -4,6 +4,9 @@
 # Results
 /results/
 
+# Local state
+/.ldp/
+
 # Mac OS-specific storage files
 .DS_Store
 
