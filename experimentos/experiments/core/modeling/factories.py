@@ -75,7 +75,7 @@ def get_model_instance(model_type: ModelType, random_state: int) -> BaseEstimato
     elif model_type == ModelType.RANDOM_FOREST:
         return RandomForestClassifier(random_state=random_state, n_jobs=1)
     elif model_type == ModelType.ADA_BOOST:
-        return AdaBoostClassifier(random_state=random_state, algorithm="SAMME")
+        return AdaBoostClassifier(random_state=random_state)
     elif model_type == ModelType.MLP:
         return MLPClassifier(random_state=random_state)
     else:
