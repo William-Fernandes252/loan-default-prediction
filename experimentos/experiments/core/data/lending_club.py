@@ -82,7 +82,7 @@ class LendingClubProcessor(DataProcessor):
             )
             .with_columns(
                 # Handle divisions by zero resulting in infinity only in float columns
-                pl.col(datatypes.Float32).replace([float("inf"), float("-inf")], None)
+                pl.col(datatypes.Float64).replace([float("inf"), float("-inf")], None)
             )
             .with_columns(
                 # --- 4. Log Transformations ---
