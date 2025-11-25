@@ -6,6 +6,7 @@ for passing state between the CLI and core logic.
 """
 
 from dataclasses import dataclass, field
+from datetime import datetime
 import os
 from pathlib import Path
 from typing import Any
@@ -87,7 +88,25 @@ class Context:
         return ckpt_dir / f"{model}_{technique}_seed{seed}.parquet"
 
     def get_consolidated_results_path(self, dataset_value: str) -> Path:
-        return self.cfg.results_dir / f"{dataset_value}_results.parquet"
+        """Return a new consolidated results path with a timestamp and 'consolidated' tag.
+
+        Example: `taiwan_credit_consolidated_20251125_153045.parquet`
+        """
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        return self.cfg.results_dir / f"{dataset_value}_consolidated_{ts}.parquet"
+
+    def get_latest_consolidated_results_path(self, dataset_value: str) -> Path | None:
+        """Return the most recent consolidated results file for a dataset, or None.
+
+        This is useful for analysis code that wants to read the latest consolidated
+        artifact without knowing the exact timestamped filename.
+        """
+        pattern = f"{dataset_value}_consolidated_*.parquet"
+        files = list(self.cfg.results_dir.glob(pattern))
+        if not files:
+            return None
+        # Choose the most recently modified file
+        return max(files, key=lambda p: p.stat().st_mtime)
 
     # --- Resource Helpers ---
 
