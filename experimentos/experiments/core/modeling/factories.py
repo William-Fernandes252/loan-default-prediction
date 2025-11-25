@@ -54,8 +54,7 @@ def get_hyperparameters(model_type: ModelType) -> dict:
             # Random Forest also accepts class_weight, useful for comparison with CS-SVM
         },
         ModelType.ADA_BOOST: {
-            "clf__n_estimators": [50, 100, 200],
-            "clf__learning_rate": [0.01, 0.1, 0.5],
+            "clf__n_estimators": [200, 500, 1000],
         },
         ModelType.MLP: {
             "clf__hidden_layer_sizes": [(50,), (100,), (50, 50)],
@@ -74,7 +73,7 @@ def get_model_instance(model_type: ModelType, random_state: int) -> BaseEstimato
     elif model_type == ModelType.RANDOM_FOREST:
         return RandomForestClassifier(random_state=random_state, n_jobs=1)
     elif model_type == ModelType.ADA_BOOST:
-        return AdaBoostClassifier(random_state=random_state, learning_rate=0.1)
+        return AdaBoostClassifier(random_state=random_state, learning_rate=0.001, n_estimators=100)
     elif model_type == ModelType.MLP:
         return MLPClassifier(
             random_state=random_state, max_iter=1000, early_stopping=True, n_iter_no_change=20
