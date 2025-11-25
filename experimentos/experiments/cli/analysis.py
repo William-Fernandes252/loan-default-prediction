@@ -424,8 +424,7 @@ def analyze_hyperparameter_effects(
                     hue="technique",
                     style="model",
                     marker="o",
-                    err_style="bars",  # error bars for multiple seeds
-                    errorbar=("se", 1),  # Standard Error
+                    errorbar=None,  # Avoid matplotlib warnings on single-sample groups
                 )
 
                 if is_numeric:
