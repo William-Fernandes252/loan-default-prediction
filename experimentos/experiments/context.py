@@ -105,7 +105,7 @@ class Context:
         artifact without knowing the exact timestamped filename.
         """
         dataset_dir = self.get_dataset_results_dir(dataset_value)
-        pattern = "*.parquet"
+        pattern = f"{'[0-9]' * 8}_{'[0-9]' * 6}.parquet"
         files = list(dataset_dir.glob(pattern))
         if not files:
             return None
