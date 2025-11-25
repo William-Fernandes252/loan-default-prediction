@@ -50,7 +50,12 @@ def _consolidate_results(ctx: Context, dataset: Dataset):
         ctx.logger.warning(f"No results found for {dataset.value}")
 
 
-def run_dataset_experiments(ctx: Context, dataset: Dataset, jobs: int):
+def run_dataset_experiments(
+    ctx: Context,
+    dataset: Dataset,
+    jobs: int,
+    excluded_models: set[ModelType] | None = None,
+):
     """
     Prepares data and launches parallel experiment tasks for a dataset.
     """
@@ -86,9 +91,16 @@ def run_dataset_experiments(ctx: Context, dataset: Dataset, jobs: int):
 
         # Generate Task List
         tasks = []
+        excluded_models_set = excluded_models or set()
+        available_models = [m for m in ModelType if m not in excluded_models_set]
+        if not available_models:
+            ctx.logger.warning(
+                f"No eligible models left to run for {dataset.value} after exclusions."
+            )
+            return
         # Access settings via Context
         for seed in range(ctx.cfg.num_seeds):
-            for model_type in ModelType:
+            for model_type in available_models:
                 for technique in Technique:
                     # Skip invalid combinations
                     if technique == Technique.CS_SVM and model_type != ModelType.SVM:
@@ -151,6 +163,15 @@ def main(
             is_flag=True,
         ),
     ] = False,
+    exclude_models: Annotated[
+        list[ModelType] | None,
+        typer.Option(
+            "--exclude-model",
+            "-x",
+            help="Exclude one or more model types (use multiple flags).",
+            case_sensitive=False,
+        ),
+    ] = None,
 ):
     """Runs the training experiments."""
     tracker = GitStateTracker("train_cli")
@@ -172,6 +193,11 @@ def main(
         ctx = Context(discard_checkpoints=discard_checkpoints)
 
         datasets = [dataset] if dataset is not None else list(Dataset)
+        excluded_models = set(exclude_models or [])
+
+        if len(excluded_models) == len(ModelType):
+            ctx.logger.warning("All model types were excluded. No experiments to run.")
+            return
 
         for ds in datasets:
             if not _artifacts_exist(ctx, ds):
@@ -192,7 +218,7 @@ def main(
             else:
                 n_jobs = jobs
 
-            run_dataset_experiments(ctx, ds, n_jobs)
+            run_dataset_experiments(ctx, ds, n_jobs, excluded_models)
     finally:
         tracker.record_current_commit()
 
