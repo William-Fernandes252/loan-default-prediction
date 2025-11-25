@@ -26,6 +26,7 @@ class AppConfig:
     interim_data_dir: Path = config.INTERIM_DATA_DIR
     processed_data_dir: Path = config.PROCESSED_DATA_DIR
     results_dir: Path = config.RESULTS_DIR
+    figures_dir: Path = config.FIGURES_DIR
     models_dir: Path = config.MODELS_DIR
 
     # Experiment Settings
@@ -83,7 +84,8 @@ class Context:
     def get_checkpoint_path(
         self, dataset_value: str, model: str, technique: str, seed: int
     ) -> Path:
-        ckpt_dir = self.cfg.results_dir / "checkpoints" / dataset_value
+        dataset_dir = self.get_dataset_results_dir(dataset_value, create=True)
+        ckpt_dir = dataset_dir / "checkpoints"
         ckpt_dir.mkdir(parents=True, exist_ok=True)
         return ckpt_dir / f"{model}_{technique}_seed{seed}.parquet"
 
@@ -93,7 +95,8 @@ class Context:
         Example: `taiwan_credit_consolidated_20251125_153045.parquet`
         """
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        return self.cfg.results_dir / f"{dataset_value}_consolidated_{ts}.parquet"
+        dataset_dir = self.get_dataset_results_dir(dataset_value, create=True)
+        return dataset_dir / f"{ts}.parquet"
 
     def get_latest_consolidated_results_path(self, dataset_value: str) -> Path | None:
         """Return the most recent consolidated results file for a dataset, or None.
@@ -101,12 +104,27 @@ class Context:
         This is useful for analysis code that wants to read the latest consolidated
         artifact without knowing the exact timestamped filename.
         """
-        pattern = f"{dataset_value}_consolidated_*.parquet"
-        files = list(self.cfg.results_dir.glob(pattern))
+        dataset_dir = self.get_dataset_results_dir(dataset_value)
+        pattern = "*.parquet"
+        files = list(dataset_dir.glob(pattern))
         if not files:
             return None
         # Choose the most recently modified file
         return max(files, key=lambda p: p.stat().st_mtime)
+
+    def get_dataset_results_dir(self, dataset_value: str, *, create: bool = False) -> Path:
+        """Return the directory under `results/` reserved for a dataset."""
+        dataset_dir = self.cfg.results_dir / dataset_value
+        if create:
+            dataset_dir.mkdir(parents=True, exist_ok=True)
+        return dataset_dir
+
+    def get_dataset_figures_dir(self, dataset_value: str, *, create: bool = False) -> Path:
+        """Return the directory under `figures/` reserved for a dataset."""
+        dataset_dir = self.cfg.figures_dir / dataset_value
+        if create:
+            dataset_dir.mkdir(parents=True, exist_ok=True)
+        return dataset_dir
 
     # --- Resource Helpers ---
 
