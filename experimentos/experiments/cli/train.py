@@ -27,19 +27,19 @@ app = typer.Typer()
 
 
 def _artifacts_exist(ctx: Context, dataset: Dataset) -> bool:
-    paths = ctx.get_feature_paths(dataset.value)
+    paths = ctx.get_feature_paths(dataset.id)
     return paths["X"].exists() and paths["y"].exists()
 
 
 def _consolidate_results(ctx: Context, dataset: Dataset):
     """Combines all checkpoint files into a single results file."""
-    sample_ckpt = ctx.get_checkpoint_path(dataset.value, "x", "y", 0)
+    sample_ckpt = ctx.get_checkpoint_path(dataset.id, "x", "y", 0)
     ckpt_dir = sample_ckpt.parent
 
     all_files = list(ckpt_dir.glob("*.parquet"))
 
     if all_files:
-        ctx.logger.info(f"Consolidating {len(all_files)} results for {dataset.value}...")
+        ctx.logger.info(f"Consolidating {len(all_files)} results for {dataset.display_name}...")
         # Read each checkpoint file and concatenate into a single DataFrame
         frames = []
         for fp in all_files:
@@ -50,7 +50,7 @@ def _consolidate_results(ctx: Context, dataset: Dataset):
 
         if frames:
             df_final = cast(pd.DataFrame, pd.concat(frames, ignore_index=True))
-            final_output = ctx.get_consolidated_results_path(dataset.value)
+            final_output = ctx.get_consolidated_results_path(dataset.id)
 
             # Ensure results directory exists
             final_output.parent.mkdir(parents=True, exist_ok=True)
@@ -58,9 +58,9 @@ def _consolidate_results(ctx: Context, dataset: Dataset):
             df_final.to_parquet(final_output)
             ctx.logger.success(f"Saved consolidated results to {final_output}")
         else:
-            ctx.logger.warning(f"No readable checkpoint files found for {dataset.value}")
+            ctx.logger.warning(f"No readable checkpoint files found for {dataset.display_name}")
     else:
-        ctx.logger.warning(f"No results found for {dataset.value}")
+        ctx.logger.warning(f"No results found for {dataset.display_name}")
 
 
 def run_dataset_experiments(
@@ -72,14 +72,14 @@ def run_dataset_experiments(
     """
     Prepares data and launches parallel experiment tasks for a dataset.
     """
-    paths = ctx.get_feature_paths(dataset.value)
+    paths = ctx.get_feature_paths(dataset.id)
     x_path, y_path = paths["X"], paths["y"]
 
     if not x_path.exists() or not y_path.exists():
-        ctx.logger.error(f"Data missing for {dataset}")
+        ctx.logger.error(f"Data missing for {dataset.display_name}")
         return
 
-    ctx.logger.info(f"Loading data for {dataset.value}...")
+    ctx.logger.info(f"Loading data for {dataset.display_name}...")
 
     # Load original data
     X_df = pl.read_parquet(x_path).to_pandas()
@@ -108,7 +108,7 @@ def run_dataset_experiments(
         available_models = [m for m in ModelType if m not in excluded_models_set]
         if not available_models:
             ctx.logger.warning(
-                f"No eligible models left to run for {dataset.value} after exclusions."
+                f"No eligible models left to run for {dataset.display_name} after exclusions."
             )
             return
         # Access settings via Context
@@ -126,7 +126,7 @@ def run_dataset_experiments(
                     tasks.append(
                         (
                             ctx,
-                            dataset.value,
+                            dataset.id,
                             X_mmap_path,
                             y_mmap_path,
                             model_type,
@@ -136,7 +136,7 @@ def run_dataset_experiments(
                     )
 
         ctx.logger.info(
-            f"Dataset {dataset.value}: Launching {len(tasks)} tasks with {jobs} workers..."
+            f"Dataset {dataset.display_name}: Launching {len(tasks)} tasks with {jobs} workers..."
         )
 
         # Execute Parallel
@@ -214,14 +214,14 @@ def main(
 
         for ds in datasets:
             if not _artifacts_exist(ctx, ds):
-                ctx.logger.warning(f"Artifacts not found for {ds}. Skipping.")
+                ctx.logger.warning(f"Artifacts not found for {ds.display_name}. Skipping.")
                 continue
 
             gc.collect()
 
             # Calculate jobs using Context helper
             if jobs is None:
-                raw_path = ctx.get_raw_data_path(ds.value)
+                raw_path = ctx.get_raw_data_path(ds.id)
                 if raw_path.exists():
                     size_gb = raw_path.stat().st_size / (1024**3)
                 else:
@@ -251,7 +251,7 @@ def consolidate(
     datasets = [dataset] if dataset is not None else list(Dataset)
 
     for ds in datasets:
-        ctx.logger.info(f"Consolidating results for {ds.value}...")
+        ctx.logger.info(f"Consolidating results for {ds.display_name}...")
         _consolidate_results(ctx, ds)
 
 

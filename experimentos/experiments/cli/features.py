@@ -22,16 +22,16 @@ app = typer.Typer()
 
 
 def _artifacts_exist(ctx: Context, dataset: Dataset) -> bool:
-    paths = ctx.get_feature_paths(dataset.value)
+    paths = ctx.get_feature_paths(dataset.id)
     return any(path.exists() for path in paths.values())
 
 
 def _process_single_dataset(ctx: Context, dataset: Dataset) -> tuple[Dataset, bool, str | None]:
     """Orchestrates the feature extraction for a single dataset."""
     try:
-        ctx.logger.info(f"Preparing features (X/y) for: {dataset.value}")
+        ctx.logger.info(f"Preparing features (X/y) for: {dataset.display_name}")
 
-        input_path = ctx.get_interim_data_path(dataset.value)
+        input_path = ctx.get_interim_data_path(dataset.id)
         if not input_path.exists():
             msg = f"File not found: {input_path}. Run 'experiments.cli.data' first."
             raise FileNotFoundError(msg)
@@ -44,7 +44,7 @@ def _process_single_dataset(ctx: Context, dataset: Dataset) -> tuple[Dataset, bo
         X_final, y_final = extract_features_and_target(df)
 
         # 3. Save Artifacts
-        artifacts = ctx.get_feature_paths(dataset.value)
+        artifacts = ctx.get_feature_paths(dataset.id)
         for path in artifacts.values():
             path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -52,11 +52,11 @@ def _process_single_dataset(ctx: Context, dataset: Dataset) -> tuple[Dataset, bo
         X_final.write_parquet(artifacts["X"])
         y_final.write_parquet(artifacts["y"])
 
-        ctx.logger.success(f"Processed data saved for {dataset.value}")
+        ctx.logger.success(f"Processed data saved for {dataset.display_name}")
         return dataset, True, None
 
     except Exception as exc:  # noqa: BLE001
-        ctx.logger.exception(f"Failed to process features for {dataset}: {exc}")
+        ctx.logger.exception(f"Failed to process features for {dataset.display_name}: {exc}")
         return dataset, False, str(exc)
 
 
@@ -92,16 +92,16 @@ def main(
     datasets = filter_items_for_processing(
         datasets,
         exists_fn=lambda ds: _artifacts_exist(ctx, ds),
-        prompt_fn=lambda ds: f"Features for '{ds.value}' exist. Overwrite?",
+        prompt_fn=lambda ds: f"Features for '{ds.display_name}' exist. Overwrite?",
         force=force,
-        on_skip=lambda ds: ctx.logger.info(f"Skipping dataset {ds} per user choice."),
+        on_skip=lambda ds: ctx.logger.info(f"Skipping dataset {ds.display_name} per user choice."),
     )
 
     if not datasets:
         ctx.logger.info("No dataset selected.")
         return
 
-    dataset_names = ", ".join(ds.value for ds in datasets)
+    dataset_names = ", ".join(ds.display_name for ds in datasets)
     ctx.logger.info(f"Scheduling feature preparation for: {dataset_names}")
 
     n_jobs = get_jobs_from_available_cpus(jobs)
@@ -112,7 +112,7 @@ def main(
 
     failed = [ds for ds, success, _ in results if not success]
     if failed:
-        failed_names = ", ".join(ds.value for ds in failed)
+        failed_names = ", ".join(ds.display_name for ds in failed)
         ctx.logger.error(f"Feature preparation failed for: {failed_names}")
         raise typer.Exit(code=1)
 

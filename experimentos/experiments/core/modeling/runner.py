@@ -49,16 +49,18 @@ def run_experiment_task(
         technique (Technique): The handling technique.
         seed (int): Random seed.
     """
-    # Reconstruct Enum from string
-    dataset = Dataset(dataset_val)
+    # Reconstruct Dataset enum from identifier
+    try:
+        dataset = Dataset(dataset_val)  # type: ignore[arg-type]
+    except ValueError:
+        dataset = Dataset.from_id(str(dataset_val))
 
     # Use context for path resolution
-    checkpoint_path = ctx.get_checkpoint_path(
-        dataset.value, model_type.value, technique.value, seed
-    )
+    checkpoint_path = ctx.get_checkpoint_path(dataset.id, model_type.id, technique.id, seed)
 
     ctx.logger.info(
-        f"Starting task: {dataset.value} | {model_type.value} | {technique.value} | seed={seed}"
+        f"Starting task: {dataset.display_name} | {model_type.display_name} | "
+        f"{technique.display_name} | seed={seed}"
     )
 
     # 1. Checkpoint Check
@@ -143,10 +145,10 @@ def run_experiment_task(
             auc_score = 0.5
 
         metrics = {
-            "dataset": dataset.value,
+            "dataset": dataset.id,
             "seed": seed,
-            "model": model_type.value,
-            "technique": technique.value,
+            "model": model_type.id,
+            "technique": technique.id,
             "best_params": str(grid.best_params_),
             "accuracy_balanced": balanced_accuracy_score(y_test, y_pred),
             "g_mean": g_mean_score(y_test, y_pred),
@@ -157,7 +159,8 @@ def run_experiment_task(
         }
 
         ctx.logger.success(
-            f"Finished: {dataset.value} | {model_type.value} | {technique.value} | seed={seed} -> "
+            f"Finished: {dataset.display_name} | {model_type.display_name} | "
+            f"{technique.display_name} | seed={seed} -> "
             f"AUC={auc_score:.4f}, F1={metrics['f1_score']:.4f}"
         )
 
@@ -169,12 +172,12 @@ def run_experiment_task(
         del grid, best_model, X_test, y_test, X_mmap, y_mmap
         gc.collect()
 
-        return f"{dataset.value} - {model_type.value} - {technique.value} - Seed {seed}"
+        return f"{dataset.id} - {model_type.id} - {technique.id} - Seed {seed}"
 
     except Exception:
         ctx.logger.error(
-            f"Failed task {dataset.value} {model_type.value} {technique.value} {seed}:\n"
-            f"{traceback.format_exc()}"
+            f"Failed task {dataset.display_name} {model_type.display_name} "
+            f"{technique.display_name} {seed}:\n{traceback.format_exc()}"
         )
         gc.collect()
         return None

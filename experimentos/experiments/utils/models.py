@@ -96,7 +96,7 @@ class FileSystemModelRepository(ModelRepository):
         self.base_path = base_path
         self.model_type = model_type
         self.technique = technique
-        self._model_dir = self.base_path / model_type.value / technique.value
+        self._model_dir = self.base_path / model_type.id / technique.id
         self._model_dir.mkdir(parents=True, exist_ok=True)
 
     def save_model(self, model: Classifier, id: str | None) -> ModelVersion:
@@ -110,8 +110,8 @@ class FileSystemModelRepository(ModelRepository):
             metadata = {
                 "id": model_id,
                 "created_at": created_at.isoformat(),
-                "type": self.model_type.value,
-                "technique": self.technique.value,
+                "type": self.model_type.id,
+                "technique": self.technique.id,
             }
             metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
         except Exception as exc:  # pragma: no cover - defensive catch for IO errors
@@ -168,7 +168,7 @@ class ModelVersioningServiceImpl(ModelVersioningService):
     def get_latest_version(self, model_type: ModelType, technique: Technique) -> ModelVersion:
         versions = list(self.list_versions(model_type, technique))
         if not versions:
-            raise ModelNotFoundError(f"{model_type.value}:{technique.value}")
+            raise ModelNotFoundError(f"{model_type.id}:{technique.id}")
         return versions[0]
 
     def list_versions(self, model_type: ModelType, technique: Technique) -> Iterable[ModelVersion]:

@@ -13,6 +13,7 @@ from typing_extensions import Annotated
 
 from experiments.context import Context
 from experiments.core.data import Dataset
+from experiments.core.modeling import ModelType, Technique
 
 MODULE_NAME = "experiments.cli.analysis"
 
@@ -25,19 +26,30 @@ app = typer.Typer()
 # Estimated Majority/Minority ratios for the datasets
 # Used to populate the 'imbalance_ratio' column for cross-dataset analysis
 IMBALANCE_RATIOS = {
-    "lending_club": 9.0,  # ~90% vs 10%
-    "taiwan_credit": 3.5,  # ~78% vs 22%
-    "corporate_credit": 2000.0,  # ~99.95% vs 0.05%
+    Dataset.LENDING_CLUB.id: 9.0,  # ~90% vs 10%
+    Dataset.TAIWAN_CREDIT.id: 3.5,  # ~78% vs 22%
+    Dataset.CORPORATE_CREDIT_RATING.id: 2000.0,  # ~99.95% vs 0.05%
 }
+
+MODEL_DISPLAY = {member.id: member.display_name for member in ModelType}
+TECHNIQUE_DISPLAY = {member.id: member.display_name for member in Technique}
 
 
 def _load_data(ctx: Context, dataset: Dataset) -> pd.DataFrame:
     """Loads the consolidated results for a given dataset."""
-    path = ctx.get_latest_consolidated_results_path(dataset.value)
+    path = ctx.get_latest_consolidated_results_path(dataset.id)
     if path is None or not path.exists():
-        ctx.logger.warning(f"No consolidated results found for {dataset.value} at {path}")
+        ctx.logger.warning(f"No consolidated results found for {dataset.display_name} at {path}")
         return pd.DataFrame()
-    return pd.read_parquet(path)
+    df = pd.read_parquet(path)
+    if df.empty:
+        return df
+    df = df.copy()
+    if "model" in df.columns:
+        df["model_display"] = df["model"].map(MODEL_DISPLAY).fillna(df["model"])
+    if "technique" in df.columns:
+        df["technique_display"] = df["technique"].map(TECHNIQUE_DISPLAY).fillna(df["technique"])
+    return df
 
 
 def _ensure_output_dir(ctx: Context, dataset_name: str) -> Path:
@@ -76,13 +88,13 @@ def analyze_stability_and_variance(
     metrics_to_plot = ["roc_auc", "g_mean", "f1_score"]
 
     for ds in datasets:
-        ctx.logger.info(f"Generating stability analysis for {ds.value}...")
+        ctx.logger.info(f"Generating stability analysis for {ds.display_name}...")
         df = _load_data(ctx, ds)
 
         if df.empty:
             continue
 
-        output_dir = _ensure_output_dir(ctx, ds.value)
+        output_dir = _ensure_output_dir(ctx, ds.id)
 
         for metric in metrics_to_plot:
             if metric not in df.columns:
@@ -94,9 +106,9 @@ def analyze_stability_and_variance(
             # Grouping by Model allows comparing techniques within a model architecture
             ax = sns.boxplot(
                 data=df,
-                x="technique",
+                x="technique_display",
                 y=metric,
-                hue="model",
+                hue="model_display",
                 palette="viridis",
                 showfliers=False,  # Hide outliers to focus on the IQR boxes
                 linewidth=1.5,
@@ -105,9 +117,9 @@ def analyze_stability_and_variance(
             # Add stripplot to see individual points (seeds) distributions
             sns.stripplot(
                 data=df,
-                x="technique",
+                x="technique_display",
                 y=metric,
-                hue="model",
+                hue="model_display",
                 dodge=True,
                 alpha=0.4,
                 palette="dark:black",
@@ -117,7 +129,7 @@ def analyze_stability_and_variance(
             )
 
             metric_name = metric.replace("_", " ").upper()
-            plt.title(f"Stability Analysis: {metric_name} - {ds.value}", fontsize=16)
+            plt.title(f"Stability Analysis: {metric_name} - {ds.display_name}", fontsize=16)
             plt.ylabel(metric_name, fontsize=12)
             plt.xlabel("Handling Technique", fontsize=12)
             plt.xticks(rotation=15)
@@ -156,16 +168,20 @@ def analyze_risk_tradeoff(
     sns.set_theme(style="whitegrid")
 
     for ds in datasets:
-        ctx.logger.info(f"Generating risk trade-off analysis for {ds.value}...")
+        ctx.logger.info(f"Generating risk trade-off analysis for {ds.display_name}...")
         df = _load_data(ctx, ds)
 
         if df.empty:
             continue
 
-        output_dir = _ensure_output_dir(ctx, ds.value)
+        output_dir = _ensure_output_dir(ctx, ds.id)
 
         # Calculate mean performance across seeds for stability
         df_agg = df.groupby(["model", "technique"])[["precision", "recall"]].mean().reset_index()
+        df_agg["model_display"] = df_agg["model"].map(MODEL_DISPLAY).fillna(df_agg["model"])
+        df_agg["technique_display"] = (
+            df_agg["technique"].map(TECHNIQUE_DISPLAY).fillna(df_agg["technique"])
+        )
 
         plt.figure(figsize=(12, 10))
 
@@ -177,8 +193,8 @@ def analyze_risk_tradeoff(
             data=df_agg,
             x="recall",
             y="precision",
-            hue="technique",
-            style="model",
+            hue="technique_display",
+            style="model_display",
             s=200,  # Marker size
             palette="deep",
             alpha=0.8,
@@ -186,7 +202,7 @@ def analyze_risk_tradeoff(
         )
 
         plt.title(
-            f"Precision-Recall Trade-off (Mean over {ctx.cfg.num_seeds} seeds) - {ds.value}",
+            f"Precision-Recall Trade-off (Mean over {ctx.cfg.num_seeds} seeds) - {ds.display_name}",
             fontsize=16,
         )
         plt.xlabel("Recall (Sensitivity) - Ability to detect defaults", fontsize=12)
@@ -240,22 +256,24 @@ def analyze_imbalance_impact(
     metrics = ["roc_auc", "f1_score"]
 
     for ds in datasets:
-        ctx.logger.info(f"Generating imbalance impact analysis for {ds.value}...")
+        ctx.logger.info(f"Generating imbalance impact analysis for {ds.display_name}...")
         df = _load_data(ctx, ds)
 
         if df.empty:
             continue
 
-        ratio = IMBALANCE_RATIOS.get(ds.value, 1.0)
+        ratio = IMBALANCE_RATIOS.get(ds.id, 1.0)
         df_plot = df.copy()
         df_plot["imbalance_ratio"] = ratio
 
         available_metrics = [metric for metric in metrics if metric in df_plot.columns]
         if not available_metrics:
-            ctx.logger.warning(f"No supported metrics found for imbalance analysis in {ds.value}.")
+            ctx.logger.warning(
+                f"No supported metrics found for imbalance analysis in {ds.display_name}."
+            )
             continue
 
-        output_dir = _ensure_output_dir(ctx, ds.value)
+        output_dir = _ensure_output_dir(ctx, ds.id)
 
         plt.figure(figsize=(7 * len(available_metrics), 6))
 
@@ -265,8 +283,8 @@ def analyze_imbalance_impact(
                 data=df_plot,
                 x="imbalance_ratio",
                 y=metric,
-                hue="technique",
-                style="model",
+                hue="technique_display",
+                style="model_display",
                 s=100,
                 palette="muted",
                 alpha=0.7,
@@ -276,7 +294,7 @@ def analyze_imbalance_impact(
             plt.xlabel("Imbalance Ratio (Majority/Minority) - Log Scale", fontsize=12)
             plt.ylabel(metric.replace("_", " ").upper(), fontsize=12)
             plt.title(
-                f"{metric.replace('_', ' ').upper()} vs. Imbalance Ratio - {ds.value}",
+                f"{metric.replace('_', ' ').upper()} vs. Imbalance Ratio - {ds.display_name}",
                 fontsize=14,
             )
             plt.legend(bbox_to_anchor=(1.01, 1), loc="upper left", borderaxespad=0.0)
@@ -312,27 +330,29 @@ def compare_cost_sensitive_and_resampling(
     sns.set_theme(style="whitegrid")
 
     for ds in datasets:
-        ctx.logger.info(f"Generating cost-sensitive vs resampling analysis for {ds.value}...")
+        ctx.logger.info(
+            f"Generating cost-sensitive vs resampling analysis for {ds.display_name}..."
+        )
         df = _load_data(ctx, ds)
 
         if df.empty:
             continue
 
-        output_dir = _ensure_output_dir(ctx, ds.value)
+        output_dir = _ensure_output_dir(ctx, ds.id)
 
         plt.figure(figsize=(12, 8))
 
         sns.barplot(
             data=df,
-            x="technique",
+            x="technique_display",
             y="roc_auc",
-            hue="model",
+            hue="model_display",
             palette="Set2",
             errorbar="sd",
             capsize=0.1,
         )
 
-        plt.title(f"Cost-Sensitive vs Resampling Performance - {ds.value}", fontsize=16)
+        plt.title(f"Cost-Sensitive vs Resampling Performance - {ds.display_name}", fontsize=16)
         plt.ylabel("ROC AUC", fontsize=12)
         plt.xlabel("Technique", fontsize=12)
         plt.ylim(0.0, 1.0)
@@ -370,20 +390,20 @@ def analyze_hyperparameter_effects(
     sns.set_theme(style="whitegrid")
 
     for ds in datasets:
-        ctx.logger.info(f"Generating hyperparameter effects analysis for {ds.value}...")
+        ctx.logger.info(f"Generating hyperparameter effects analysis for {ds.display_name}...")
         df = _load_data(ctx, ds)
 
         if df.empty:
             continue
 
-        output_dir = _ensure_output_dir(ctx, ds.value)
+        output_dir = _ensure_output_dir(ctx, ds.id)
 
         # Safely parse the 'best_params' string into columns
         # best_params is typically a string representation of a dict: "{'clf__C': 1.0, ...}"
         try:
             hp_df = df["best_params"].apply(lambda x: pd.Series(ast.literal_eval(x)))
         except (ValueError, SyntaxError) as e:
-            ctx.logger.error(f"Failed to parse hyperparameters for {ds.value}: {e}")
+            ctx.logger.error(f"Failed to parse hyperparameters for {ds.display_name}: {e}")
             continue
 
         # Combine metrics with extracted hyperparameters
@@ -393,8 +413,9 @@ def analyze_hyperparameter_effects(
             if col in df.columns
         ]
 
-        # We also need 'technique' and 'model' for grouping
-        meta_columns = ["technique", "model"]
+        # We also need identifiers and display labels for grouping
+        display_cols = [col for col in ("technique_display", "model_display") if col in df.columns]
+        meta_columns = ["technique", "model", *display_cols]
 
         if metric_columns:
             # Reconstruct a DataFrame with HPs + Metrics + Metadata
@@ -421,8 +442,10 @@ def analyze_hyperparameter_effects(
                     data=merged_df,
                     x=param,
                     y="roc_auc",
-                    hue="technique",
-                    style="model",
+                    hue="technique_display"
+                    if "technique_display" in merged_df.columns
+                    else "technique",
+                    style="model_display" if "model_display" in merged_df.columns else "model",
                     marker="o",
                     errorbar=None,  # Avoid matplotlib warnings on single-sample groups
                 )
@@ -430,7 +453,7 @@ def analyze_hyperparameter_effects(
                 if is_numeric:
                     plt.xscale("log")
 
-                plt.title(f"Effect of {param} on ROC AUC - {ds.value}", fontsize=16)
+                plt.title(f"Effect of {param} on ROC AUC - {ds.display_name}", fontsize=16)
                 plt.xlabel(f"{param} (Log Scale if numeric)", fontsize=12)
                 plt.ylabel("ROC AUC", fontsize=12)
                 plt.ylim(0.0, 1.05)

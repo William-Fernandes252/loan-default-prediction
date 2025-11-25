@@ -40,10 +40,10 @@ def get_processor(ctx: Context, dataset: Dataset) -> DataProcessor:
 def _process_single_dataset(ctx: Context, dataset: Dataset) -> tuple[Dataset, bool, str | None]:
     """Runs the preprocessing pipeline for a single dataset."""
     try:
-        ctx.logger.info(f"Processing dataset {dataset}...")
+        ctx.logger.info(f"Processing dataset {dataset.display_name}...")
 
-        raw_data_path = ctx.get_raw_data_path(dataset.value)
-        output_path = ctx.get_interim_data_path(dataset.value)
+        raw_data_path = ctx.get_raw_data_path(dataset.id)
+        output_path = ctx.get_interim_data_path(dataset.id)
 
         ctx.logger.info(f"Loading raw data from {raw_data_path}...")
         read_csv_kwargs: dict[str, Any] = {"low_memory": False, "use_pyarrow": True}
@@ -64,11 +64,11 @@ def _process_single_dataset(ctx: Context, dataset: Dataset) -> tuple[Dataset, bo
         ctx.logger.info(f"Saving processed data to {output_path}...")
         processed_data.write_parquet(output_path)
 
-        ctx.logger.success(f"Processing dataset {dataset} complete.")
+        ctx.logger.success(f"Processing dataset {dataset.display_name} complete.")
         return dataset, True, None
 
     except Exception as exc:  # noqa: BLE001
-        ctx.logger.exception(f"Failed to process dataset {dataset}: {exc}")
+        ctx.logger.exception(f"Failed to process dataset {dataset.display_name}: {exc}")
         return dataset, False, str(exc)
 
 
@@ -120,17 +120,17 @@ def main(
     # Use context for path checking in filter
     datasets_to_process = filter_items_for_processing(
         datasets_to_process,
-        exists_fn=lambda ds: ctx.get_interim_data_path(ds.value).exists(),
-        prompt_fn=lambda ds: f"File '{ctx.get_interim_data_path(ds.value)}' exists. Overwrite?",
+        exists_fn=lambda ds: ctx.get_interim_data_path(ds.id).exists(),
+        prompt_fn=lambda ds: f"File '{ctx.get_interim_data_path(ds.id)}' exists. Overwrite?",
         force=force,
-        on_skip=lambda ds: ctx.logger.info(f"Skipping dataset {ds} per user choice."),
+        on_skip=lambda ds: ctx.logger.info(f"Skipping dataset {ds.display_name} per user choice."),
     )
 
     if not datasets_to_process:
         ctx.logger.info("No datasets selected for processing. Exiting.")
         return
 
-    dataset_names = ", ".join(ds.value for ds in datasets_to_process)
+    dataset_names = ", ".join(ds.display_name for ds in datasets_to_process)
     ctx.logger.info(f"Scheduling preprocessing for: {dataset_names}")
 
     n_jobs = get_jobs_from_available_cpus(jobs)
@@ -142,7 +142,7 @@ def main(
 
     failed = [ds for ds, success, _ in results if not success]
     if failed:
-        failed_names = ", ".join(ds.value for ds in failed)
+        failed_names = ", ".join(ds.display_name for ds in failed)
         ctx.logger.error(f"Processing failed for: {failed_names}")
         raise typer.Exit(code=1)
 
