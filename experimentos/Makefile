@@ -56,6 +56,11 @@ create_environment:
 
 
 
+## Compile translations
+.PHONY: compile-i18n
+compile-i18n:
+	$(PYTHON_INTERPRETER) compile_i18n.py
+
 
 #################################################################################
 # PROJECT RULES                                                                 #

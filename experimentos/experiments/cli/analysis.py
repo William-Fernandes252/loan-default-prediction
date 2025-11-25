@@ -1,6 +1,7 @@
 """CLI for analyzing experimental results."""
 
 import ast
+import gettext
 from pathlib import Path
 import sys
 from typing import Optional
@@ -13,7 +14,6 @@ from typing_extensions import Annotated
 
 from experiments.context import Context
 from experiments.core.data import Dataset
-from experiments.core.modeling import ModelType, Technique
 
 MODULE_NAME = "experiments.cli.analysis"
 
@@ -23,6 +23,13 @@ if __name__ == "__main__":
 app = typer.Typer()
 
 
+def _noop(s):
+    return s
+
+
+# Global translation function, will be set in main/commands
+_ = _noop
+
 # Estimated Majority/Minority ratios for the datasets
 # Used to populate the 'imbalance_ratio' column for cross-dataset analysis
 IMBALANCE_RATIOS = {
@@ -31,8 +38,53 @@ IMBALANCE_RATIOS = {
     Dataset.CORPORATE_CREDIT_RATING.id: 2000.0,  # ~99.95% vs 0.05%
 }
 
-MODEL_DISPLAY = {member.id: member.display_name for member in ModelType}
-TECHNIQUE_DISPLAY = {member.id: member.display_name for member in Technique}
+
+def _setup_i18n(language: str):
+    """Sets up the gettext translation based on the language code."""
+    global _
+    locales_dir = Path(__file__).parents[2] / "locales"
+    try:
+        lang = gettext.translation("base", localedir=locales_dir, languages=[language])
+        lang.install()
+        _ = lang.gettext
+    except FileNotFoundError:
+        # Fallback to null translation (English/Source)
+        _ = _noop
+
+
+def _get_model_display(model_id: str) -> str:
+    """Returns the translated display name for a model."""
+    # Map IDs to translatable strings
+    mapping = {
+        "random_forest": _("Random Forest"),
+        "svm": _("Support Vector Machine"),
+        "xgboost": _("XGBoost"),
+        "mlp": _("Multi-Layer Perceptron"),
+    }
+    return mapping.get(model_id, model_id)
+
+
+def _get_technique_display(technique_id: str) -> str:
+    """Returns the translated display name for a technique."""
+    mapping = {
+        "baseline": _("Baseline"),
+        "smote": _("SMOTE"),
+        "random_under_sampling": _("Random Under Sampling"),
+        "smote_tomek": _("SMOTE Tomek"),
+        "meta_cost": _("Meta Cost"),
+        "cs_svm": _("Cost-sensitive SVM"),
+    }
+    return mapping.get(technique_id, technique_id)
+
+
+def _get_dataset_display(dataset_id: str) -> str:
+    """Returns the translated display name for a dataset."""
+    mapping = {
+        "corporate_credit_rating": _("Corporate Credit Rating"),
+        "lending_club": _("Lending Club"),
+        "taiwan_credit": _("Taiwan Credit"),
+    }
+    return mapping.get(dataset_id, dataset_id)
 
 
 def _load_data(ctx: Context, dataset: Dataset) -> pd.DataFrame:
@@ -45,18 +97,21 @@ def _load_data(ctx: Context, dataset: Dataset) -> pd.DataFrame:
     if df.empty:
         return df
     df = df.copy()
+
+    # Apply translations to model and technique columns
     if "model" in df.columns:
-        df["model_display"] = df["model"].map(MODEL_DISPLAY).fillna(df["model"])
+        df["model_display"] = df["model"].apply(_get_model_display)
     if "technique" in df.columns:
-        df["technique_display"] = df["technique"].map(TECHNIQUE_DISPLAY).fillna(df["technique"])
+        df["technique_display"] = df["technique"].apply(_get_technique_display)
+
     return df
 
 
-def _ensure_output_dir(ctx: Context, dataset_name: str) -> Path:
+def _ensure_output_dir(ctx: Context, dataset_name: str, language: str) -> Path:
     """Creates and returns the directory for saving analysis plots."""
-    # Saves in reports/figures/<dataset>/
+    # Saves in reports/<language>/figures/<dataset>/
     # If analyzing multiple datasets combined, uses 'combined'
-    output_dir = ctx.cfg.figures_dir / dataset_name
+    output_dir = ctx.cfg.figures_dir.parent / language / "figures" / dataset_name
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir
 
@@ -72,6 +127,9 @@ def analyze_stability_and_variance(
             ),
         ),
     ] = None,
+    language: Annotated[
+        str, typer.Option("--language", "-l", help="Language code (e.g., en_US, pt_BR)")
+    ] = "en_US",
 ):
     """Analyzes the stability and variance of model performance across seeds.
 
@@ -80,6 +138,7 @@ def analyze_stability_and_variance(
     2. Median performance: Which method is consistently better?
     3. Outliers: Cases where the model failed significantly.
     """
+    _setup_i18n(language)
     ctx = Context()
     datasets = [dataset] if dataset is not None else list(Dataset)
 
@@ -87,14 +146,22 @@ def analyze_stability_and_variance(
     sns.set_theme(style="whitegrid")
     metrics_to_plot = ["roc_auc", "g_mean", "f1_score"]
 
+    # Metric display names mapping
+    metric_names = {
+        "roc_auc": _("ROC AUC"),
+        "g_mean": _("G-Mean"),
+        "f1_score": _("F1 Score"),
+    }
+
     for ds in datasets:
-        ctx.logger.info(f"Generating stability analysis for {ds.display_name}...")
+        ds_display = _get_dataset_display(ds.id)
+        ctx.logger.info(f"Generating stability analysis for {ds_display}...")
         df = _load_data(ctx, ds)
 
         if df.empty:
             continue
 
-        output_dir = _ensure_output_dir(ctx, ds.id)
+        output_dir = _ensure_output_dir(ctx, ds.id, language)
 
         for metric in metrics_to_plot:
             if metric not in df.columns:
@@ -128,12 +195,16 @@ def analyze_stability_and_variance(
                 size=3,
             )
 
-            metric_name = metric.replace("_", " ").upper()
-            plt.title(f"Stability Analysis: {metric_name} - {ds.display_name}", fontsize=16)
-            plt.ylabel(metric_name, fontsize=12)
-            plt.xlabel("Handling Technique", fontsize=12)
+            metric_display = metric_names.get(metric, metric.replace("_", " ").upper())
+
+            title = _("Stability Analysis: {metric_name} - {dataset_name}").format(
+                metric_name=metric_display, dataset_name=ds_display
+            )
+            plt.title(title, fontsize=16)
+            plt.ylabel(metric_display, fontsize=12)
+            plt.xlabel(_("Handling Technique"), fontsize=12)
             plt.xticks(rotation=15)
-            plt.legend(bbox_to_anchor=(1.01, 1), loc="upper left", title="Model")
+            plt.legend(bbox_to_anchor=(1.01, 1), loc="upper left", title=_("Model"))
 
             filename = output_dir / f"stability_{metric}.png"
             plt.tight_layout()
@@ -154,6 +225,9 @@ def analyze_risk_tradeoff(
             ),
         ),
     ] = None,
+    language: Annotated[
+        str, typer.Option("--language", "-l", help="Language code (e.g., en_US, pt_BR)")
+    ] = "en_US",
 ):
     """Analyzes the risk trade-off curves for different models and techniques.
 
@@ -162,26 +236,28 @@ def analyze_risk_tradeoff(
     Which technique offered the best Recall without destroying Precision?
     The F1-Score helps summarize this, but the graph tells the full story.
     """
+    _setup_i18n(language)
     ctx = Context()
     datasets = [dataset] if dataset is not None else list(Dataset)
 
     sns.set_theme(style="whitegrid")
 
     for ds in datasets:
-        ctx.logger.info(f"Generating risk trade-off analysis for {ds.display_name}...")
+        ds_display = _get_dataset_display(ds.id)
+        ctx.logger.info(f"Generating risk trade-off analysis for {ds_display}...")
         df = _load_data(ctx, ds)
 
         if df.empty:
             continue
 
-        output_dir = _ensure_output_dir(ctx, ds.id)
+        output_dir = _ensure_output_dir(ctx, ds.id, language)
 
         # Calculate mean performance across seeds for stability
         df_agg = df.groupby(["model", "technique"])[["precision", "recall"]].mean().reset_index()
-        df_agg["model_display"] = df_agg["model"].map(MODEL_DISPLAY).fillna(df_agg["model"])
-        df_agg["technique_display"] = (
-            df_agg["technique"].map(TECHNIQUE_DISPLAY).fillna(df_agg["technique"])
-        )
+
+        # Apply translations
+        df_agg["model_display"] = df_agg["model"].apply(_get_model_display)
+        df_agg["technique_display"] = df_agg["technique"].apply(_get_technique_display)
 
         plt.figure(figsize=(12, 10))
 
@@ -201,12 +277,12 @@ def analyze_risk_tradeoff(
             edgecolor="k",
         )
 
-        plt.title(
-            f"Precision-Recall Trade-off (Mean over {ctx.cfg.num_seeds} seeds) - {ds.display_name}",
-            fontsize=16,
-        )
-        plt.xlabel("Recall (Sensitivity) - Ability to detect defaults", fontsize=12)
-        plt.ylabel("Precision - Trustworthiness of default prediction", fontsize=12)
+        title = _(
+            "Precision-Recall Trade-off (Mean over {num_seeds} seeds) - {dataset_name}"
+        ).format(num_seeds=ctx.cfg.num_seeds, dataset_name=ds_display)
+        plt.title(title, fontsize=16)
+        plt.xlabel(_("Recall (Sensitivity) - Ability to detect defaults"), fontsize=12)
+        plt.ylabel(_("Precision - Trustworthiness of default prediction"), fontsize=12)
         plt.xlim(-0.05, 1.05)
         plt.ylim(-0.05, 1.05)
 
@@ -241,6 +317,9 @@ def analyze_imbalance_impact(
             ),
         ),
     ] = None,
+    language: Annotated[
+        str, typer.Option("--language", "-l", help="Language code (e.g., en_US, pt_BR)")
+    ] = "en_US",
 ):
     """Analyzes how class imbalance ratio affects model performance.
 
@@ -248,6 +327,7 @@ def analyze_imbalance_impact(
     and generates scatter plots to visualize the correlation between imbalance
     ratio and key performance metrics (ROC AUC, F1 Score).
     """
+    _setup_i18n(language)
     ctx = Context()
     datasets = [dataset] if dataset is not None else list(Dataset)
 
@@ -255,8 +335,15 @@ def analyze_imbalance_impact(
 
     metrics = ["roc_auc", "f1_score"]
 
+    # Metric display names mapping
+    metric_names = {
+        "roc_auc": _("ROC AUC"),
+        "f1_score": _("F1 Score"),
+    }
+
     for ds in datasets:
-        ctx.logger.info(f"Generating imbalance impact analysis for {ds.display_name}...")
+        ds_display = _get_dataset_display(ds.id)
+        ctx.logger.info(f"Generating imbalance impact analysis for {ds_display}...")
         df = _load_data(ctx, ds)
 
         if df.empty:
@@ -269,11 +356,11 @@ def analyze_imbalance_impact(
         available_metrics = [metric for metric in metrics if metric in df_plot.columns]
         if not available_metrics:
             ctx.logger.warning(
-                f"No supported metrics found for imbalance analysis in {ds.display_name}."
+                f"No supported metrics found for imbalance analysis in {ds_display}."
             )
             continue
 
-        output_dir = _ensure_output_dir(ctx, ds.id)
+        output_dir = _ensure_output_dir(ctx, ds.id, language)
 
         plt.figure(figsize=(7 * len(available_metrics), 6))
 
@@ -291,12 +378,15 @@ def analyze_imbalance_impact(
                 edgecolor="k",
             )
             plt.xscale("log")
-            plt.xlabel("Imbalance Ratio (Majority/Minority) - Log Scale", fontsize=12)
-            plt.ylabel(metric.replace("_", " ").upper(), fontsize=12)
-            plt.title(
-                f"{metric.replace('_', ' ').upper()} vs. Imbalance Ratio - {ds.display_name}",
-                fontsize=14,
+            plt.xlabel(_("Imbalance Ratio (Majority/Minority) - Log Scale"), fontsize=12)
+
+            metric_display = metric_names.get(metric, metric.replace("_", " ").upper())
+            plt.ylabel(metric_display, fontsize=12)
+
+            title = _("{metric_name} vs. Imbalance Ratio - {dataset_name}").format(
+                metric_name=metric_display, dataset_name=ds_display
             )
+            plt.title(title, fontsize=14)
             plt.legend(bbox_to_anchor=(1.01, 1), loc="upper left", borderaxespad=0.0)
 
         filename = output_dir / "imbalance_impact.png"
@@ -318,27 +408,30 @@ def compare_cost_sensitive_and_resampling(
             ),
         ),
     ] = None,
+    language: Annotated[
+        str, typer.Option("--language", "-l", help="Language code (e.g., en_US, pt_BR)")
+    ] = "en_US",
 ):
     """Compares cost-sensitive methods against resampling techniques.
 
     Generates bar plots to visualize and compare the performance of
     cost-sensitive classifiers (e.g., MetaCost) against various resampling methods.
     """
+    _setup_i18n(language)
     ctx = Context()
     datasets = [dataset] if dataset is not None else list(Dataset)
 
     sns.set_theme(style="whitegrid")
 
     for ds in datasets:
-        ctx.logger.info(
-            f"Generating cost-sensitive vs resampling analysis for {ds.display_name}..."
-        )
+        ds_display = _get_dataset_display(ds.id)
+        ctx.logger.info(f"Generating cost-sensitive vs resampling analysis for {ds_display}...")
         df = _load_data(ctx, ds)
 
         if df.empty:
             continue
 
-        output_dir = _ensure_output_dir(ctx, ds.id)
+        output_dir = _ensure_output_dir(ctx, ds.id, language)
 
         plt.figure(figsize=(12, 8))
 
@@ -352,11 +445,14 @@ def compare_cost_sensitive_and_resampling(
             capsize=0.1,
         )
 
-        plt.title(f"Cost-Sensitive vs Resampling Performance - {ds.display_name}", fontsize=16)
-        plt.ylabel("ROC AUC", fontsize=12)
-        plt.xlabel("Technique", fontsize=12)
+        title = _("Cost-Sensitive vs Resampling Performance - {dataset_name}").format(
+            dataset_name=ds_display
+        )
+        plt.title(title, fontsize=16)
+        plt.ylabel(_("ROC AUC"), fontsize=12)
+        plt.xlabel(_("Technique"), fontsize=12)
         plt.ylim(0.0, 1.0)
-        plt.legend(bbox_to_anchor=(1.01, 1), loc="upper left", title="Model")
+        plt.legend(bbox_to_anchor=(1.01, 1), loc="upper left", title=_("Model"))
         plt.xticks(rotation=15)
 
         filename = output_dir / "cost_sensitive_vs_resampling.png"
@@ -378,32 +474,37 @@ def analyze_hyperparameter_effects(
             ),
         ),
     ] = None,
+    language: Annotated[
+        str, typer.Option("--language", "-l", help="Language code (e.g., en_US, pt_BR)")
+    ] = "en_US",
 ):
     """Analyzes the effects of hyperparameter choices on model performance.
 
     Generates heatmaps or line plots to visualize how different hyperparameter
     settings impact key performance metrics like ROC AUC.
     """
+    _setup_i18n(language)
     ctx = Context()
     datasets = [dataset] if dataset is not None else list(Dataset)
 
     sns.set_theme(style="whitegrid")
 
     for ds in datasets:
-        ctx.logger.info(f"Generating hyperparameter effects analysis for {ds.display_name}...")
+        ds_display = _get_dataset_display(ds.id)
+        ctx.logger.info(f"Generating hyperparameter effects analysis for {ds_display}...")
         df = _load_data(ctx, ds)
 
         if df.empty:
             continue
 
-        output_dir = _ensure_output_dir(ctx, ds.id)
+        output_dir = _ensure_output_dir(ctx, ds.id, language)
 
         # Safely parse the 'best_params' string into columns
         # best_params is typically a string representation of a dict: "{'clf__C': 1.0, ...}"
         try:
             hp_df = df["best_params"].apply(lambda x: pd.Series(ast.literal_eval(x)))
         except (ValueError, SyntaxError) as e:
-            ctx.logger.error(f"Failed to parse hyperparameters for {ds.display_name}: {e}")
+            ctx.logger.error(f"Failed to parse hyperparameters for {ds_display}: {e}")
             continue
 
         # Combine metrics with extracted hyperparameters
@@ -453,11 +554,16 @@ def analyze_hyperparameter_effects(
                 if is_numeric:
                     plt.xscale("log")
 
-                plt.title(f"Effect of {param} on ROC AUC - {ds.display_name}", fontsize=16)
-                plt.xlabel(f"{param} (Log Scale if numeric)", fontsize=12)
-                plt.ylabel("ROC AUC", fontsize=12)
+                title = _("Effect of {param} on ROC AUC - {dataset_name}").format(
+                    param=param, dataset_name=ds_display
+                )
+                plt.title(title, fontsize=16)
+
+                xlabel = _("{param} (Log Scale if numeric)").format(param=param)
+                plt.xlabel(xlabel, fontsize=12)
+                plt.ylabel(_("ROC AUC"), fontsize=12)
                 plt.ylim(0.0, 1.05)
-                plt.legend(bbox_to_anchor=(1.01, 1), loc="upper left", title="Technique")
+                plt.legend(bbox_to_anchor=(1.01, 1), loc="upper left", title=_("Technique"))
 
                 filename = output_dir / f"hyperparameter_effects_{param.replace('__', '_')}.png"
                 plt.tight_layout()
@@ -478,13 +584,16 @@ def run_all_analyses(
             ),
         ),
     ] = None,
+    language: Annotated[
+        str, typer.Option("--language", "-l", help="Language code (e.g., en_US, pt_BR)")
+    ] = "en_US",
 ):
     """Runs all analysis commands sequentially."""
-    analyze_stability_and_variance(dataset)
-    analyze_risk_tradeoff(dataset)
-    analyze_imbalance_impact(dataset)
-    compare_cost_sensitive_and_resampling(dataset)
-    analyze_hyperparameter_effects(dataset)
+    analyze_stability_and_variance(dataset, language=language)
+    analyze_risk_tradeoff(dataset, language=language)
+    analyze_imbalance_impact(dataset, language=language)
+    compare_cost_sensitive_and_resampling(dataset, language=language)
+    analyze_hyperparameter_effects(dataset, language=language)
 
 
 if __name__ == "__main__":

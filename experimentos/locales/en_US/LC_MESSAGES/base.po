@@ -1,0 +1,97 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "Stability Analysis: {metric_name} - {dataset_name}"
+msgstr "Stability Analysis: {metric_name} - {dataset_name}"
+
+msgid "Handling Technique"
+msgstr "Handling Technique"
+
+msgid "Precision-Recall Trade-off (Mean over {num_seeds} seeds) - {dataset_name}"
+msgstr "Precision-Recall Trade-off (Mean over {num_seeds} seeds) - {dataset_name}"
+
+msgid "Recall (Sensitivity) - Ability to detect defaults"
+msgstr "Recall (Sensitivity) - Ability to detect defaults"
+
+msgid "Precision - Trustworthiness of default prediction"
+msgstr "Precision - Trustworthiness of default prediction"
+
+msgid "{metric_name} vs. Imbalance Ratio - {dataset_name}"
+msgstr "{metric_name} vs. Imbalance Ratio - {dataset_name}"
+
+msgid "Imbalance Ratio (Majority/Minority) - Log Scale"
+msgstr "Imbalance Ratio (Majority/Minority) - Log Scale"
+
+msgid "Cost-Sensitive vs Resampling Performance - {dataset_name}"
+msgstr "Cost-Sensitive vs Resampling Performance - {dataset_name}"
+
+msgid "Technique"
+msgstr "Technique"
+
+msgid "Effect of {param} on ROC AUC - {dataset_name}"
+msgstr "Effect of {param} on ROC AUC - {dataset_name}"
+
+msgid "{param} (Log Scale if numeric)"
+msgstr "{param} (Log Scale if numeric)"
+
+msgid "ROC AUC"
+msgstr "ROC AUC"
+
+msgid "Model"
+msgstr "Model"
+
+# Dataset names
+msgid "Corporate Credit Rating"
+msgstr "Corporate Credit Rating"
+
+msgid "Lending Club"
+msgstr "Lending Club"
+
+msgid "Taiwan Credit"
+msgstr "Taiwan Credit"
+
+# Model names
+msgid "Random Forest"
+msgstr "Random Forest"
+
+msgid "Support Vector Machine"
+msgstr "Support Vector Machine"
+
+msgid "XGBoost"
+msgstr "XGBoost"
+
+msgid "Multi-Layer Perceptron"
+msgstr "Multi-Layer Perceptron"
+
+# Technique names
+msgid "Baseline"
+msgstr "Baseline"
+
+msgid "SMOTE"
+msgstr "SMOTE"
+
+msgid "Random Under Sampling"
+msgstr "Random Under Sampling"
+
+msgid "SMOTE Tomek"
+msgstr "SMOTE Tomek"
+
+msgid "Meta Cost"
+msgstr "Meta Cost"
+
+msgid "Cost-sensitive SVM"
+msgstr "Cost-sensitive SVM"
+
+# Metrics
+msgid "G-Mean"
+msgstr "G-Mean"
+
+msgid "F1 Score"
+msgstr "F1 Score"
+
+msgid "Precision"
+msgstr "Precision"
+
+msgid "Recall"
+msgstr "Recall"
