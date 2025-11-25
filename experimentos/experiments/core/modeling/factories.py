@@ -8,11 +8,12 @@ from imblearn.over_sampling import SMOTE
 from imblearn.pipeline import Pipeline as ImbPipeline
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.base import BaseEstimator
-from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
+from xgboost import XGBClassifier
 
 from experiments.core.modeling.estimators import MetaCostClassifier
 
@@ -22,7 +23,7 @@ class ModelType(enum.Enum):
 
     RANDOM_FOREST = "random_forest"
     SVM = "svm"
-    ADA_BOOST = "ada_boost"
+    XGBOOST = "xgboost"
     MLP = "mlp"
 
 
@@ -53,8 +54,12 @@ def get_hyperparameters(model_type: ModelType) -> dict:
             "clf__min_samples_leaf": [1, 5],
             # Random Forest also accepts class_weight, useful for comparison with CS-SVM
         },
-        ModelType.ADA_BOOST: {
-            "clf__n_estimators": [200, 500, 1000],
+        ModelType.XGBOOST: {
+            "clf__n_estimators": [100, 200],
+            "clf__learning_rate": [0.01, 0.1, 0.3],  # 'eta' in XGBoost terminology
+            "clf__max_depth": [3, 6, 10],  # Important for controlling complexity
+            "clf__subsample": [0.8, 1.0],  # Helps to avoid over-fitting
+            "clf__colsample_bytree": [0.8, 1.0],  # Fraction of features per tree
         },
         ModelType.MLP: {
             "clf__hidden_layer_sizes": [(50,), (100,), (50, 50)],
@@ -72,8 +77,12 @@ def get_model_instance(model_type: ModelType, random_state: int) -> BaseEstimato
         return SVC(random_state=random_state, probability=True)
     elif model_type == ModelType.RANDOM_FOREST:
         return RandomForestClassifier(random_state=random_state, n_jobs=1)
-    elif model_type == ModelType.ADA_BOOST:
-        return AdaBoostClassifier(random_state=random_state, learning_rate=0.001, n_estimators=100)
+    elif model_type == ModelType.XGBOOST:
+        return XGBClassifier(
+            random_state=random_state,
+            eval_metric="logloss",
+            n_jobs=1,
+        )
     elif model_type == ModelType.MLP:
         return MLPClassifier(
             random_state=random_state, max_iter=1000, early_stopping=True, n_iter_no_change=20
