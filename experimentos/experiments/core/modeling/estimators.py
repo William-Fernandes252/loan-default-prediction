@@ -6,7 +6,58 @@ import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.dummy import DummyClassifier
 from sklearn.ensemble import BaggingClassifier
+from sklearn.svm import SVC
 from sklearn.utils.class_weight import compute_class_weight
+from xgboost import XGBClassifier
+
+
+class _ProbabilityMatrixClassesCorrectionMixin:
+    @staticmethod
+    def _ensure_two_classes(probas: np.ndarray, classes: np.ndarray) -> np.ndarray:
+        """
+        Ensures that the probability matrix has 2 columns, even if the model
+        has collapsed to a single class.
+        """
+        if probas.shape[1] == 1:
+            n_samples = probas.shape[0]
+            new_probas = np.zeros((n_samples, 2), dtype=probas.dtype)
+
+            # The model only knows one class. Which one is it?
+            present_class = int(classes[0])
+
+            # If the present class is 0, fill column 0. If it is 1, fill column 1.
+            # Assumes binary classes {0, 1}.
+            if present_class == 0:
+                new_probas[:, 0] = probas[:, 0]
+                new_probas[:, 1] = 0.0
+            elif present_class == 1:
+                new_probas[:, 1] = probas[:, 0]
+                new_probas[:, 0] = 0.0
+
+            return new_probas
+        return probas
+
+
+class RobustSVC(_ProbabilityMatrixClassesCorrectionMixin, SVC):
+    """SVC that ensures output (N, 2) in predict_proba even in degenerate cases.
+
+    Inherits from SVC, so it works natively with GridSearchCV.
+    """
+
+    def predict_proba(self, X):
+        probas = super().predict_proba(X)
+        return self._ensure_two_classes(probas, self.classes_)
+
+
+class RobustXGBClassifier(_ProbabilityMatrixClassesCorrectionMixin, XGBClassifier):
+    """XGBClassifier that ensures output (N, 2) in predict_proba even in degenerate cases.
+
+    Inherits from XGBClassifier, so it works natively with GridSearchCV.
+    """
+
+    def predict_proba(self, X, **kwargs):
+        probas = super().predict_proba(X, **kwargs)
+        return self._ensure_two_classes(probas, self.classes_)
 
 
 class MetaCostClassifier(ClassifierMixin, BaseEstimator):
@@ -116,4 +167,29 @@ class MetaCostClassifier(ClassifierMixin, BaseEstimator):
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         if self.final_estimator_ is None:
             raise ValueError("The model has not been fitted yet.")
-        return self.final_estimator_.predict_proba(X)
+
+        probas = self.final_estimator_.predict_proba(X)
+
+        # If the classifier collapsed to a single class (e.g., DummyClassifier),
+        # the output will have shape (N, 1). We need to expand it to (N, 2).
+        if probas.shape[1] == 1:
+            n_samples = probas.shape[0]
+            # Create a (N, 2) matrix filled with zeros
+            new_probas = np.zeros((n_samples, 2), dtype=probas.dtype)
+
+            # Discover which class remains (0 or 1)
+            present_class = int(self.final_estimator_.classes_[0])
+
+            # Map the probability to the correct column
+            # If the class is 0, fill column 0; if it is 1, fill column 1.
+            # It is assumed that the original classes were 0 and 1 (validated in fit).
+            if present_class == 0:
+                new_probas[:, 0] = probas[:, 0]  # P(0)
+                # P(1) remains 0.0
+            elif present_class == 1:
+                new_probas[:, 1] = probas[:, 0]  # P(1)
+                # P(0) remains 0.0
+
+            return new_probas
+
+        return probas

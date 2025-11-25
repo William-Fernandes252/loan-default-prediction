@@ -12,10 +12,10 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import StandardScaler
-from sklearn.svm import SVC
-from xgboost import XGBClassifier
 
 from experiments.core.modeling.estimators import MetaCostClassifier
+from experiments.core.modeling.estimators import RobustSVC as SVC
+from experiments.core.modeling.estimators import RobustXGBClassifier as XGBClassifier
 
 
 class ModelType(enum.Enum):
@@ -79,9 +79,7 @@ def get_model_instance(model_type: ModelType, random_state: int) -> BaseEstimato
         return RandomForestClassifier(random_state=random_state, n_jobs=1)
     elif model_type == ModelType.XGBOOST:
         return XGBClassifier(
-            random_state=random_state,
-            eval_metric="logloss",
-            n_jobs=1,
+            random_state=random_state, eval_metric="logloss", n_jobs=1, objective="binary:logistic"
         )
     elif model_type == ModelType.MLP:
         return MLPClassifier(
