@@ -4,7 +4,7 @@ import gc
 import os
 import sys
 import tempfile
-from typing import Optional
+from typing import Optional, cast
 
 import joblib
 from joblib import Parallel, delayed
@@ -33,8 +33,6 @@ def _artifacts_exist(ctx: Context, dataset: Dataset) -> bool:
 
 def _consolidate_results(ctx: Context, dataset: Dataset):
     """Combines all checkpoint files into a single results file."""
-    # We use the context helper to find the directory
-    # We can infer the directory from a sample checkpoint path
     sample_ckpt = ctx.get_checkpoint_path(dataset.value, "x", "y", 0)
     ckpt_dir = sample_ckpt.parent
 
@@ -42,10 +40,25 @@ def _consolidate_results(ctx: Context, dataset: Dataset):
 
     if all_files:
         ctx.logger.info(f"Consolidating {len(all_files)} results for {dataset.value}...")
-        df_final = pd.read_parquet(ckpt_dir)
-        final_output = ctx.get_consolidated_results_path(dataset.value)
-        df_final.to_parquet(final_output)
-        ctx.logger.success(f"Saved consolidated results to {final_output}")
+        # Read each checkpoint file and concatenate into a single DataFrame
+        frames = []
+        for fp in all_files:
+            try:
+                frames.append(pd.read_parquet(fp))
+            except Exception:
+                ctx.logger.warning(f"Failed to read checkpoint file {fp}, skipping.")
+
+        if frames:
+            df_final = cast(pd.DataFrame, pd.concat(frames, ignore_index=True))
+            final_output = ctx.get_consolidated_results_path(dataset.value)
+
+            # Ensure results directory exists
+            final_output.parent.mkdir(parents=True, exist_ok=True)
+
+            df_final.to_parquet(final_output)
+            ctx.logger.success(f"Saved consolidated results to {final_output}")
+        else:
+            ctx.logger.warning(f"No readable checkpoint files found for {dataset.value}")
     else:
         ctx.logger.warning(f"No results found for {dataset.value}")
 
@@ -221,6 +234,25 @@ def main(
             run_dataset_experiments(ctx, ds, n_jobs, excluded_models)
     finally:
         tracker.record_current_commit()
+
+
+@app.command("consolidate")
+def consolidate(
+    dataset: Annotated[
+        Optional[Dataset],
+        typer.Argument(
+            help="Dataset to consolidate. If omitted, consolidates all datasets.",
+        ),
+    ] = None,
+):
+    """Consolidates checkpoint parquet files into the final results artifact."""
+
+    ctx = Context()
+    datasets = [dataset] if dataset is not None else list(Dataset)
+
+    for ds in datasets:
+        ctx.logger.info(f"Consolidating results for {ds.value}...")
+        _consolidate_results(ctx, ds)
 
 
 if __name__ == "__main__":
