@@ -67,10 +67,30 @@ compile-i18n:
 #################################################################################
 
 
-## Make dataset
-.PHONY: data
-data: requirements
-	$(PYTHON_INTERPRETER) experimentos/dataset.py
+## Process raw data
+.PHONY: process-data
+process-data:
+	uv run ldp data process
+
+## Prepare features
+.PHONY: prepare-features
+prepare-features:
+	uv run ldp features prepare
+
+## Run training experiments
+.PHONY: train
+train:
+	uv run ldp train experiment
+
+## Consolidate training results
+.PHONY: consolidate-results
+consolidate-results:
+	uv run ldp train consolidate
+
+## Analyze results
+.PHONY: analyze
+analyze:
+	uv run ldp analyze all
 
 
 #################################################################################
