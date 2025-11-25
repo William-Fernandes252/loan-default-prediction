@@ -67,6 +67,7 @@ def run_experiment_task(
             ctx.logger.info(f"Discarding checkpoint at {checkpoint_path}")
             checkpoint_path.unlink(missing_ok=True)
         else:
+            ctx.logger.info(f"Checkpoint found at {checkpoint_path}, skipping task.")
             return None
 
     try:
