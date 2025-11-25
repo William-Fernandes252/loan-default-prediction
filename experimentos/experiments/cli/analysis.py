@@ -110,7 +110,7 @@ def analyze_stability_and_variance(
                 hue="model",
                 dodge=True,
                 alpha=0.4,
-                color="black",
+                palette="dark:black",
                 legend=False,
                 ax=ax,
                 size=3,
@@ -215,65 +215,78 @@ def analyze_risk_tradeoff(
 
 
 @app.command("imbalanceimpact")
-def analyze_imbalance_impact():
+def analyze_imbalance_impact(
+    dataset: Annotated[
+        Optional[Dataset],
+        typer.Argument(
+            help=(
+                "Identifier of the dataset to analyze. "
+                "When omitted, all datasets are analyzed sequentially."
+            ),
+        ),
+    ] = None,
+):
     """Analyzes how class imbalance ratio affects model performance.
 
-    Loads ALL datasets, injects their imbalance ratios, and generates
-    scatter plots to visualize the correlation between imbalance ratio
-    and key performance metrics (ROC AUC, F1 Score).
+    Loads each requested dataset independently, injects its imbalance ratio,
+    and generates scatter plots to visualize the correlation between imbalance
+    ratio and key performance metrics (ROC AUC, F1 Score).
     """
     ctx = Context()
+    datasets = [dataset] if dataset is not None else list(Dataset)
+
     sns.set_theme(style="whitegrid")
 
-    ctx.logger.info("Generating imbalance impact analysis across ALL datasets...")
-
-    all_dfs = []
-    for ds in list(Dataset):
-        df = _load_data(ctx, ds)
-        if not df.empty:
-            # Inject imbalance ratio based on dataset name
-            ratio = IMBALANCE_RATIOS.get(ds.value, 1.0)
-            df["imbalance_ratio"] = ratio
-            all_dfs.append(df)
-
-    if not all_dfs:
-        ctx.logger.warning("No data found to analyze imbalance impact.")
-        return
-
-    df_combined = pd.concat(all_dfs, ignore_index=True)
-    output_dir = _ensure_output_dir(ctx, "combined")
-
-    plt.figure(figsize=(14, 6))
-
     metrics = ["roc_auc", "f1_score"]
-    for i, metric in enumerate(metrics, 1):
-        if metric not in df_combined.columns:
+
+    for ds in datasets:
+        ctx.logger.info(f"Generating imbalance impact analysis for {ds.value}...")
+        df = _load_data(ctx, ds)
+
+        if df.empty:
             continue
 
-        plt.subplot(1, 2, i)
-        sns.scatterplot(
-            data=df_combined,
-            x="imbalance_ratio",
-            y=metric,
-            hue="technique",
-            style="model",
-            s=100,
-            palette="muted",
-            alpha=0.7,
-            edgecolor="k",
-        )
-        plt.xscale("log")
-        plt.xlabel("Imbalance Ratio (Majority/Minority) - Log Scale", fontsize=12)
-        plt.ylabel(metric.replace("_", " ").upper(), fontsize=12)
-        plt.title(f"{metric.replace('_', ' ').upper()} vs. Imbalance Ratio", fontsize=14)
-        plt.legend(bbox_to_anchor=(1.01, 1), loc="upper left", borderaxespad=0.0)
+        ratio = IMBALANCE_RATIOS.get(ds.value, 1.0)
+        df_plot = df.copy()
+        df_plot["imbalance_ratio"] = ratio
 
-    filename = output_dir / "imbalance_impact.png"
-    plt.tight_layout()
-    plt.savefig(filename, dpi=300)
-    plt.close()
+        available_metrics = [metric for metric in metrics if metric in df_plot.columns]
+        if not available_metrics:
+            ctx.logger.warning(f"No supported metrics found for imbalance analysis in {ds.value}.")
+            continue
 
-    ctx.logger.success(f"Saved imbalance impact plot to {filename}")
+        output_dir = _ensure_output_dir(ctx, ds.value)
+
+        plt.figure(figsize=(7 * len(available_metrics), 6))
+
+        for i, metric in enumerate(available_metrics, 1):
+            plt.subplot(1, len(available_metrics), i)
+            sns.scatterplot(
+                data=df_plot,
+                x="imbalance_ratio",
+                y=metric,
+                hue="technique",
+                style="model",
+                s=100,
+                palette="muted",
+                alpha=0.7,
+                edgecolor="k",
+            )
+            plt.xscale("log")
+            plt.xlabel("Imbalance Ratio (Majority/Minority) - Log Scale", fontsize=12)
+            plt.ylabel(metric.replace("_", " ").upper(), fontsize=12)
+            plt.title(
+                f"{metric.replace('_', ' ').upper()} vs. Imbalance Ratio - {ds.value}",
+                fontsize=14,
+            )
+            plt.legend(bbox_to_anchor=(1.01, 1), loc="upper left", borderaxespad=0.0)
+
+        filename = output_dir / "imbalance_impact.png"
+        plt.tight_layout()
+        plt.savefig(filename, dpi=300)
+        plt.close()
+
+        ctx.logger.success(f"Saved imbalance impact plot to {filename}")
 
 
 @app.command("csvsresampling")
@@ -430,6 +443,26 @@ def analyze_hyperparameter_effects(
                 plt.close()
 
                 ctx.logger.success(f"Saved hyperparameter effects plot to {filename}")
+
+
+@app.command("all")
+def run_all_analyses(
+    dataset: Annotated[
+        Optional[Dataset],
+        typer.Argument(
+            help=(
+                "Identifier of the dataset to analyze. "
+                "When omitted, all datasets are analyzed sequentially."
+            ),
+        ),
+    ] = None,
+):
+    """Runs all analysis commands sequentially."""
+    analyze_stability_and_variance(dataset)
+    analyze_risk_tradeoff(dataset)
+    analyze_imbalance_impact(dataset)
+    compare_cost_sensitive_and_resampling(dataset)
+    analyze_hyperparameter_effects(dataset)
 
 
 if __name__ == "__main__":
