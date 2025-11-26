@@ -1,6 +1,7 @@
 """CLI for analyzing experimental results."""
 
 import ast
+import enum
 import gettext
 from pathlib import Path
 import sys
@@ -17,8 +18,19 @@ from experiments.core.data import Dataset
 
 MODULE_NAME = "experiments.cli.analysis"
 
+
+class _Language(enum.Enum):
+    """Supported languages for analysis reports."""
+
+    ENGLISH = "en_US"
+    PORTUGUESE_BRAZIL = "pt_BR"
+
+
+_LanguageOption = Annotated[_Language, typer.Option("--language", "-l", help="Language code")]
+
 if __name__ == "__main__":
     sys.modules.setdefault(MODULE_NAME, sys.modules[__name__])
+
 
 app = typer.Typer()
 
@@ -39,12 +51,12 @@ IMBALANCE_RATIOS = {
 }
 
 
-def _setup_i18n(language: str):
+def _setup_i18n(language: _Language):
     """Sets up the gettext translation based on the language code."""
     global _
     locales_dir = Path(__file__).parents[2] / "locales"
     try:
-        lang = gettext.translation("base", localedir=locales_dir, languages=[language])
+        lang = gettext.translation("base", localedir=locales_dir, languages=[language.value])
         lang.install()
         _ = lang.gettext
     except FileNotFoundError:
@@ -107,11 +119,11 @@ def _load_data(ctx: Context, dataset: Dataset) -> pd.DataFrame:
     return df
 
 
-def _ensure_output_dir(ctx: Context, dataset_name: str, language: str) -> Path:
+def _ensure_output_dir(ctx: Context, dataset_name: str, language: _Language) -> Path:
     """Creates and returns the directory for saving analysis plots."""
     # Saves in reports/<language>/figures/<dataset>/
     # If analyzing multiple datasets combined, uses 'combined'
-    output_dir = ctx.cfg.figures_dir.parent / language / "figures" / dataset_name
+    output_dir = ctx.cfg.figures_dir.parent / language.value / "figures" / dataset_name
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir
 
@@ -127,9 +139,7 @@ def analyze_stability_and_variance(
             ),
         ),
     ] = None,
-    language: Annotated[
-        str, typer.Option("--language", "-l", help="Language code (e.g., en_US, pt_BR)")
-    ] = "en_US",
+    language: _LanguageOption = _Language.ENGLISH,
 ):
     """Analyzes the stability and variance of model performance across seeds.
 
@@ -225,9 +235,7 @@ def analyze_risk_tradeoff(
             ),
         ),
     ] = None,
-    language: Annotated[
-        str, typer.Option("--language", "-l", help="Language code (e.g., en_US, pt_BR)")
-    ] = "en_US",
+    language: _LanguageOption = _Language.ENGLISH,
 ):
     """Analyzes the risk trade-off curves for different models and techniques.
 
@@ -317,9 +325,7 @@ def analyze_imbalance_impact(
             ),
         ),
     ] = None,
-    language: Annotated[
-        str, typer.Option("--language", "-l", help="Language code (e.g., en_US, pt_BR)")
-    ] = "en_US",
+    language: _LanguageOption = _Language.ENGLISH,
 ):
     """Analyzes how class imbalance ratio affects model performance.
 
@@ -408,9 +414,7 @@ def compare_cost_sensitive_and_resampling(
             ),
         ),
     ] = None,
-    language: Annotated[
-        str, typer.Option("--language", "-l", help="Language code (e.g., en_US, pt_BR)")
-    ] = "en_US",
+    language: _LanguageOption = _Language.ENGLISH,
 ):
     """Compares cost-sensitive methods against resampling techniques.
 
@@ -474,9 +478,7 @@ def analyze_hyperparameter_effects(
             ),
         ),
     ] = None,
-    language: Annotated[
-        str, typer.Option("--language", "-l", help="Language code (e.g., en_US, pt_BR)")
-    ] = "en_US",
+    language: _LanguageOption = _Language.ENGLISH,
 ):
     """Analyzes the effects of hyperparameter choices on model performance.
 
@@ -573,6 +575,94 @@ def analyze_hyperparameter_effects(
                 ctx.logger.success(f"Saved hyperparameter effects plot to {filename}")
 
 
+@app.command("experiment")
+def analyze_results(
+    dataset: Annotated[
+        Optional[Dataset],
+        typer.Argument(
+            help=(
+                "Identifier of the dataset to analyze. "
+                "When omitted, all datasets are analyzed sequentially."
+            ),
+        ),
+    ] = None,
+    language: _LanguageOption = _Language.ENGLISH,
+):
+    """Analyzes overall experimental results in a tabular format."""
+    _setup_i18n(language)
+    ctx = Context()
+    datasets = [dataset] if dataset is not None else list(Dataset)
+
+    # Metrics to report
+    metrics = ["roc_auc", "g_mean", "f1_score", "precision", "recall"]
+
+    # Metric display names
+    metric_names = {
+        "roc_auc": _("ROC AUC"),
+        "g_mean": _("G-Mean"),
+        "f1_score": _("F1 Score"),
+        "precision": _("Precision"),
+        "recall": _("Recall"),
+    }
+
+    for ds in datasets:
+        ds_display = _get_dataset_display(ds.id)
+        ctx.logger.info(f"Analyzing results for {ds_display}...")
+        df = _load_data(ctx, ds)
+
+        if df.empty:
+            continue
+
+        available_metrics = [m for m in metrics if m in df.columns]
+        if not available_metrics:
+            ctx.logger.warning(f"No metrics found for {ds_display}.")
+            continue
+
+        # Group by Model and Technique
+        # We want to aggregate over seeds
+        # Ensure display columns exist (they are added in _load_data)
+        group_cols = ["model", "technique", "model_display", "technique_display"]
+
+        # Calculate mean and std
+        agg_dict = {m: ["mean", "std"] for m in available_metrics}
+        summary = df.groupby(group_cols)[available_metrics].agg(agg_dict)
+
+        # Flatten MultiIndex columns
+        summary.columns = [f"{col[0]}_{col[1]}" for col in summary.columns]
+        summary = summary.reset_index()
+
+        # Create a display DataFrame
+        display_df = pd.DataFrame()
+        display_df[_("Model")] = summary["model_display"]
+        display_df[_("Technique")] = summary["technique_display"]
+
+        for m in available_metrics:
+            m_display = metric_names.get(m, m)
+            mean_col = f"{m}_mean"
+            std_col = f"{m}_std"
+            display_df[m_display] = summary.apply(
+                lambda row: f"{row[mean_col]:.4f} ± {row[std_col]:.4f}", axis=1
+            )
+
+        # Sort by ROC AUC (mean) descending
+        sort_col = "roc_auc_mean"
+        if sort_col in summary.columns:
+            summary = summary.sort_values(sort_col, ascending=False)
+            display_df = display_df.iloc[summary.index]
+
+        # Print to console
+        print(f"\n=== {ds_display} ===")
+        # Use to_string for a simple table representation
+        print(display_df.to_string(index=False))
+        print("\n")
+
+        # Save to file
+        output_dir = _ensure_output_dir(ctx, ds.id, language)
+        output_csv = output_dir / "results_summary.csv"
+        display_df.to_csv(output_csv, index=False)
+        ctx.logger.success(f"Saved summary table to {output_csv}")
+
+
 @app.command("all")
 def run_all_analyses(
     dataset: Annotated[
@@ -584,9 +674,7 @@ def run_all_analyses(
             ),
         ),
     ] = None,
-    language: Annotated[
-        str, typer.Option("--language", "-l", help="Language code (e.g., en_US, pt_BR)")
-    ] = "en_US",
+    language: _LanguageOption = _Language.ENGLISH,
 ):
     """Runs all analysis commands sequentially."""
     analyze_stability_and_variance(dataset, language=language)
@@ -594,6 +682,7 @@ def run_all_analyses(
     analyze_imbalance_impact(dataset, language=language)
     compare_cost_sensitive_and_resampling(dataset, language=language)
     analyze_hyperparameter_effects(dataset, language=language)
+    analyze_results(dataset, language=language)
 
 
 if __name__ == "__main__":
