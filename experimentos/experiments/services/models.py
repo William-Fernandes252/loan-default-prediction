@@ -10,7 +10,7 @@ from typing import Any, Protocol
 import joblib
 from uuid_extensions import uuid7
 
-from experiments.core.modeling import ModelType, Technique
+from experiments.core.modeling.types import ModelType, Technique
 
 
 class ModelNotFoundError(Exception):
@@ -45,6 +45,7 @@ class ModelVersion:
     created_at: datetime
     type: ModelType
     technique: Technique
+    dataset: str
 
 
 class ModelRepository(Protocol):
@@ -85,6 +86,15 @@ class ModelVersioningService(Protocol):
         """
         ...
 
+    def save_model(self, model: Classifier, id: str | None) -> ModelVersion:
+        """Saves a model and returns its version information.
+
+        Args:
+            model (Classifier): The model to save.
+            id (str | None): Optional identifier for the model. If None, a new ID is generated.
+        """
+        ...
+
 
 class FileSystemModelRepository(ModelRepository):
     """A simple file system-based model repository implementation."""
@@ -92,11 +102,12 @@ class FileSystemModelRepository(ModelRepository):
     _MODEL_EXTENSION = ".joblib"
     _METADATA_EXTENSION = ".json"
 
-    def __init__(self, base_path: Path, model_type: ModelType, technique: Technique):
+    def __init__(self, base_path: Path, dataset: str, model_type: ModelType, technique: Technique):
         self.base_path = base_path
+        self.dataset = dataset
         self.model_type = model_type
         self.technique = technique
-        self._model_dir = self.base_path / model_type.id / technique.id
+        self._model_dir = self.base_path / dataset / model_type.id / technique.id
         self._model_dir.mkdir(parents=True, exist_ok=True)
 
     def save_model(self, model: Classifier, id: str | None) -> ModelVersion:
@@ -112,6 +123,7 @@ class FileSystemModelRepository(ModelRepository):
                 "created_at": created_at.isoformat(),
                 "type": self.model_type.id,
                 "technique": self.technique.id,
+                "dataset": self.dataset,
             }
             metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
         except Exception as exc:  # pragma: no cover - defensive catch for IO errors
@@ -125,6 +137,7 @@ class FileSystemModelRepository(ModelRepository):
             created_at=created_at,
             type=self.model_type,
             technique=self.technique,
+            dataset=self.dataset,
         )
 
     def load_model(self, id: str) -> Classifier:
@@ -153,6 +166,7 @@ class FileSystemModelRepository(ModelRepository):
                     created_at=created_at,
                     type=self.model_type,
                     technique=self.technique,
+                    dataset=data.get("dataset", self.dataset),
                 )
             )
 
@@ -178,3 +192,6 @@ class ModelVersioningServiceImpl(ModelVersioningService):
             if version.type == model_type and version.technique == technique
         ]
         return sorted(versions, key=lambda mv: mv.created_at, reverse=True)
+
+    def save_model(self, model: Classifier, id: str | None) -> ModelVersion:
+        return self.repository.save_model(model, id)

@@ -1,10 +1,12 @@
 """Experiment running logic for executing modeling tasks with memory efficiency."""
 
 import gc
+from pathlib import Path
 import traceback
 from typing import Optional
 
 import joblib
+from loguru import logger
 import numpy as np
 import pandas as pd
 from sklearn.metrics import (
@@ -16,38 +18,42 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import GridSearchCV, StratifiedKFold, train_test_split
 
-from experiments.context import Context
 from experiments.core.data import Dataset
-from experiments.core.modeling import (
-    ModelType,
-    Technique,
+from experiments.core.modeling.factories import (
     build_pipeline,
-    g_mean_score,
     get_hyperparameters,
     get_params_for_technique,
 )
+from experiments.core.modeling.metrics import g_mean_score
+from experiments.core.modeling.schema import ExperimentConfig
+from experiments.core.modeling.types import ModelType, Technique
+from experiments.services.models import ModelVersioningService
 
 
 def run_experiment_task(
-    ctx: Context,
+    cfg: ExperimentConfig,
     dataset_val: str,
     X_mmap_path: str,
     y_mmap_path: str,
     model_type: ModelType,
     technique: Technique,
     seed: int,
+    checkpoint_path: Path,
+    model_versioning_service: Optional[ModelVersioningService] = None,
 ) -> Optional[str]:
     """
-    Executes a single experiment task using the provided Context.
+    Executes a single experiment task.
 
     Args:
-        ctx (Context): The application context containing config and logger.
+        cfg (ExperimentConfig): Experiment configuration.
         dataset_val (str): The dataset identifier.
         X_mmap_path (str): Path to features memmap.
         y_mmap_path (str): Path to target memmap.
         model_type (ModelType): The model to train.
         technique (Technique): The handling technique.
         seed (int): Random seed.
+        checkpoint_path (Path): Path to save the checkpoint.
+        model_versioning_service (Optional[ModelVersioningService]): Service to save the model.
     """
     # Reconstruct Dataset enum from identifier
     try:
@@ -55,21 +61,18 @@ def run_experiment_task(
     except ValueError:
         dataset = Dataset.from_id(str(dataset_val))
 
-    # Use context for path resolution
-    checkpoint_path = ctx.get_checkpoint_path(dataset.id, model_type.id, technique.id, seed)
-
-    ctx.logger.info(
+    logger.info(
         f"Starting task: {dataset.display_name} | {model_type.display_name} | "
         f"{technique.display_name} | seed={seed}"
     )
 
     # 1. Checkpoint Check
     if checkpoint_path.exists():
-        if ctx.discard_checkpoints:
-            ctx.logger.info(f"Discarding checkpoint at {checkpoint_path}")
+        if cfg.discard_checkpoints:
+            logger.info(f"Discarding checkpoint at {checkpoint_path}")
             checkpoint_path.unlink(missing_ok=True)
         else:
-            ctx.logger.info(f"Checkpoint found at {checkpoint_path}, skipping task.")
+            logger.info(f"Checkpoint found at {checkpoint_path}, skipping task.")
             return None
 
     try:
@@ -82,7 +85,7 @@ def run_experiment_task(
         min_class_count = counts.min()
 
         stratify_y = y_mmap
-        internal_cv_folds = ctx.cfg.cv_folds
+        internal_cv_folds = cfg.cv_folds
 
         # Adjust folds if class count is too small
         if min_class_count < 2:
@@ -112,7 +115,7 @@ def run_experiment_task(
         base_grid = get_hyperparameters(model_type)
 
         # Retrieve cost grids from Context
-        param_grid = get_params_for_technique(model_type, technique, base_grid, ctx.cfg.cost_grids)
+        param_grid = get_params_for_technique(model_type, technique, base_grid, cfg.cost_grids)
 
         grid = GridSearchCV(
             estimator=pipeline,
@@ -158,11 +161,19 @@ def run_experiment_task(
             "roc_auc": auc_score,
         }
 
-        ctx.logger.success(
+        logger.success(
             f"Finished: {dataset.display_name} | {model_type.display_name} | "
             f"{technique.display_name} | seed={seed} -> "
             f"AUC={auc_score:.4f}, F1={metrics['f1_score']:.4f}"
         )
+
+        # Save Model
+        if model_versioning_service:
+            try:
+                version = model_versioning_service.save_model(best_model, None)
+                logger.info(f"Saved model {version.id}")
+            except Exception as e:
+                logger.warning(f"Failed to save model: {e}")
 
         # 9. Save Checkpoint
         df_res = pd.DataFrame([metrics])
@@ -175,7 +186,7 @@ def run_experiment_task(
         return f"{dataset.id} - {model_type.id} - {technique.id} - Seed {seed}"
 
     except Exception:
-        ctx.logger.error(
+        logger.error(
             f"Failed task {dataset.display_name} {model_type.display_name} "
             f"{technique.display_name} {seed}:\n{traceback.format_exc()}"
         )

@@ -15,6 +15,12 @@ from loguru import logger
 import psutil
 
 from experiments import config
+from experiments.core.modeling.types import ModelType, Technique
+from experiments.services.models import (
+    FileSystemModelRepository,
+    ModelVersioningService,
+    ModelVersioningServiceImpl,
+)
 
 
 @dataclass
@@ -44,6 +50,12 @@ class Context:
     The runtime context for the application.
 
     Acts as a facade for configuration, logging, and system interactions.
+
+    Attributes:
+        cfg (AppConfig): The application configuration.
+        logger (loguru.Logger): The logger instance.
+        model_versioning_service (ModelVersioningService): Service for model versioning. If not provided, model versioning is disabled.
+        discard_checkpoints (bool): Whether to discard intermediate checkpoints.
     """
 
     def __init__(
@@ -65,6 +77,13 @@ class Context:
         os.environ["OPENBLAS_NUM_THREADS"] = self.cfg.max_threads
         os.environ["VECLIB_MAXIMUM_THREADS"] = self.cfg.max_threads
         os.environ["NUMEXPR_NUM_THREADS"] = self.cfg.max_threads
+
+    def get_model_versioning_service(
+        self, dataset: str, model_type: ModelType, technique: Technique
+    ) -> ModelVersioningService:
+        """Returns a model versioning service for the specified model and technique."""
+        repo = FileSystemModelRepository(self.cfg.models_dir, dataset, model_type, technique)
+        return ModelVersioningServiceImpl(repo)
 
     # --- Path Helpers ---
 

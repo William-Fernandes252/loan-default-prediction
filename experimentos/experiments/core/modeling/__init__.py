@@ -6,8 +6,6 @@ custom metrics, and functions to run experiments with various techniques and mod
 
 from .estimators import MetaCostClassifier
 from .factories import (
-    ModelType,
-    Technique,
     build_pipeline,
     get_hyperparameters,
     get_model_instance,
@@ -15,6 +13,7 @@ from .factories import (
 )
 from .metrics import g_mean_score, g_mean_scorer
 from .runner import run_experiment_task
+from .types import ModelType, Technique
 
 __all__ = [
     "MetaCostClassifier",

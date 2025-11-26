@@ -2,7 +2,7 @@ import pytest
 from sklearn.ensemble import RandomForestClassifier
 
 from experiments.core.modeling import ModelType, Technique
-from experiments.utils.models import (
+from experiments.services.models import (
     FileSystemModelRepository,
     ModelRepository,
     ModelVersioningServiceImpl,
@@ -17,6 +17,7 @@ class DescribeFileSystemModelRepository:
     def it_saves_and_loads_model(self, base_path):
         repo = FileSystemModelRepository(
             base_path=base_path,
+            dataset="test_dataset",
             model_type=ModelType.RANDOM_FOREST,
             technique=Technique.BASELINE,
         )
@@ -34,6 +35,7 @@ class DescribeFileSystemModelRepository:
     def it_raises_when_model_not_found(self, base_path):
         repo = FileSystemModelRepository(
             base_path=base_path,
+            dataset="test_dataset",
             model_type=ModelType.RANDOM_FOREST,
             technique=Technique.BASELINE,
         )
@@ -47,6 +49,7 @@ class DescribeModelVersioningServiceImpl:
     def repository(self, tmp_path):
         return FileSystemModelRepository(
             base_path=tmp_path / "models",
+            dataset="test_dataset",
             model_type=ModelType.RANDOM_FOREST,
             technique=Technique.BASELINE,
         )

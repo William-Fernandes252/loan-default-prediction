@@ -1,7 +1,9 @@
 """CLI for training models."""
 
+from contextlib import contextmanager
 import gc
 import os
+import random
 import sys
 import tempfile
 from typing import Optional, cast
@@ -16,6 +18,7 @@ from typing_extensions import Annotated
 from experiments.context import Context
 from experiments.core.data import Dataset
 from experiments.core.modeling import ModelType, Technique, run_experiment_task
+from experiments.core.modeling.schema import ExperimentConfig
 from experiments.utils.git_state import GitStateTracker
 
 MODULE_NAME = "experiments.cli.train"
@@ -63,21 +66,13 @@ def _consolidate_results(ctx: Context, dataset: Dataset):
         ctx.logger.warning(f"No results found for {dataset.display_name}")
 
 
-def run_dataset_experiments(
-    ctx: Context,
-    dataset: Dataset,
-    jobs: int,
-    excluded_models: set[ModelType] | None = None,
-):
-    """
-    Prepares data and launches parallel experiment tasks for a dataset.
-    """
+@contextmanager
+def prepare_data_context(ctx: Context, dataset: Dataset):
     paths = ctx.get_feature_paths(dataset.id)
     x_path, y_path = paths["X"], paths["y"]
 
     if not x_path.exists() or not y_path.exists():
-        ctx.logger.error(f"Data missing for {dataset.display_name}")
-        return
+        raise FileNotFoundError(f"Data missing for {dataset.display_name}")
 
     ctx.logger.info(f"Loading data for {dataset.display_name}...")
 
@@ -102,56 +97,83 @@ def run_dataset_experiments(
         del X_df, y_df
         gc.collect()
 
-        # Generate Task List
-        tasks = []
-        excluded_models_set = excluded_models or set()
-        available_models = [m for m in ModelType if m not in excluded_models_set]
-        if not available_models:
-            ctx.logger.warning(
-                f"No eligible models left to run for {dataset.display_name} after exclusions."
+        yield X_mmap_path, y_mmap_path
+
+
+def run_dataset_experiments(
+    ctx: Context,
+    dataset: Dataset,
+    jobs: int,
+    excluded_models: set[ModelType] | None = None,
+):
+    """
+    Prepares data and launches parallel experiment tasks for a dataset.
+    """
+    try:
+        with prepare_data_context(ctx, dataset) as (X_mmap_path, y_mmap_path):
+            # Generate Task List
+            tasks = []
+            excluded_models_set = excluded_models or set()
+            available_models = [m for m in ModelType if m not in excluded_models_set]
+            if not available_models:
+                ctx.logger.warning(
+                    f"No eligible models left to run for {dataset.display_name} after exclusions."
+                )
+                return
+
+            cfg = ExperimentConfig(
+                cv_folds=ctx.cfg.cv_folds,
+                cost_grids=ctx.cfg.cost_grids,
+                discard_checkpoints=ctx.discard_checkpoints,
             )
-            return
-        # Access settings via Context
-        for seed in range(ctx.cfg.num_seeds):
-            for model_type in available_models:
-                for technique in Technique:
-                    # Skip invalid combinations
-                    if technique == Technique.CS_SVM and model_type != ModelType.SVM:
-                        continue
 
-                    # Context resolves paths, but we only need to pass the context
-                    # to the runner, which will resolve it again internally.
-                    # However, the runner needs to know if it exists to skip efficiently.
-                    # Here we just append the task params.
-                    tasks.append(
-                        (
-                            ctx,
-                            dataset.id,
-                            X_mmap_path,
-                            y_mmap_path,
-                            model_type,
-                            technique,
-                            seed,
+            # Access settings via Context
+            for seed in range(ctx.cfg.num_seeds):
+                for model_type in available_models:
+                    for technique in Technique:
+                        # Skip invalid combinations
+                        if technique == Technique.CS_SVM and model_type != ModelType.SVM:
+                            continue
+
+                        checkpoint_path = ctx.get_checkpoint_path(
+                            dataset.id, model_type.id, technique.id, seed
                         )
-                    )
+                        svc = ctx.get_model_versioning_service(dataset.id, model_type, technique)
 
-        ctx.logger.info(
-            f"Dataset {dataset.display_name}: Launching {len(tasks)} tasks with {jobs} workers..."
-        )
+                        tasks.append(
+                            (
+                                cfg,
+                                dataset.id,
+                                X_mmap_path,
+                                y_mmap_path,
+                                model_type,
+                                technique,
+                                seed,
+                                checkpoint_path,
+                                svc,
+                            )
+                        )
 
-        # Execute Parallel
-        Parallel(
-            n_jobs=jobs,
-            verbose=5,
-            pre_dispatch="2*n_jobs",
-        )(delayed(run_experiment_task)(*t) for t in tasks)
+            ctx.logger.info(
+                f"Dataset {dataset.display_name}: Launching {len(tasks)} tasks with {jobs} workers..."
+            )
 
-    # Consolidate results
-    _consolidate_results(ctx, dataset)
+            # Execute Parallel
+            Parallel(
+                n_jobs=jobs,
+                verbose=5,
+                pre_dispatch="2*n_jobs",
+            )(delayed(run_experiment_task)(*t) for t in tasks)
+
+        # Consolidate results
+        _consolidate_results(ctx, dataset)
+
+    except FileNotFoundError:
+        ctx.logger.error(f"Data missing for {dataset.display_name}")
 
 
 @app.command("experiment")
-def main(
+def run_experiment(
     dataset: Annotated[
         Optional[Dataset],
         typer.Argument(
@@ -253,6 +275,64 @@ def consolidate(
     for ds in datasets:
         ctx.logger.info(f"Consolidating results for {ds.display_name}...")
         _consolidate_results(ctx, ds)
+
+
+@app.command("model")
+def train_model(
+    dataset: Annotated[
+        Dataset,
+        typer.Argument(
+            help="Dataset to process.",
+        ),
+    ],
+    model_type: Annotated[
+        ModelType,
+        typer.Argument(
+            help="Model type to train.",
+        ),
+    ],
+    technique: Annotated[
+        Technique,
+        typer.Argument(
+            help="Technique to use for handling class imbalance.",
+        ),
+    ],
+    seed: Annotated[
+        int,
+        typer.Argument(
+            help="Random seed for reproducibility.",
+            lazy=True,
+            default_factory=lambda: random.randint(0, 1_000_000),
+        ),
+    ],
+):
+    """Runs a single model training task."""
+    ctx = Context()
+    try:
+        with prepare_data_context(ctx, dataset) as (X_mmap_path, y_mmap_path):
+            cfg = ExperimentConfig(
+                cv_folds=ctx.cfg.cv_folds,
+                cost_grids=ctx.cfg.cost_grids,
+                discard_checkpoints=ctx.discard_checkpoints,
+            )
+            checkpoint_path = ctx.get_checkpoint_path(
+                dataset.id, model_type.id, technique.id, seed
+            )
+            svc = ctx.get_model_versioning_service(dataset.id, model_type, technique)
+
+            run_experiment_task(
+                cfg,
+                dataset.id,
+                X_mmap_path,
+                y_mmap_path,
+                model_type,
+                technique,
+                seed,
+                checkpoint_path,
+                svc,
+            )
+    except FileNotFoundError:
+        ctx.logger.error(f"Data missing for {dataset.display_name}")
 
 
 if __name__ == "__main__":

@@ -4,6 +4,9 @@
 # Results
 /results/
 
+# Models
+/models/
+
 # Local state
 /.ldp/
 
