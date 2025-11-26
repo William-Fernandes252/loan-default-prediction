@@ -147,7 +147,9 @@ def run_experiment_task(
             logger.info(f"Skipping existing: {dataset.id} | seed={seed}")
             return None
 
-    logger.info(f"Starting: {dataset.display_name} | {model_type.name} | {technique.name}")
+    logger.info(
+        f"Starting: {dataset.display_name} | {model_type.name} | {technique.name} | seed={seed}"
+    )
 
     try:
         # 2. Data Preparation
