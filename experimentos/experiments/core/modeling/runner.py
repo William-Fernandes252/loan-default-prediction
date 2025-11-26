@@ -1,14 +1,15 @@
-"""Experiment running logic for executing modeling tasks with memory efficiency."""
+"""Experiment running logic refactored for cohesion and testability."""
 
 import gc
 from pathlib import Path
 import traceback
-from typing import Optional
+from typing import Any, Dict, Optional, Tuple
 
 import joblib
 from loguru import logger
 import numpy as np
 import pandas as pd
+from sklearn.base import BaseEstimator
 from sklearn.metrics import (
     balanced_accuracy_score,
     f1_score,
@@ -30,6 +31,96 @@ from experiments.core.modeling.types import ModelType, Technique
 from experiments.services.models import ModelVersioningService
 
 
+def _load_and_validate_data(
+    X_mmap_path: str, y_mmap_path: str, seed: int, cv_folds: int
+) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:
+    """
+    Loads memory-mapped data, validates class distribution, and performs the split.
+    Returns (X_train, y_train, X_test, y_test) or None if validation fails.
+    """
+    X_mmap = joblib.load(X_mmap_path, mmap_mode="r")
+    y_mmap = joblib.load(y_mmap_path, mmap_mode="r")
+
+    # Validation: Check minimum class counts
+    _, counts = np.unique(y_mmap, return_counts=True)
+    if counts.min() < 2:
+        return None
+
+    # Determine stratification
+    stratify_y = y_mmap if counts.min() >= cv_folds else None
+
+    indices = np.arange(X_mmap.shape[0])
+    train_idx, test_idx = train_test_split(
+        indices, test_size=0.30, stratify=stratify_y, random_state=seed
+    )
+
+    # Validate training split sufficiency
+    y_train_preview = y_mmap[train_idx]
+    if len(np.unique(y_train_preview)) < 2:
+        return None
+
+    _, train_counts = np.unique(y_train_preview, return_counts=True)
+    if train_counts.min() < cv_folds:
+        return None
+
+    # Materialize training data (Test data remains indices/mmap until needed to save RAM)
+    return X_mmap[train_idx], y_mmap[train_idx], X_mmap[test_idx], y_mmap[test_idx]
+
+
+def _train_and_optimize(
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    model_type: ModelType,
+    technique: Technique,
+    seed: int,
+    cv_folds: int,
+    cost_grids: Any,
+) -> Tuple[BaseEstimator, Dict[str, Any]]:
+    """Builds the pipeline and runs GridSearchCV."""
+
+    pipeline = build_pipeline(model_type, technique, seed)
+    base_grid = get_hyperparameters(model_type)
+    param_grid = get_params_for_technique(model_type, technique, base_grid, cost_grids)
+
+    # Adjust CV if class count is low
+    _, counts = np.unique(y_train, return_counts=True)
+    actual_folds = max(2, min(cv_folds, counts.min()))
+
+    grid = GridSearchCV(
+        estimator=pipeline,
+        param_grid=param_grid,
+        scoring="roc_auc",
+        cv=StratifiedKFold(n_splits=actual_folds, shuffle=True, random_state=seed),
+        n_jobs=1,
+        verbose=0,
+    )
+
+    grid.fit(X_train, y_train)
+    return grid.best_estimator_, grid.best_params_
+
+
+def _evaluate_model(
+    model: BaseEstimator, X_test: np.ndarray, y_test: np.ndarray
+) -> Dict[str, float | str]:
+    """Calculates all performance metrics."""
+    y_pred = model.predict(X_test)
+
+    try:
+        y_proba = model.predict_proba(X_test)[:, 1]
+        auc_score = roc_auc_score(y_test, y_proba)
+    except (AttributeError, IndexError):
+        auc_score = 0.5
+
+    return {
+        "accuracy_balanced": balanced_accuracy_score(y_test, y_pred),
+        "g_mean": g_mean_score(y_test, y_pred),
+        "f1_score": f1_score(y_test, y_pred),
+        "precision": precision_score(y_test, y_pred, zero_division=0),
+        "recall": recall_score(y_test, y_pred),
+        "roc_auc": auc_score,
+    }
+
+
 def run_experiment_task(
     cfg: ExperimentConfig,
     dataset_val: str,
@@ -41,154 +132,73 @@ def run_experiment_task(
     checkpoint_path: Path,
     model_versioning_service: Optional[ModelVersioningService] = None,
 ) -> Optional[str]:
-    """
-    Executes a single experiment task.
+    """Orchestrates the experiment steps: Load -> Train -> Evaluate -> Save."""
 
-    Args:
-        cfg (ExperimentConfig): Experiment configuration.
-        dataset_val (str): The dataset identifier.
-        X_mmap_path (str): Path to features memmap.
-        y_mmap_path (str): Path to target memmap.
-        model_type (ModelType): The model to train.
-        technique (Technique): The handling technique.
-        seed (int): Random seed.
-        checkpoint_path (Path): Path to save the checkpoint.
-        model_versioning_service (Optional[ModelVersioningService]): Service to save the model.
-    """
-    # Reconstruct Dataset enum from identifier
+    # 1. Setup & Checkpoint Check
     try:
-        dataset = Dataset(dataset_val)  # type: ignore[arg-type]
+        dataset = Dataset(dataset_val)
     except ValueError:
         dataset = Dataset.from_id(str(dataset_val))
 
-    logger.info(
-        f"Starting task: {dataset.display_name} | {model_type.display_name} | "
-        f"{technique.display_name} | seed={seed}"
-    )
-
-    # 1. Checkpoint Check
     if checkpoint_path.exists():
         if cfg.discard_checkpoints:
-            logger.info(f"Discarding checkpoint at {checkpoint_path}")
             checkpoint_path.unlink(missing_ok=True)
         else:
-            logger.info(f"Checkpoint found at {checkpoint_path}, skipping task.")
+            logger.info(f"Skipping existing: {dataset.id} | seed={seed}")
             return None
+
+    logger.info(f"Starting: {dataset.display_name} | {model_type.name} | {technique.name}")
 
     try:
-        # 2. Load Data (Memory Mapped)
-        X_mmap = joblib.load(X_mmap_path, mmap_mode="r")
-        y_mmap = joblib.load(y_mmap_path, mmap_mode="r")
+        # 2. Data Preparation
+        data_split = _load_and_validate_data(X_mmap_path, y_mmap_path, seed, cfg.cv_folds)
+        if data_split is None:
+            return None
 
-        # 3. Validation Checks
-        _, counts = np.unique(y_mmap, return_counts=True)
-        min_class_count = counts.min()
+        X_train, y_train, X_test, y_test = data_split
 
-        stratify_y = y_mmap
-        internal_cv_folds = cfg.cv_folds
-
-        # Adjust folds if class count is too small
-        if min_class_count < 2:
-            stratify_y = None
-            internal_cv_folds = max(2, min(internal_cv_folds, min_class_count))
-
-        # 4. Split INDICES only
-        indices = np.arange(X_mmap.shape[0])
-        train_idx, test_idx = train_test_split(
-            indices, test_size=0.30, stratify=stratify_y, random_state=seed
+        # 3. Training
+        best_model, best_params = _train_and_optimize(
+            X_train, y_train, model_type, technique, seed, cfg.cv_folds, cfg.cost_grids
         )
 
-        # Validation on the subsets
-        y_train_preview = y_mmap[train_idx]
-        if len(np.unique(y_train_preview)) < 2:
-            return None
-        _, train_counts = np.unique(y_train_preview, return_counts=True)
-        if train_counts.min() < internal_cv_folds:
-            return None
-        del y_train_preview
-
-        # 5. MATERIALIZE TRAIN SET
-        X_train = X_mmap[train_idx]
-        y_train = y_mmap[train_idx]
-
-        pipeline = build_pipeline(model_type, technique, seed)
-        base_grid = get_hyperparameters(model_type)
-
-        # Retrieve cost grids from Context
-        param_grid = get_params_for_technique(model_type, technique, base_grid, cfg.cost_grids)
-
-        grid = GridSearchCV(
-            estimator=pipeline,
-            param_grid=param_grid,
-            scoring="roc_auc",
-            cv=StratifiedKFold(n_splits=internal_cv_folds, shuffle=True, random_state=seed),
-            n_jobs=1,
-            verbose=0,
-        )
-
-        # Fit the model
-        grid.fit(X_train, y_train)
-
-        # 6. Cleanup train set from memory
+        # Free training memory immediately
         del X_train, y_train
         gc.collect()
 
-        # 7. Materialize test set
-        X_test = X_mmap[test_idx]
-        y_test = y_mmap[test_idx]
+        # 4. Evaluation
+        metrics = _evaluate_model(best_model, X_test, y_test)
 
-        # 8. Evaluate
-        best_model = grid.best_estimator_
-        y_pred = best_model.predict(X_test)
-
-        try:
-            y_proba = best_model.predict_proba(X_test)[:, 1]
-            auc_score = roc_auc_score(y_test, y_proba)
-        except (AttributeError, IndexError):
-            auc_score = 0.5
-
-        metrics = {
-            "dataset": dataset.id,
-            "seed": seed,
-            "model": model_type.id,
-            "technique": technique.id,
-            "best_params": str(grid.best_params_),
-            "accuracy_balanced": balanced_accuracy_score(y_test, y_pred),
-            "g_mean": g_mean_score(y_test, y_pred),
-            "f1_score": f1_score(y_test, y_pred),
-            "precision": precision_score(y_test, y_pred, zero_division=0),
-            "recall": recall_score(y_test, y_pred),
-            "roc_auc": auc_score,
-        }
+        # Add metadata
+        metrics.update(
+            {
+                "dataset": dataset.id,
+                "seed": seed,
+                "model": model_type.id,
+                "technique": technique.id,
+                "best_params": str(best_params),
+            }
+        )
 
         logger.success(
-            f"Finished: {dataset.display_name} | {model_type.display_name} | "
-            f"{technique.display_name} | seed={seed} -> "
-            f"AUC={auc_score:.4f}, F1={metrics['f1_score']:.4f}"
+            f"Done: {dataset.display_name} | {model_type.name} | seed={seed} | "
+            f"AUC={metrics['roc_auc']:.4f}"
         )
 
-        # Save Model
+        # 5. Persistence
         if model_versioning_service:
             try:
-                version = model_versioning_service.save_model(best_model, None)
-                logger.info(f"Saved model {version.id}")
+                model_versioning_service.save_model(best_model, None)
             except Exception as e:
-                logger.warning(f"Failed to save model: {e}")
+                logger.warning(f"Model save failed: {e}")
 
-        # 9. Save Checkpoint
-        df_res = pd.DataFrame([metrics])
-        df_res.to_parquet(checkpoint_path)
+        pd.DataFrame([metrics]).to_parquet(checkpoint_path)
 
-        # 10. Cleanup
-        del grid, best_model, X_test, y_test, X_mmap, y_mmap
-        gc.collect()
-
-        return f"{dataset.id} - {model_type.id} - {technique.id} - Seed {seed}"
+        return f"{dataset.id}-{model_type.id}-{seed}"
 
     except Exception:
-        logger.error(
-            f"Failed task {dataset.display_name} {model_type.display_name} "
-            f"{technique.display_name} {seed}:\n{traceback.format_exc()}"
-        )
-        gc.collect()
+        logger.error(f"Failed task: {traceback.format_exc()}")
         return None
+    finally:
+        # Final cleanup
+        gc.collect()

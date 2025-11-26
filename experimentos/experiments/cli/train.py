@@ -1,17 +1,11 @@
 """CLI for training models."""
 
-from contextlib import contextmanager
 import gc
-import os
 import random
 import sys
-import tempfile
-from typing import Optional, cast
+from typing import Optional
 
-import joblib
 from joblib import Parallel, delayed
-import pandas as pd
-import polars as pl
 import typer
 from typing_extensions import Annotated
 
@@ -19,6 +13,7 @@ from experiments.context import Context
 from experiments.core.data import Dataset
 from experiments.core.modeling import ModelType, Technique, run_experiment_task
 from experiments.core.modeling.schema import ExperimentConfig
+from experiments.services.data_manager import ExperimentDataManager
 from experiments.utils.git_state import GitStateTracker
 
 MODULE_NAME = "experiments.cli.train"
@@ -29,79 +24,9 @@ if __name__ == "__main__":
 app = typer.Typer()
 
 
-def _artifacts_exist(ctx: Context, dataset: Dataset) -> bool:
-    paths = ctx.get_feature_paths(dataset.id)
-    return paths["X"].exists() and paths["y"].exists()
-
-
-def _consolidate_results(ctx: Context, dataset: Dataset):
-    """Combines all checkpoint files into a single results file."""
-    sample_ckpt = ctx.get_checkpoint_path(dataset.id, "x", "y", 0)
-    ckpt_dir = sample_ckpt.parent
-
-    all_files = list(ckpt_dir.glob("*.parquet"))
-
-    if all_files:
-        ctx.logger.info(f"Consolidating {len(all_files)} results for {dataset.display_name}...")
-        # Read each checkpoint file and concatenate into a single DataFrame
-        frames = []
-        for fp in all_files:
-            try:
-                frames.append(pd.read_parquet(fp))
-            except Exception:
-                ctx.logger.warning(f"Failed to read checkpoint file {fp}, skipping.")
-
-        if frames:
-            df_final = cast(pd.DataFrame, pd.concat(frames, ignore_index=True))
-            final_output = ctx.get_consolidated_results_path(dataset.id)
-
-            # Ensure results directory exists
-            final_output.parent.mkdir(parents=True, exist_ok=True)
-
-            df_final.to_parquet(final_output)
-            ctx.logger.success(f"Saved consolidated results to {final_output}")
-        else:
-            ctx.logger.warning(f"No readable checkpoint files found for {dataset.display_name}")
-    else:
-        ctx.logger.warning(f"No results found for {dataset.display_name}")
-
-
-@contextmanager
-def prepare_data_context(ctx: Context, dataset: Dataset):
-    paths = ctx.get_feature_paths(dataset.id)
-    x_path, y_path = paths["X"], paths["y"]
-
-    if not x_path.exists() or not y_path.exists():
-        raise FileNotFoundError(f"Data missing for {dataset.display_name}")
-
-    ctx.logger.info(f"Loading data for {dataset.display_name}...")
-
-    # Load original data
-    X_df = pl.read_parquet(x_path).to_pandas()
-    y_df = pl.read_parquet(y_path).to_pandas().iloc[:, 0]
-
-    # Create a temporary directory for memory mapping
-    with tempfile.TemporaryDirectory() as temp_dir:
-        # Create memmap files
-        X_mmap_path = os.path.join(temp_dir, "X.mmap")
-        y_mmap_path = os.path.join(temp_dir, "y.mmap")
-
-        # Dump data using joblib (optimized for numpy)
-        joblib.dump(X_df.to_numpy(), X_mmap_path)
-        joblib.dump(y_df.to_numpy(), y_mmap_path)
-
-        # Load back briefly to check
-        _ = joblib.load(X_mmap_path, mmap_mode="r")
-
-        # Free the original RAM
-        del X_df, y_df
-        gc.collect()
-
-        yield X_mmap_path, y_mmap_path
-
-
 def run_dataset_experiments(
     ctx: Context,
+    data_manager: ExperimentDataManager,
     dataset: Dataset,
     jobs: int,
     excluded_models: set[ModelType] | None = None,
@@ -110,7 +35,7 @@ def run_dataset_experiments(
     Prepares data and launches parallel experiment tasks for a dataset.
     """
     try:
-        with prepare_data_context(ctx, dataset) as (X_mmap_path, y_mmap_path):
+        with data_manager.feature_context(dataset) as (X_mmap_path, y_mmap_path):
             # Generate Task List
             tasks = []
             excluded_models_set = excluded_models or set()
@@ -166,7 +91,7 @@ def run_dataset_experiments(
             )(delayed(run_experiment_task)(*t) for t in tasks)
 
         # Consolidate results
-        _consolidate_results(ctx, dataset)
+        data_manager.consolidate_results(dataset)
 
     except FileNotFoundError:
         ctx.logger.error(f"Data missing for {dataset.display_name}")
@@ -224,8 +149,9 @@ def run_experiment(
             if typer.confirm(prompt, default=True):
                 discard_checkpoints = True
 
-        # Initialize Context
+        # Initialize Context and DataManager
         ctx = Context(discard_checkpoints=discard_checkpoints)
+        data_manager = ExperimentDataManager(ctx)
 
         datasets = [dataset] if dataset is not None else list(Dataset)
         excluded_models = set(exclude_models or [])
@@ -235,25 +161,21 @@ def run_experiment(
             return
 
         for ds in datasets:
-            if not _artifacts_exist(ctx, ds):
-                ctx.logger.warning(f"Artifacts not found for {ds.display_name}. Skipping.")
+            if not data_manager.artifacts_exist(ds):
+                # Logger warning is handled inside data_manager if needed,
+                # but good to check here to skip loop
                 continue
 
             gc.collect()
 
-            # Calculate jobs using Context helper
+            # Calculate jobs using DataManager helper
             if jobs is None:
-                raw_path = ctx.get_raw_data_path(ds.id)
-                if raw_path.exists():
-                    size_gb = raw_path.stat().st_size / (1024**3)
-                else:
-                    size_gb = 1.0  # Default fallback
-
+                size_gb = data_manager.get_dataset_size_gb(ds)
                 n_jobs = ctx.compute_safe_jobs(size_gb)
             else:
                 n_jobs = jobs
 
-            run_dataset_experiments(ctx, ds, n_jobs, excluded_models)
+            run_dataset_experiments(ctx, data_manager, ds, n_jobs, excluded_models)
     finally:
         tracker.record_current_commit()
 
@@ -270,11 +192,11 @@ def consolidate(
     """Consolidates checkpoint parquet files into the final results artifact."""
 
     ctx = Context()
+    data_manager = ExperimentDataManager(ctx)
     datasets = [dataset] if dataset is not None else list(Dataset)
 
     for ds in datasets:
-        ctx.logger.info(f"Consolidating results for {ds.display_name}...")
-        _consolidate_results(ctx, ds)
+        data_manager.consolidate_results(ds)
 
 
 @app.command("model")
@@ -308,8 +230,10 @@ def train_model(
 ):
     """Runs a single model training task."""
     ctx = Context()
+    data_manager = ExperimentDataManager(ctx)
+
     try:
-        with prepare_data_context(ctx, dataset) as (X_mmap_path, y_mmap_path):
+        with data_manager.feature_context(dataset) as (X_mmap_path, y_mmap_path):
             cfg = ExperimentConfig(
                 cv_folds=ctx.cfg.cv_folds,
                 cost_grids=ctx.cfg.cost_grids,
