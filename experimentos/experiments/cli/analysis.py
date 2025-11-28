@@ -625,7 +625,7 @@ def analyze_results(
 
         # Calculate mean and std
         agg_dict = {m: ["mean", "std"] for m in available_metrics}
-        summary = df.groupby(group_cols)[available_metrics].agg(agg_dict)
+        summary: pd.DataFrame = df.groupby(group_cols)[available_metrics].agg(agg_dict)
 
         # Flatten MultiIndex columns
         summary.columns = [f"{col[0]}_{col[1]}" for col in summary.columns]
