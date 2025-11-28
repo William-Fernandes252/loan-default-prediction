@@ -98,3 +98,6 @@ msgstr "Recall"
 
 msgid "Sensitivity"
 msgstr "Sensitivity"
+
+msgid "Balanced Accuracy"
+msgstr "Balanced Accuracy"

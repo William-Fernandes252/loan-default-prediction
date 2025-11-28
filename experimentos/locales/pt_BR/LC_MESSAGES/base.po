@@ -98,3 +98,6 @@ msgstr "Revocação"
 
 msgid "Sensitivity"
 msgstr "Sensibilidade"
+
+msgid "Balanced Accuracy"
+msgstr "Acurácia Balanceada"
