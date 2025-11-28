@@ -154,13 +154,14 @@ def analyze_stability_and_variance(
 
     # Plot settings
     sns.set_theme(style="whitegrid")
-    metrics_to_plot = ["roc_auc", "g_mean", "f1_score"]
+    metrics_to_plot = ["accuracy_balanced", "g_mean", "f1_score", "recall"]
 
     # Metric display names mapping
     metric_names = {
-        "roc_auc": _("ROC AUC"),
+        "accuracy_balanced": _("Balanced Accuracy"),
         "g_mean": _("G-Mean"),
         "f1_score": _("F1 Score"),
+        "recall": _("Recall"),
     }
 
     for ds in datasets:
@@ -331,7 +332,7 @@ def analyze_imbalance_impact(
 
     Loads each requested dataset independently, injects its imbalance ratio,
     and generates scatter plots to visualize the correlation between imbalance
-    ratio and key performance metrics (ROC AUC, F1 Score).
+    ratio and key performance metrics (Balanced Accuracy, F1-Score, G-mean and Sensitivity).
     """
     _setup_i18n(language)
     ctx = Context()
@@ -339,12 +340,14 @@ def analyze_imbalance_impact(
 
     sns.set_theme(style="whitegrid")
 
-    metrics = ["roc_auc", "f1_score"]
+    metrics = ["accuracy_balanced", "f1_score", "g_mean", "recall"]
 
     # Metric display names mapping
     metric_names = {
-        "roc_auc": _("ROC AUC"),
+        "accuracy_balanced": _("Balanced Accuracy"),
         "f1_score": _("F1 Score"),
+        "g_mean": _("G-Mean"),
+        "recall": _("Recall"),
     }
 
     for ds in datasets:
@@ -442,7 +445,7 @@ def compare_cost_sensitive_and_resampling(
         sns.barplot(
             data=df,
             x="technique_display",
-            y="roc_auc",
+            y="accuracy_balanced",
             hue="model_display",
             palette="Set2",
             errorbar="sd",
@@ -453,7 +456,7 @@ def compare_cost_sensitive_and_resampling(
             dataset_name=ds_display
         )
         plt.title(title, fontsize=16)
-        plt.ylabel(_("ROC AUC"), fontsize=12)
+        plt.ylabel(_("Balanced Accuracy"), fontsize=12)
         plt.xlabel(_("Technique"), fontsize=12)
         plt.ylim(0.0, 1.0)
         plt.legend(bbox_to_anchor=(1.01, 1), loc="upper left", title=_("Model"))
@@ -483,7 +486,7 @@ def analyze_hyperparameter_effects(
     """Analyzes the effects of hyperparameter choices on model performance.
 
     Generates heatmaps or line plots to visualize how different hyperparameter
-    settings impact key performance metrics like ROC AUC.
+    settings impact key performance metrics, like Balanced Accuracy and G-mean and  across models and techniques.
     """
     _setup_i18n(language)
     ctx = Context()
@@ -512,7 +515,13 @@ def analyze_hyperparameter_effects(
         # Combine metrics with extracted hyperparameters
         metric_columns = [
             col
-            for col in ("roc_auc", "g_mean", "f1_score", "precision", "recall")
+            for col in (
+                "accuracy_balanced",
+                "g_mean",
+                "f1_score",
+                "precision",
+                "recall",
+            )
             if col in df.columns
         ]
 
@@ -544,7 +553,7 @@ def analyze_hyperparameter_effects(
                 sns.lineplot(
                     data=merged_df,
                     x=param,
-                    y="roc_auc",
+                    y="accuracy_balanced",
                     hue="technique_display"
                     if "technique_display" in merged_df.columns
                     else "technique",
@@ -556,14 +565,14 @@ def analyze_hyperparameter_effects(
                 if is_numeric:
                     plt.xscale("log")
 
-                title = _("Effect of {param} on ROC AUC - {dataset_name}").format(
+                title = _("Effect of {param} on Balanced Accuracy - {dataset_name}").format(
                     param=param, dataset_name=ds_display
                 )
                 plt.title(title, fontsize=16)
 
                 xlabel = _("{param} (Log Scale if numeric)").format(param=param)
                 plt.xlabel(xlabel, fontsize=12)
-                plt.ylabel(_("ROC AUC"), fontsize=12)
+                plt.ylabel(_("Balanced Accuracy"), fontsize=12)
                 plt.ylim(0.0, 1.05)
                 plt.legend(bbox_to_anchor=(1.01, 1), loc="upper left", title=_("Technique"))
 
@@ -594,11 +603,11 @@ def analyze_results(
     datasets = [dataset] if dataset is not None else list(Dataset)
 
     # Metrics to report
-    metrics = ["roc_auc", "g_mean", "f1_score", "precision", "recall"]
+    metrics = ["accuracy_balanced", "g_mean", "f1_score", "precision", "recall"]
 
     # Metric display names
     metric_names = {
-        "roc_auc": _("ROC AUC"),
+        "accuracy_balanced": _("Balanced Accuracy"),
         "g_mean": _("G-Mean"),
         "f1_score": _("F1 Score"),
         "precision": _("Precision"),
@@ -644,8 +653,8 @@ def analyze_results(
                 lambda row: f"{row[mean_col]:.4f} ± {row[std_col]:.4f}", axis=1
             )
 
-        # Sort by ROC AUC (mean) descending
-        sort_col = "roc_auc_mean"
+        # Sort by Balanced Accuracy (mean) descending
+        sort_col = "accuracy_balanced_mean"
         if sort_col in summary.columns:
             summary = summary.sort_values(sort_col, ascending=False)
             display_df = display_df.iloc[summary.index]
