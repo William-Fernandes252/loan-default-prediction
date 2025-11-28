@@ -95,3 +95,6 @@ msgstr "Precision"
 
 msgid "Recall"
 msgstr "Recall"
+
+msgid "Sensitivity"
+msgstr "Sensitivity"

@@ -95,3 +95,6 @@ msgstr "Precisão"
 
 msgid "Recall"
 msgstr "Revocação"
+
+msgid "Sensitivity"
+msgstr "Sensibilidade"

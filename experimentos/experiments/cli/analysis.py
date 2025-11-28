@@ -161,7 +161,7 @@ def analyze_stability_and_variance(
         "accuracy_balanced": _("Balanced Accuracy"),
         "g_mean": _("G-Mean"),
         "f1_score": _("F1 Score"),
-        "recall": _("Recall"),
+        "recall": _("Sensitivity"),
     }
 
     for ds in datasets:
@@ -347,7 +347,7 @@ def analyze_imbalance_impact(
         "accuracy_balanced": _("Balanced Accuracy"),
         "f1_score": _("F1 Score"),
         "g_mean": _("G-Mean"),
-        "recall": _("Recall"),
+        "recall": _("Sensitivity"),
     }
 
     for ds in datasets:
@@ -611,7 +611,7 @@ def analyze_results(
         "g_mean": _("G-Mean"),
         "f1_score": _("F1 Score"),
         "precision": _("Precision"),
-        "recall": _("Recall"),
+        "recall": _("Sensitivity"),
     }
 
     for ds in datasets:
