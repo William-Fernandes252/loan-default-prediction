@@ -119,11 +119,18 @@ def _load_data(ctx: Context, dataset: Dataset) -> pd.DataFrame:
     return df
 
 
-def _ensure_output_dir(ctx: Context, dataset_name: str, language: _Language) -> Path:
+def _ensure_output_dir(
+    ctx: Context, dataset_name: str, language: _Language, is_figure: bool = True
+) -> Path:
     """Creates and returns the directory for saving analysis plots."""
     # Saves in reports/<language>/figures/<dataset>/
     # If analyzing multiple datasets combined, uses 'combined'
-    output_dir = ctx.cfg.figures_dir.parent / language.value / "figures" / dataset_name
+    base_dir = ctx.cfg.figures_dir.parent / language.value
+    if is_figure:
+        output_dir = base_dir / dataset_name / "figures"
+    else:
+        output_dir = base_dir / dataset_name
+
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir
 
@@ -666,10 +673,44 @@ def analyze_results(
         print("\n")
 
         # Save to file
-        output_dir = _ensure_output_dir(ctx, ds.id, language)
-        output_csv = output_dir / "results_summary.csv"
+        output_dir_csv = _ensure_output_dir(ctx, ds.id, language, is_figure=False)
+        output_csv = output_dir_csv / "results_summary.csv"
         display_df.to_csv(output_csv, index=False)
         ctx.logger.success(f"Saved summary table to {output_csv}")
+
+        # Save as image
+        output_dir_fig = _ensure_output_dir(ctx, ds.id, language, is_figure=True)
+        # Calculate figure size based on number of rows
+        # Base height for header + height per row
+        row_height = 0.5
+        header_height = 0.8
+        fig_height = header_height + (len(display_df) * row_height)
+
+        plt.figure(figsize=(14, fig_height))
+        plt.axis("off")
+
+        table = plt.table(
+            cellText=display_df.values,
+            colLabels=display_df.columns,
+            cellLoc="center",
+            loc="center",
+            bbox=[0, 0, 1, 1],
+        )
+
+        # Style the table
+        table.auto_set_font_size(False)
+        table.set_fontsize(10)
+
+        # Bold the headers
+        for (row, col), cell in table.get_celld().items():
+            if row == 0:
+                cell.set_text_props(weight="bold")
+                cell.set_facecolor("#f0f0f0")
+
+        output_png = output_dir_fig / "results_summary.png"
+        plt.savefig(output_png, bbox_inches="tight", dpi=300)
+        plt.close()
+        ctx.logger.success(f"Saved summary table image to {output_png}")
 
 
 @app.command("all")
