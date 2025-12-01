@@ -55,14 +55,14 @@ msgstr "Crédito de Taiwan"
 msgid "Random Forest"
 msgstr "Random Forest"
 
-msgid "Support Vector Machine"
-msgstr "Máquina de Vetores de Suporte"
+msgid "SVM"
+msgstr "SVM"
 
 msgid "XGBoost"
 msgstr "XGBoost"
 
-msgid "Multi-Layer Perceptron"
-msgstr "Perceptron Multicamadas"
+msgid "MLP"
+msgstr "MLP"
 
 # Technique names
 msgid "Baseline"
@@ -71,8 +71,8 @@ msgstr "Linha de Base"
 msgid "SMOTE"
 msgstr "SMOTE"
 
-msgid "Random Under Sampling"
-msgstr "Subamostragem Aleatória"
+msgid "RUS"
+msgstr "RUS"
 
 msgid "SMOTE Tomek"
 msgstr "SMOTE Tomek"
@@ -80,8 +80,8 @@ msgstr "SMOTE Tomek"
 msgid "Meta Cost"
 msgstr "Meta Cost"
 
-msgid "Cost-sensitive SVM"
-msgstr "SVM Custo-Sensível"
+msgid "CSSVM"
+msgstr "CSSVM"
 
 # Metrics
 msgid "G-Mean"

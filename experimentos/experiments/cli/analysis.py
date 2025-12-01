@@ -15,6 +15,7 @@ from typing_extensions import Annotated
 
 from experiments.context import Context
 from experiments.core.data import Dataset
+from experiments.core.modeling.types import ModelType, Technique
 
 MODULE_NAME = "experiments.cli.analysis"
 
@@ -66,37 +67,26 @@ def _setup_i18n(language: _Language):
 
 def _get_model_display(model_id: str) -> str:
     """Returns the translated display name for a model."""
-    # Map IDs to translatable strings
-    mapping = {
-        "random_forest": _("Random Forest"),
-        "svm": _("Support Vector Machine"),
-        "xgboost": _("XGBoost"),
-        "mlp": _("Multi-Layer Perceptron"),
-    }
-    return mapping.get(model_id, model_id)
+    try:
+        return _(ModelType.from_id(model_id).display_name)
+    except ValueError:
+        return model_id
 
 
 def _get_technique_display(technique_id: str) -> str:
     """Returns the translated display name for a technique."""
-    mapping = {
-        "baseline": _("Baseline"),
-        "smote": _("SMOTE"),
-        "random_under_sampling": _("Random Under Sampling"),
-        "smote_tomek": _("SMOTE Tomek"),
-        "meta_cost": _("Meta Cost"),
-        "cs_svm": _("Cost-sensitive SVM"),
-    }
-    return mapping.get(technique_id, technique_id)
+    try:
+        return _(Technique.from_id(technique_id).display_name)
+    except ValueError:
+        return technique_id
 
 
 def _get_dataset_display(dataset_id: str) -> str:
     """Returns the translated display name for a dataset."""
-    mapping = {
-        "corporate_credit_rating": _("Corporate Credit Rating"),
-        "lending_club": _("Lending Club"),
-        "taiwan_credit": _("Taiwan Credit"),
-    }
-    return mapping.get(dataset_id, dataset_id)
+    try:
+        return _(Dataset.from_id(dataset_id).display_name)
+    except ValueError:
+        return dataset_id
 
 
 def _load_data(ctx: Context, dataset: Dataset) -> pd.DataFrame:

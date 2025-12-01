@@ -7,9 +7,9 @@ class ModelType(enum.Enum):
     """Types of models used in experiments."""
 
     RANDOM_FOREST = Choice("random_forest", "Random Forest")
-    SVM = Choice("svm", "Support Vector Machine")
+    SVM = Choice("svm", "SVM")
     XGBOOST = Choice("xgboost", "XGBoost")
-    MLP = Choice("mlp", "Multi-Layer Perceptron")
+    MLP = Choice("mlp", "MLP")
 
     def __str__(self) -> str:
         return self.id
@@ -47,10 +47,10 @@ class Technique(enum.Enum):
 
     BASELINE = Choice("baseline", "Baseline")
     SMOTE = Choice("smote", "SMOTE")
-    RANDOM_UNDER_SAMPLING = Choice("random_under_sampling", "Random Under Sampling")
+    RANDOM_UNDER_SAMPLING = Choice("random_under_sampling", "RUS")
     SMOTE_TOMEK = Choice("smote_tomek", "SMOTE Tomek")
     META_COST = Choice("meta_cost", "Meta Cost")
-    CS_SVM = Choice("cs_svm", "Cost-sensitive SVM")
+    CS_SVM = Choice("cs_svm", "CSSVM")
 
     def __str__(self) -> str:
         return self.id
