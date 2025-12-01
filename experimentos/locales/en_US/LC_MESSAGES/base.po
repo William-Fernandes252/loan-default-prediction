@@ -101,3 +101,6 @@ msgstr "Sensitivity"
 
 msgid "Balanced Accuracy"
 msgstr "Balanced Accuracy"
+
+msgid "Effect of {param} on Balanced Accuracy - {dataset_name}"
+msgstr "Effect of {param} on Balanced Accuracy - {dataset_name}"
