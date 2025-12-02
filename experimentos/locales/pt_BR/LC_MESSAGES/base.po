@@ -8,8 +8,8 @@ msgstr "Análise de Estabilidade: {metric_name} - {dataset_name}"
 msgid "Handling Technique"
 msgstr "Técnica de Tratamento"
 
-msgid "Precision-Recall Trade-off (Mean over {num_seeds} seeds) - {dataset_name}"
-msgstr "Compromisso Precisão-Revocação (Média de {num_seeds} sementes) - {dataset_name}"
+msgid "Precision-Sensitivity Trade-off - {dataset_name}"
+msgstr "Trade-off Precisão-Sensibilidade - {dataset_name}"
 
 msgid "Recall (Sensitivity) - Ability to detect defaults"
 msgstr "Revocação (Sensibilidade) - Capacidade de detectar inadimplência"

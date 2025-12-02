@@ -283,9 +283,9 @@ def analyze_risk_tradeoff(
             edgecolor="k",
         )
 
-        title = _(
-            "Precision-Recall Trade-off (Mean over {num_seeds} seeds) - {dataset_name}"
-        ).format(num_seeds=ctx.cfg.num_seeds, dataset_name=ds_display)
+        title = _("Precision-Sensitivity Trade-off - {dataset_name}").format(
+            num_seeds=ctx.cfg.num_seeds, dataset_name=ds_display
+        )
         plt.title(title, fontsize=16)
         plt.xlabel(_("Recall (Sensitivity) - Ability to detect defaults"), fontsize=12)
         plt.ylabel(_("Precision - Trustworthiness of default prediction"), fontsize=12)
@@ -685,7 +685,6 @@ def analyze_results(
             fig_height = header_height + (len(sub_df) * row_height)
 
             plt.figure(figsize=(14, fig_height))
-            plt.title(_(tech), fontsize=16)
             plt.axis("off")
 
             sub_df = sub_df.drop(columns=[technique_col])
