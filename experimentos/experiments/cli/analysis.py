@@ -76,7 +76,7 @@ def _get_model_display(model_id: str) -> str:
 def _get_technique_display(technique_id: str) -> str:
     """Returns the translated display name for a technique."""
     try:
-        return _(Technique.from_id(technique_id).display_name)
+        return _(Technique.display_name_from_id(technique_id))
     except ValueError:
         return technique_id
 
@@ -84,7 +84,7 @@ def _get_technique_display(technique_id: str) -> str:
 def _get_dataset_display(dataset_id: str) -> str:
     """Returns the translated display name for a dataset."""
     try:
-        return _(Dataset.from_id(dataset_id).display_name)
+        return _(Dataset.display_name_from_id(dataset_id))
     except ValueError:
         return dataset_id
 
@@ -670,37 +670,50 @@ def analyze_results(
 
         # Save as image
         output_dir_fig = _ensure_output_dir(ctx, ds.id, language, is_figure=True)
-        # Calculate figure size based on number of rows
-        # Base height for header + height per row
-        row_height = 0.5
-        header_height = 0.8
-        fig_height = header_height + (len(display_df) * row_height)
 
-        plt.figure(figsize=(14, fig_height))
-        plt.axis("off")
+        # Split by technique for better visualization
+        technique_col = _("Technique")
+        techniques = display_df[technique_col].unique()
 
-        table = plt.table(
-            cellText=display_df.values,
-            colLabels=display_df.columns,
-            cellLoc="center",
-            loc="center",
-            bbox=[0, 0, 1, 1],
-        )
+        for tech in techniques:
+            sub_df: pd.DataFrame = display_df[display_df[technique_col] == tech]
 
-        # Style the table
-        table.auto_set_font_size(False)
-        table.set_fontsize(10)
+            # Calculate figure size based on number of rows
+            # Base height for header + height per row
+            row_height = 0.5
+            header_height = 0.8
+            fig_height = header_height + (len(sub_df) * row_height)
 
-        # Bold the headers
-        for (row, col), cell in table.get_celld().items():
-            if row == 0:
-                cell.set_text_props(weight="bold")
-                cell.set_facecolor("#f0f0f0")
+            plt.figure(figsize=(14, fig_height))
+            plt.title(_(tech), fontsize=16)
+            plt.axis("off")
 
-        output_png = output_dir_fig / "results_summary.png"
-        plt.savefig(output_png, bbox_inches="tight", dpi=300)
-        plt.close()
-        ctx.logger.success(f"Saved summary table image to {output_png}")
+            sub_df = sub_df.drop(columns=[technique_col])
+            table = plt.table(
+                cellText=sub_df.values,
+                colLabels=sub_df.columns,
+                cellLoc="center",
+                loc="center",
+                bbox=[0, 0, 1, 1],
+            )
+
+            # Style the table
+            table.auto_set_font_size(False)
+            table.set_fontsize(10)
+
+            # Bold the headers
+            for (row, col), cell in table.get_celld().items():
+                if row == 0:
+                    cell.set_text_props(weight="bold")
+                    cell.set_facecolor("#f0f0f0")
+
+            # Sanitize filename
+            safe_tech_name = str(tech).replace(" ", "_").replace("/", "-").lower()
+            output_png = output_dir_fig / f"results_summary_{safe_tech_name}.png"
+
+            plt.savefig(output_png, bbox_inches="tight", dpi=300)
+            plt.close()
+            ctx.logger.success(f"Saved summary table image for {tech} to {output_png}")
 
 
 @app.command("all")

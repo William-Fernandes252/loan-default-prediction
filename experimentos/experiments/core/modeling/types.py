@@ -30,6 +30,11 @@ class ModelType(enum.Enum):
         raise ValueError(f"Unknown model type id: {identifier}")
 
     @classmethod
+    def display_name_from_id(cls, model_type_id: str) -> str:
+        model_type = cls.from_id(model_type_id)
+        return model_type.display_name
+
+    @classmethod
     def _missing_(cls, value):  # type: ignore[override]
         if isinstance(value, Choice):
             for member in cls:
@@ -69,6 +74,11 @@ class Technique(enum.Enum):
             if member.id == identifier:
                 return member
         raise ValueError(f"Unknown technique id: {identifier}")
+
+    @classmethod
+    def display_name_from_id(cls, technique_id: str) -> str:
+        technique = cls.from_id(technique_id)
+        return technique.display_name
 
     @classmethod
     def _missing_(cls, value):  # type: ignore[override]

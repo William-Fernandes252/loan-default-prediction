@@ -54,6 +54,11 @@ class Dataset(enum.Enum):
         raise ValueError(f"Unknown dataset id: {dataset_id}")
 
     @classmethod
+    def display_name_from_id(cls, dataset_id: str) -> str:
+        dataset = cls.from_id(dataset_id)
+        return dataset.display_name
+
+    @classmethod
     def _missing_(cls, value):  # type: ignore[override]
         if isinstance(value, Choice):
             for member in cls:
