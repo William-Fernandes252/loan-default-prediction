@@ -1,1 +1,87 @@
 \chapter{Resultados e Discussão}\label{cap:resultados}
+
+Nesta seção, serão discutidos os resultados parciais dos experimentos, onde foi tirada a média das métricas obtidas no treinamento para 5 seeds de cada combinação \textit{Modelo/Técnica} com o conjunto de dados de cartão de crédito de Taiwan.
+
+\section{Métricas de Avaliação e Critério de Escolha}\label{sec:metricas-resultados}
+
+Dada a natureza desbalanceada do conjunto de dados de crédito de Taiwan, a métrica tradicional de acurácia não se mostra adequada, pois pode apresentar valores elevados mesmo que o modelo falhe completamente em identificar a classe minoritária (inadimplentes). Portanto, este trabalho adota a acurácia balanceada como métrica principal para a comparação de desempenho.
+
+A acurácia balanceada é definida como a média aritmética entre a sensibilidade e a especificidade, garantindo que o acerto em ambas as classes (adimplentes e inadimplentes) tenha o mesmo peso na avaliação final do modelo.
+
+\section{Análise de Desempenho dos Modelos}\label{sec:analise-resultados}
+
+Os experimentos foram realizados utilizando validação cruzada com 5 sementes distintas para garantir a estabilidade estatística dos resultados. As Figuras~\ref{fig:resultados-cssvm} a~\ref{fig:resultados-smote-tomek} apresentam o resumo do desempenho dos modelos para cada técnica utilizado, ordenados pela acurácia balanceada.
+
+\begin{figure}
+  \centering
+  \includegraphics[width=1\linewidth, keepaspectratio]{experimentos/reports/pt_BR/taiwan_credit/figures/results_summary_cssvm.png}
+  \caption{Resultados do CSSVM (média de 5 sementes)}
+  \label{fig:resultados-cssvm}
+\end{figure}
+
+\begin{figure}
+  \centering
+  \includegraphics[width=1\linewidth, keepaspectratio]{experimentos/reports/pt_BR/taiwan_credit/figures/results_summary_linha_de_base.png}
+  \caption{Resultados com treinamento direto}
+  \label{fig:resultados-linha-base}
+\end{figure}
+
+\begin{figure}
+  \centering
+  \includegraphics[width=1\linewidth, keepaspectratio]{experimentos/reports/pt_BR/taiwan_credit/figures/results_summary_meta_cost.png}
+  \caption{Resultados do MetaCost (média de 5 sementes)}
+  \label{fig:resultados-meta-cost}
+\end{figure}
+
+\begin{figure}
+  \centering
+  \includegraphics[width=1\linewidth, keepaspectratio]{experimentos/reports/pt_BR/taiwan_credit/figures/results_summary_rus.png}
+  \caption{Resultados do RUS (média de 5 sementes)}
+  \label{fig:resultados-rus}
+\end{figure}
+
+\begin{figure}
+  \centering
+  \includegraphics[width=1\linewidth, keepaspectratio]{experimentos/reports/pt_BR/taiwan_credit/figures/results_summary_smote.png}
+  \caption{Resultados do SMOTE (média de 5 sementes)}
+  \label{fig:resultados-smote}
+\end{figure}
+
+\begin{figure}
+  \centering
+  \includegraphics[width=\linewidth, keepaspectratio]{experimentos/reports/pt_BR/taiwan_credit/figures/results_summary_smote_tomek.png}
+  \caption{Resultados do SMOTE Tomek (média de 5 sementes)}
+  \label{fig:resultados-smote-tomek}
+\end{figure}
+
+Observa-se que a aplicação de técnicas de balanceamento resultou em um ganho significativo de desempenho em relação ao treinamento base. Enquanto este apresentou uma acurácia balanceada média de aproximadamente \(0.6435\), as técnicas de re-amostragem elevaram esse patamar para acima de \(0.70\). Abordagens baseadas em custo (como CSSVM e MetaCost) também superaram a linha de base, mas, no geral, mostraram-se menos eficazes que as abordagens de re-amostragem direta para este cenário.
+
+\section{Impacto das Técnicas de Balanceamento}\label{impacto-tecnicas-resultados}
+
+A técnica de RUS demonstrou ser a abordagem mais eficaz para este conjunto de dados, dominando as primeiras posições do ranking. O modelo \textit{Random Forest} combinado com Subamostragem Aleatória obteve o melhor desempenho geral, com uma acurácia balanceada de \(0.7103\) \((\pm 0.0044)\).
+
+É notável que a superioridade do RUS se manteve consistente através de diferentes classificadores. O XGBoost e o MLP, quando submetidos à mesma técnica, alcançaram resultados extremamente próximos ao do Random Forest (\(0.7075\) e \(0.7071\), respectivamente). Isso sugere que, para o perfil de distribuição dos dados de Taiwan, a redução da classe majoritária facilita a definição das fronteiras de decisão mais do que a geração de dados sintéticos.
+
+As técnicas de sobre-amostragem (SMOTE e SMOTE Tomek) também apresentaram resultados competitivos, com o \textit{Random Forest} alcançando \textasciitilde$0.703$ de acurácia balanceada, mas ficaram ligeiramente abaixo da abordagem de subamostragem.
+
+\section{Estabilidade dos Modelos}\label{estabilidade-resultados}
+
+Como mostra a Figura~\ref{fig:estabilidade-resultados} análise do desvio padrão revela uma alta estabilidade nos modelos propostos. A variação da Acurácia Balanceada para o melhor modelo (\textit{Random Forest} + Subamostragem) foi de apenas \(0.0044\). Isso indica que o método é robusto e pouco sensível a variações na inicialização aleatória ou na partição dos dados de treinamento, validando a confiabilidade dos experimentos realizados.
+
+\begin{figure}
+  \centering
+  \includegraphics[width=\linewidth, keepaspectratio]{experimentos/reports/pt_BR/taiwan_credit/figures/stability_accuracy_balanced.png}
+  \caption{Estabilidade dos Modelos para Acurácia Balanceada (média de 5 sementes)}
+  \label{fig:estabilidade-resultados}
+\end{figure}
+
+\section{\textit{Trade-off} entre Sensibilidade e Precisão}\label{tradeoff-resultados}
+
+Embora a acurácia balanceada tenha sido o foco, é importante observar o comportamento das métricas componentes. Conforme ilustrado na Figura~\ref{fig:trade-off-risco}, existe um \textit{trade-off} claro. As técnicas que maximizam acurácia balanceada tendem a equilibrar melhor a Sensibilidade (capacidade de detectar fraude) e a Precisão, enquanto o treinamento padrão tende a ter alta Precisão mas baixíssima Sensibilidade, falhando no objetivo principal de detecção de risco. O gráfico mostra como diferentes combinações, apesar de terem apresentado uma acurácia semelhante, atingiram uma sensibilidade notoriamente inferior.
+
+\begin{figure}
+  \centering
+  \includegraphics[width=\linewidth, keepaspectratio]{experimentos/reports/pt_BR/taiwan_credit/figures/risk_tradeoff_scatter.png}
+  \caption{\textit{Trade-off} entre Precisão e Sensibilidade (média de 5 sementes)}
+  \label{fig:trade-off-risco}
+\end{figure}
