@@ -650,11 +650,9 @@ def analyze_results(
                 lambda row: f"{row[mean_col]:.4f} ± {row[std_col]:.4f}", axis=1
             )
 
-        # Sort by Balanced Accuracy (mean) descending
-        sort_col = "accuracy_balanced_mean"
-        if sort_col in summary.columns:
-            summary = summary.sort_values(sort_col, ascending=False)
-            display_df = display_df.iloc[summary.index]
+        # Sort by Model name
+        model_col = _("Model")
+        display_df = display_df.sort_values(by=model_col)
 
         # Print to console
         print(f"\n=== {ds_display} ===")
@@ -667,6 +665,18 @@ def analyze_results(
         output_csv = output_dir_csv / "results_summary.csv"
         display_df.to_csv(output_csv, index=False)
         ctx.logger.success(f"Saved summary table to {output_csv}")
+
+        # Save as LaTeX
+        # Replace ± with $\pm$ for proper math rendering
+        display_df_latex = display_df.replace("±", r"$\\pm$", regex=True)
+        output_latex = output_dir_csv / "results_summary.tex"
+        display_df_latex.to_latex(
+            output_latex,
+            index=False,
+            escape=False,  # Don't escape $ for math mode
+            column_format="ll" + "c" * (len(display_df_latex.columns) - 2),
+        )
+        ctx.logger.success(f"Saved LaTeX table to {output_latex}")
 
         # Save as image
         output_dir_fig = _ensure_output_dir(ctx, ds.id, language, is_figure=True)
@@ -713,6 +723,17 @@ def analyze_results(
             plt.savefig(output_png, bbox_inches="tight", dpi=300)
             plt.close()
             ctx.logger.success(f"Saved summary table image for {tech} to {output_png}")
+
+            # Save per-technique LaTeX table
+            sub_df_latex = sub_df.replace("±", r"$\\pm$", regex=True)
+            output_tex = output_dir_fig / f"results_summary_{safe_tech_name}.tex"
+            sub_df_latex.to_latex(
+                output_tex,
+                index=False,
+                escape=False,
+                column_format="l" + "c" * (len(sub_df_latex.columns) - 1),
+            )
+            ctx.logger.success(f"Saved LaTeX table for {tech} to {output_tex}")
 
 
 @app.command("all")
