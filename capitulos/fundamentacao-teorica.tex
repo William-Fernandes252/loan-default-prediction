@@ -14,7 +14,7 @@ Contudo, essas abordagens tradicionais apresentam limitações significativas. E
 
 Aprendizado de máquina é o processo de fazer com que computadores modifiquem, ou adaptem, as suas ações de modo que elas se tornem progressivamente mais eficazes segundo um conjunto de métricas~\cite{StephenMarsland2014}. É uma sub-área da Inteligência Artificial que foca na reprodução computacional do aprendizado, no sentido de desenvolver programas capazes de generalizar um problema: reconhecer que dentro de um determinado contexto (entrada), se uma decisão em particular (saída) foi a correta, então ela pode funcionar novamente, ou se ela foi equivocada, uma estratégia diferente deve ser elaborada.
 
-Os métodos utilizados para atingir esse comportamento podem ser divididos em aprendizado supervisionado, não-supervisionado e por reforço. No aprendizado supervisionado, um conjunto de dados de treinamento é utilizado juntamente com as respostas esperadas (rótulos) é fornecido, e com isso um algoritmo generaliza o problema, se tornando capaz de prever a resposta correta para novas entradas. Quando essa resposta é categórica, diz-se que o algoritmo é de classificação, e quando é contínua chama-se regressão~\cite{SindhuMeena2020}. O aprendizado não-supervisionado, por sua vez, opera em dados não rotulados para identificar padrões~\cite{Dike2018}. No aprendizado por reforço, um agente autônomo aprende a atingir um objetivo por meio de tentativa e erro enquanto interage com um ambiente: o agente utiliza o feedback que recebe na forma de recompensas para aprender uma política de ações que maximize a recompensa total a longo prazo~\cite{Sutton2018}.
+Os métodos utilizados para atingir esse comportamento podem ser divididos em aprendizado supervisionado, não-supervisionado e por reforço. No aprendizado supervisionado, um conjunto de dados de treinamento é utilizado juntamente com as respostas esperadas (rótulos) é fornecido, e com isso um algoritmo generaliza o problema, se tornando capaz de predizer a resposta correta para novas entradas. Quando essa resposta é categórica, diz-se que o algoritmo é de classificação, e quando é contínua chama-se regressão~\cite{SindhuMeena2020}. O aprendizado não-supervisionado, por sua vez, opera em dados não rotulados para identificar padrões~\cite{Dike2018}. No aprendizado por reforço, um agente autônomo aprende a atingir um objetivo por meio de tentativa e erro enquanto interage com um ambiente: o agente utiliza o feedback que recebe na forma de recompensas para aprender uma política de ações que maximize a recompensa total a longo prazo~\cite{Sutton2018}.
 
 O escopo deste projeto concentra-se na tarefa de classificação binária aplicada a conjuntos de dados utilizados na avaliação de risco de crédito. Nesse contexto, é comum a ocorrência de desbalanceamento entre as classes, o que pode impactar negativamente o desempenho dos modelos preditivos~\cite{Namvar2018}. Assim, estratégias que considerem esse desbalanceamento tendem a produzir resultados mais robustos. Este capítulo, portanto, explora os principais conceitos e técnicas relacionados ao desenvolvimento de modelos de classificação em cenários com dados desbalanceados.
 
@@ -26,11 +26,13 @@ Um outro algoritmo com uma abordagem semelhante, combinando classificadores para
 
 Em cenários com dados desbalanceados, o AdaBoost pode apresentar vantagens em relação ao \textit{Random Forest}, pois a atribuição de pesos maiores às instâncias da classe minoritária (que são frequentemente classificadas de forma incorreta nas primeiras iterações) permite que o modelo refine sua atenção para esta classe sem alterar a lógica fundamental do algoritmo.
 
+Proposto por Chen e Guestrin (\citeyear{Chen2016}), o XGBoost é uma implementação escalável de \textit{tree boosting} que tem alcançado ótimos resultados em diversos desafios de aprendizado de máquina e aplicações industriais. Ele supera o \textit{boosting} tradicional (como o AdaBoost) por incorporar regularização (\(L_1\) e \(L_2\)) na sua função objetivo, o que ajuda a prevenir o \textit{over-fitting}. Além disso, ele possui um mecanismo nativo para lidar com esparsidade e valores ausentes, aprendendo direções padrão para dados incompletos, e oferece maior estabilidade numérica, evitando erros de execução como divisões por zero durante o treinamento.
+
 Um terceiro algoritmo de grande relevância é o \textit{Support Vector Machine} (SVM), um modelo de aprendizado supervisionado utilizado tanto em problemas de classficação quanto de regressão~\cite{Farquad2012}. Sua abordagem para classificação binária consiste em encontrar o hiperplano ótimo, que é a fronteira de decisão que maximiza a distância (ou margem) entre os pontos de dados mais próximos de cada classe. Esses pontos, que definem a margem, são chamados de vetores de suporte~\cite{Vapnik2013}. O impacto do desbalanceamento de classes ocorre quando a otimização da margem é dominada pela classe majoritária, fazendo com que o hiperplano se desloque e classifique incorretamente as instâncias da classe minoritária, pois o erro gerado por elas não é suficiente para compensar uma margem mais ampla definida pela classe majoritária~\cite{Daskalaki2006}.
 
 \section{Métricas de desempenho de classificadores}
 
-A escolha das métricas de desempenho é determinante para uma avaliação precisa e confiável de um classificador~\cite{Gaudreault2021}. Os indicadores de desempenho preditivo utilizados hoje têm sua origem em variados domínios incluindo estatística (distância, similaridade binária etc.), processamento de sinais (\textit{area under the receiver operating characteristic curve}), recuperação de informação (\textit{precision}, \textit{recall}), medicina diagnóstica (sensibilidade, especificidade), reconhecimento estatístico de padrões (acurácia), entre outros~\cite{Canbek2023}. Quando se trata da avaliação de classificadores binários, as métricas utilizadas na literatura podem ser agrupadas segundo a sua interpretação do erro~\cite{Ferri2009}:  acurácia e \textit{F1-score}, por exemplo, representam o erro de forma qualitativa utilizando proporções entre a contagem de erros e acertos, enquanto que média do erro absoluto e \textit{Brier Score} dão uma visão probabilística do erro, isto é, medem o desvio das previsões da sua probabilidade real.
+A escolha das métricas de desempenho é determinante para uma avaliação precisa e confiável de um classificador~\cite{Gaudreault2021}. Os indicadores de desempenho preditivo utilizados hoje têm sua origem em variados domínios incluindo estatística (distância, similaridade binária etc.), processamento de sinais (\textit{area under the receiver operating characteristic curve}), recuperação de informação (\textit{precision}, \textit{recall}), medicina diagnóstica (sensibilidade, especificidade), reconhecimento estatístico de padrões (acurácia), entre outros~\cite{Canbek2023}. Quando se trata da avaliação de classificadores binários, as métricas utilizadas na literatura podem ser agrupadas segundo a sua interpretação do erro~\cite{Ferri2009}:  acurácia e \textit{F1-score}, por exemplo, representam o erro de forma qualitativa utilizando proporções entre a contagem de erros e acertos, enquanto que média do erro absoluto e \textit{Brier Score} dão uma visão probabilística do erro, isto é, medem o desvio das predições da sua probabilidade real.
 
 Para o uso das métricas qualitativas, a contagem dos erros e acertos é representada com uma matriz \(M\), chamada de Matriz de confusão. Nesta matriz, cada elemento \(M_{ij}\) corresponde ao número de vezes com que uma instância da classe \(i\) foram identificados como pertencentes à classe \(j\).
 
@@ -51,7 +53,7 @@ Em problemas de classificação binária desbalanceada, a classe mais frequente 
 
 A partir dessas contagens é possível definir algumas das métricas fundamentais para avaliação de modelos de classificação, as quais servem como base para a obtenção de indicadores de desempenho mais robustos~\cite{Naidu2023}.
 
-A \textbf{acurácia} de um modelo é definida como a taxa de acertos das previsões:
+A \textbf{acurácia} de um modelo é definida como a taxa de acertos das predições:
 \begin{center}
   Acurácia = $\frac{TP + TN}{TP + FP + TN + FN}$
   \label{eq:acuracia}
@@ -63,27 +65,27 @@ A \textbf{sensibilidade} (ou \textbf{\textit{recall}}) mede a capacidade do mode
   \label{eq:sensibilidade}
 \end{center}
 
-A \textbf{precisão} mede a proporção de acertos entre as previsões positivas:
+A \textbf{precisão} mede a proporção de acertos entre as predições positivas:
 \begin{center}
   Precisão = $\frac{TP}{TP + FP}$
   \label{eq:precisao}
 \end{center}
 
-A \textbf{especificidade} é oposto da sensibilidade, medindo a capacidade do modelo de prever corretamente instâncias negativas:
+A \textbf{especificidade} é oposto da sensibilidade, medindo a capacidade do modelo de predizer corretamente instâncias negativas:
 \begin{center}
   Especificidade = $\frac{TN}{TN + FP}$
   \label{eq:especificidade}
 \end{center}
 
-Analisando estas definições, fica claro porque elas não são suficientes para avaliar a performance de forma assertiva em um cenário de desbalanceamento entre as classes. Se um modelo simplesmente classificasse todas as instâncias de um conjunto como negativas, onde essa classe representasse, por exemplo, \(99\%\), a acurácia seria \(99\%\). Apesar de parecer promissor, tal modelo seria inútil na prática, pois não identifica nenhum caso de interesse~\cite{Naidu2023}. A sua sensibilidade nula e precisão indefinida (por conta de uma divisão por \(0\)) torna isso evidente. Métricas compostas, como \textit{F1-score}, acurácia balanceada, \textit{G-mean}, combinam as métricas básicas para possibilitar uma análise mais equilibrada e assertiva nesse contexto.
+Em um cenário de desbalanceamento entre as classes, se um modelo simplesmente classificasse todas as instâncias de um conjunto como negativas, onde essa classe representasse, por exemplo, \(99\%\) das instâncias, a acurácia seria \(99\%\). Apesar de parecer promissor, tal modelo seria inútil na prática, pois não identifica nenhum caso de interesse~\cite{Naidu2023}. A sua sensibilidade nula e precisão indefinida (por conta de uma divisão por \(0\)) torna isso evidente. Métricas compostas, como \textit{F1-score}, acurácia balanceada, \textit{G-mean}, combinam as métricas básicas para possibilitar uma melhor análise nesse contexto.
 
-O \textbf{\textit{F1-score}} foi criado para balancear a sensibilidade e a precisão de um modelo, sendo definido como a média harmônica entre estes dois indicadores~\cite{Grandini2020}:
+O \textbf{\textit{F1-score}} considera a sensibilidade e a precisão de um modelo, sendo definido como a média harmônica entre estes dois indicadores~\cite{Grandini2020}:
 \begin{center}
   \textit{F1-score} = $\frac{Precisão \cdot Sensibilidade}{Precisão + Sensibilidade}$
   \label{eq:f1-score}
 \end{center}
 
-A \textbf{acurácia balanceada} é uma das correções mais diretas e robustas para o problema da acurácia padrão. Em vez de considerar a média de todas as previsões, a acurácia balanceada calcula o desempenho médio de cada classe individualmente e depois faz uma média. Isso garante que um modelo bem avaliado por essa métrica é eficaz em todas as classes~\cite{Grandini2020}. No caso binário, ela é definida como a média entre a sensibilidade e a especificidade do modelo, que representam, respectivamente, os acertos nas classes positiva e negativa:
+A \textbf{acurácia balanceada} calcula o desempenho médio de cada classe individualmente e depois faz uma média. Isso garante que um modelo bem avaliado por essa métrica seja eficaz em todas as classes~\cite{Grandini2020}. No caso binário, ela é definida como a média entre a sensibilidade e a especificidade do modelo, que representam, respectivamente, os acertos nas classes positiva e negativa:
 \begin{center}
   Acurácia balanceada = $\frac{Sensibilidade + Especificidade}{2}$
   \label{eq:acuracia-balanceada}
@@ -95,15 +97,6 @@ O \textbf{\textit{G-mean}} também sumariza o desempenho do modelo nas classes d
   \label{g-mean}
 \end{center}
 O \textit{G-mean} tem sido priorizado em problemas com conjuntos de dados altamente desbalanceados, principalmente por ser pouco influenciado pela distribuição das classes, e exigir que o modelo apresente um bom desempenho em todas as classes simultaneamente~~\cite{Namvar2018,Ri2020}.
-
-Por fim, a área sob a curva \textit{Receiver Operating Characteristic} (ROC), ou \textbf{AUC}, revela a capacidade do modelo em separar as instâncias das classes positiva e negativa, através de uma análise da relação entre a Taxa de Verdadeiros Positivos (TPR) e a Taxa de Falsos Positivos (FPR) para diferentes limiares de decisão~\cite{Naidu2023}. Essa métrica pode ser interpretada da seguinte maneira:
-\begin{itemize}
-  \item $\textbf{AUC = 1}$: indica que todas as amostras positivas tem maior probabilidade de serem classificadas corretamente, ou seja, um modelo ideal;
-  \item $\textbf{AUC = 0.5}$: um modelo com desempenho igual a uma previsão aleatória. A curva ROC segue a linha diagonal do gráfico;
-  \item $\textbf{0.5 < AUC <= 1}$: um modelo com poder de discriminação.
-\end{itemize}
-
-Por depender apenas da sensibilidade e da especificidade do modelo, a AUC não é afetada pela distribuição das classes. Naidu, Zuva e Sibanda (\citeyear{Naidu2023}) mostraram que, embora métricas como acurácia, precisão e \textit{recall} e \textit{F1-score} sejam mais utilizadas na prática, a AUC é mais perspicaz quanto a adequação da eficácia de um algoritmo.
 
 \section{Técnicas de re-amostragem}
 
@@ -132,7 +125,7 @@ Naturalmente, a efetividade do aprendizado sensível a custos depende fortemente
 
 Os algoritmos de aprendizado sensível ao custo podem ser categorizados entre aprendizagem direta, em que algoritmos existentes são adaptados para o uso de uma função de custo específica, e meta-aprendizado, que consiste em incorporar modificar a entrada (dados de teste) ou saída de um classificador~\cite{FernndezCs2018}. \textit{Cost-sensitive tree} é um exemplo de algoritmo da primeira categoria, que permite a introdução de custos, tanto dos atributos quanto de classificações incorretas, a uma árvore de decisão~\cite{Ling2006}.
 
-Proposto por Domingos (\citeyear{Domingos1999}), \textit{MetaCost} é um método genérico de meta-aprendizado que permite adicionar um procedimento de minimização de custo a qualquer classificador, independentemente do formato de sua saída. A flexibilidade e a simplicidade da sua implementação, faz com o algoritmo se destaque entre os demais~\cite[text]{FernndezCs2018, Wang2018}. O processo de treinamento utilizando o \textit{MetaCost} é divido em duas partes. Primeiro, \(m\) subconjuntos são criados a partir do conjunto de dados de teste original, cada qual usado para treinar um classificador base (por exemplo, regressão logística, \textit{decision tree} etc.). Cada classificador gera probabilidades de classe para cada instância, ou apenas o rótulo quando ele não suporta probabilidades~\cite{Araf2024}. Em seguida, para cada exemplo original, é calculada a média das previsões dos classificadores base (ou votação por maioria), que é usada para calcular o custo esperado de classificá-lo em cada classe, multiplicando pela matriz de custos. O rótulo da instância é então redefinido para a classe minimiza o custo. Com o conjunto de treinamento re-rotulado, um classificador final é então treinado com os exemplos atualizados. Esse classificador final é sensível ao custo e tem um desempenho superior aos classificadores treinados com os dados originais~\cite{Chen2021}.
+Proposto por Domingos (\citeyear{Domingos1999}), \textit{MetaCost} é um método genérico de meta-aprendizado que permite adicionar um procedimento de minimização de custo a qualquer classificador, independentemente do formato de sua saída. A flexibilidade e a simplicidade da sua implementação, faz com o algoritmo se destaque entre os demais~\cite[text]{FernndezCs2018, Wang2018}. O processo de treinamento utilizando o \textit{MetaCost} é divido em duas partes. Primeiro, \(m\) subconjuntos são criados a partir do conjunto de dados de teste original, cada qual usado para treinar um classificador base (por exemplo, regressão logística, \textit{decision tree} etc.). Cada classificador gera probabilidades de classe para cada instância, ou apenas o rótulo quando ele não suporta probabilidades~\cite{Araf2024}. Em seguida, para cada exemplo original, é calculada a média das predições dos classificadores base (ou votação por maioria), que é usada para calcular o custo esperado de classificá-lo em cada classe, multiplicando pela matriz de custos. O rótulo da instância é então redefinido para a classe minimiza o custo. Com o conjunto de treinamento re-rotulado, um classificador final é então treinado com os exemplos atualizados. Esse classificador final é sensível ao custo e tem um desempenho superior aos classificadores treinados com os dados originais~\cite{Chen2021}.
 
 \section{Trabalhos Relacionados}
 

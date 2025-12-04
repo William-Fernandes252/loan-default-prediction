@@ -1,6 +1,6 @@
-\chapter{Resultados e Discussão}\label{cap:resultados}
+\chapter{Resultados Preliminares}\label{cap:resultados}
 
-Nesta seção, serão discutidos os resultados parciais dos experimentos, onde foi tirada a média das métricas obtidas no treinamento para 5 seeds de cada combinação \textit{Modelo/Técnica} com o conjunto de dados de cartão de crédito de Taiwan.
+Nesta seção, serão discutidos os resultados parciais dos experimentos, onde foi obtida a média das métricas obtidas no treinamento para 5 seeds de cada combinação de modelo (MLP, \textit{Random Forest}, SVM e XGBoost) e técnica (CSSVM, Linha de base, RUS, MetaCost, SMOTE e SMOTE Tomek), resultando em \(120\) execuções com o conjunto de dados de cartão de crédito de Taiwan.
 
 \section{Métricas de Avaliação e Critério de Escolha}\label{sec:metricas-resultados}
 
@@ -10,65 +10,61 @@ A acurácia balanceada é definida como a média aritmética entre a sensibilida
 
 \section{Análise de Desempenho dos Modelos}\label{sec:analise-resultados}
 
-Os experimentos foram realizados utilizando validação cruzada com 5 sementes distintas para garantir a estabilidade estatística dos resultados. As Figuras~\ref{fig:resultados-cssvm} a~\ref{fig:resultados-smote-tomek} apresentam o resumo do desempenho dos modelos para cada técnica utilizado, ordenados pela acurácia balanceada.
-
-\begin{figure}
+Os experimentos foram realizados utilizando validação cruzada com 5 sementes distintas. As Tabelas~\ref{tab:resultados-cssvm} a~\ref{tab:resultados-smote-tomek} apresentam o resumo do desempenho dos modelos para cada técnica utilizado, ordenados pela acurácia balanceada.
+\begin{table}[H]
   \centering
-  \includegraphics[width=1\linewidth, keepaspectratio]{experimentos/reports/pt_BR/taiwan_credit/figures/results_summary_cssvm.png}
+  {\fontsize{8}{11}\selectfont \input{experimentos/reports/pt_BR/taiwan_credit/figures/results_summary_cssvm.tex}}
   \caption{Resultados do CSSVM (média de 5 sementes)}
-  \label{fig:resultados-cssvm}
-\end{figure}
-
-\begin{figure}
+  \label{tab:resultados-cssvm}
+\end{table}
+\begin{table}[H]
   \centering
-  \includegraphics[width=1\linewidth, keepaspectratio]{experimentos/reports/pt_BR/taiwan_credit/figures/results_summary_linha_de_base.png}
+  {\fontsize{8}{11}\selectfont \input{experimentos/reports/pt_BR/taiwan_credit/figures/results_summary_linha_de_base.tex}}
   \caption{Resultados com treinamento direto}
-  \label{fig:resultados-linha-base}
-\end{figure}
-
-\begin{figure}
+  \label{tab:resultados-linha-base}
+\end{table}
+\begin{table}[H]
   \centering
-  \includegraphics[width=1\linewidth, keepaspectratio]{experimentos/reports/pt_BR/taiwan_credit/figures/results_summary_meta_cost.png}
+  {\fontsize{8}{11}\selectfont \input{experimentos/reports/pt_BR/taiwan_credit/figures/results_summary_meta_cost.tex}}
   \caption{Resultados do MetaCost (média de 5 sementes)}
-  \label{fig:resultados-meta-cost}
-\end{figure}
-
-\begin{figure}
+  \label{tab:resultados-meta-cost}
+\end{table}
+\begin{table}[H]
   \centering
-  \includegraphics[width=1\linewidth, keepaspectratio]{experimentos/reports/pt_BR/taiwan_credit/figures/results_summary_rus.png}
+  {\fontsize{8}{11}\selectfont \input{experimentos/reports/pt_BR/taiwan_credit/figures/results_summary_rus.tex}}
   \caption{Resultados do RUS (média de 5 sementes)}
-  \label{fig:resultados-rus}
-\end{figure}
-
-\begin{figure}
+  \label{tab:resultados-rus}
+\end{table}
+\begin{table}[H]
   \centering
-  \includegraphics[width=1\linewidth, keepaspectratio]{experimentos/reports/pt_BR/taiwan_credit/figures/results_summary_smote.png}
+  {\fontsize{8}{11}\selectfont \input{experimentos/reports/pt_BR/taiwan_credit/figures/results_summary_smote.tex}}
   \caption{Resultados do SMOTE (média de 5 sementes)}
-  \label{fig:resultados-smote}
-\end{figure}
-
-\begin{figure}
+  \label{tab:resultados-smote}
+\end{table}
+\begin{table}[H]
   \centering
-  \includegraphics[width=\linewidth, keepaspectratio]{experimentos/reports/pt_BR/taiwan_credit/figures/results_summary_smote_tomek.png}
+  {\fontsize{8}{11}\selectfont \input{experimentos/reports/pt_BR/taiwan_credit/figures/results_summary_smote_tomek.tex}}
   \caption{Resultados do SMOTE Tomek (média de 5 sementes)}
-  \label{fig:resultados-smote-tomek}
-\end{figure}
+  \label{tab:resultados-smote-tomek}
+\end{table}
 
 Observa-se que a aplicação de técnicas de balanceamento resultou em um ganho significativo de desempenho em relação ao treinamento base. Enquanto este apresentou uma acurácia balanceada média de aproximadamente \(0.6435\), as técnicas de re-amostragem elevaram esse patamar para acima de \(0.70\). Abordagens baseadas em custo (como CSSVM e MetaCost) também superaram a linha de base, mas, no geral, mostraram-se menos eficazes que as abordagens de re-amostragem direta para este cenário.
 
 \section{Impacto das Técnicas de Balanceamento}\label{impacto-tecnicas-resultados}
 
-A técnica de RUS demonstrou ser a abordagem mais eficaz para este conjunto de dados, dominando as primeiras posições do ranking. O modelo \textit{Random Forest} combinado com Subamostragem Aleatória obteve o melhor desempenho geral, com uma acurácia balanceada de \(0.7103\) \((\pm 0.0044)\).
+A técnica de RUS demonstrou ser a abordagem mais eficaz para este conjunto de dados, dominando as primeiras posições do ranking. O modelo \textit{Random Forest} combinado com RUS obteve o melhor desempenho geral, com uma acurácia balanceada de \(0.7103\) \((\pm 0.0044)\).
 
-É notável que a superioridade do RUS se manteve consistente através de diferentes classificadores. O XGBoost e o MLP, quando submetidos à mesma técnica, alcançaram resultados extremamente próximos ao do Random Forest (\(0.7075\) e \(0.7071\), respectivamente). Isso sugere que, para o perfil de distribuição dos dados de Taiwan, a redução da classe majoritária facilita a definição das fronteiras de decisão mais do que a geração de dados sintéticos.
+É notável que a superioridade do RUS se manteve consistente através de diferentes classificadores. O XGBoost e o MLP, quando submetidos à mesma técnica, alcançaram resultados extremamente próximos ao do \textit{Random Forest} (\(0.7075\) e \(0.7071\), respectivamente). Isso sugere que, para o perfil de distribuição dos dados de Taiwan, a redução da classe majoritária facilita a definição das fronteiras de decisão mais do que a geração de dados sintéticos.
 
-As técnicas de sobre-amostragem (SMOTE e SMOTE Tomek) também apresentaram resultados competitivos, com o \textit{Random Forest} alcançando \textasciitilde$0.703$ de acurácia balanceada, mas ficaram ligeiramente abaixo da abordagem de subamostragem.
+As técnicas de sobre-amostragem (SMOTE e SMOTE Tomek) também apresentaram resultados competitivos, com o \textit{Random Forest} alcançando \(0.7029\) de acurácia balanceada, mas ficaram ligeiramente abaixo da abordagem de subamostragem.
+
+Além disso, vale ressaltar um fenômeno importante observado nos dados após a aplicação das técnicas para lidar com o desbalanceamento: o aumento da acurácia balanceada e da sensibilidade veio acompanhado de uma redução significativa na precisão. Isso ocorre devido ao deslocamento da fronteira de decisão dos modelos. O classificador treinado com a distribuição original (desbalanceada) tende a ser conservador, privilegiando a classe majoritária para minimizar o erro global, o que resulta em alta precisão (poucos falsos positivos) mas baixíssima capacidade de detecção (muitos falsos negativos). Ao aplicar técnicas como o RUS, remove-se o viés em favor da classe majoritária. O modelo torna-se mais apto em identificar a classe minoritária, aumentando os verdadeiros positivos (e consequentemente a sensibilidade). No entanto, como efeito colateral desse ajuste de sensibilidade, o modelo passa a classificar incorretamente uma maior quantidade de clientes adimplentes ariscados como inadimplentes (aumento de falsos positivos), o que penaliza a métrica de precisão.
 
 \section{Estabilidade dos Modelos}\label{estabilidade-resultados}
 
 Como mostra a Figura~\ref{fig:estabilidade-resultados} análise do desvio padrão revela uma alta estabilidade nos modelos propostos. A variação da Acurácia Balanceada para o melhor modelo (\textit{Random Forest} + Subamostragem) foi de apenas \(0.0044\). Isso indica que o método é robusto e pouco sensível a variações na inicialização aleatória ou na partição dos dados de treinamento, validando a confiabilidade dos experimentos realizados.
 
-\begin{figure}
+\begin{figure}[H]
   \centering
   \includegraphics[width=\linewidth, keepaspectratio]{experimentos/reports/pt_BR/taiwan_credit/figures/stability_accuracy_balanced.png}
   \caption{Estabilidade dos Modelos para Acurácia Balanceada (média de 5 sementes)}
@@ -79,7 +75,7 @@ Como mostra a Figura~\ref{fig:estabilidade-resultados} análise do desvio padrã
 
 Embora a acurácia balanceada tenha sido o foco, é importante observar o comportamento das métricas componentes. Conforme ilustrado na Figura~\ref{fig:trade-off-risco}, existe um \textit{trade-off} claro. As técnicas que maximizam acurácia balanceada tendem a equilibrar melhor a Sensibilidade (capacidade de detectar fraude) e a Precisão, enquanto o treinamento padrão tende a ter alta Precisão mas baixíssima Sensibilidade, falhando no objetivo principal de detecção de risco. O gráfico mostra como diferentes combinações, apesar de terem apresentado uma acurácia semelhante, atingiram uma sensibilidade notoriamente inferior.
 
-\begin{figure}
+\begin{figure}[H]
   \centering
   \includegraphics[width=\linewidth, keepaspectratio]{experimentos/reports/pt_BR/taiwan_credit/figures/risk_tradeoff_scatter.png}
   \caption{\textit{Trade-off} entre Precisão e Sensibilidade (média de 5 sementes)}
