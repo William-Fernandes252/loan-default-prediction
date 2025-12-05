@@ -5,12 +5,7 @@ from typing import Any
 import numpy as np
 from sklearn.model_selection import GridSearchCV, StratifiedKFold
 
-from experiments.core.experiment.protocols import SplitData, TrainedModel
-from experiments.core.modeling.factories import (
-    build_pipeline,
-    get_hyperparameters,
-    get_params_for_technique,
-)
+from experiments.core.experiment.protocols import EstimatorFactory, SplitData, TrainedModel
 from experiments.core.modeling.types import ModelType, Technique
 
 
@@ -18,13 +13,14 @@ class GridSearchTrainer:
     """Trains models using GridSearchCV for hyperparameter optimization.
 
     This implementation:
-    - Builds the appropriate pipeline for model type and technique
+    - Uses an injected EstimatorFactory to build pipelines and param grids
     - Performs grid search with cross-validation
     - Adjusts CV folds based on class distribution
     """
 
     def __init__(
         self,
+        estimator_factory: EstimatorFactory,
         scoring: str = "roc_auc",
         n_jobs: int = 1,
         verbose: int = 0,
@@ -32,10 +28,12 @@ class GridSearchTrainer:
         """Initialize the trainer.
 
         Args:
+            estimator_factory: Factory for creating estimators and param grids.
             scoring: Scoring metric for optimization.
             n_jobs: Number of parallel jobs for grid search.
             verbose: Verbosity level.
         """
+        self._factory = estimator_factory
         self._scoring = scoring
         self._n_jobs = n_jobs
         self._verbose = verbose
@@ -62,10 +60,9 @@ class GridSearchTrainer:
         Returns:
             The trained model with best parameters.
         """
-        # Build pipeline and parameter grid
-        pipeline = build_pipeline(model_type, technique, seed)
-        base_grid = get_hyperparameters(model_type)
-        param_grid = get_params_for_technique(model_type, technique, base_grid, cost_grids)
+        # Build pipeline and parameter grid using the factory
+        pipeline = self._factory.create_pipeline(model_type, technique, seed)
+        param_grid = self._factory.get_param_grid(model_type, technique, cost_grids)
 
         # Adjust CV if class count is low
         _, counts = np.unique(data.y_train, return_counts=True)
