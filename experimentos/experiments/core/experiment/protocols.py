@@ -8,8 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
-from imblearn.pipeline import Pipeline as ImbPipeline
 import numpy as np
+from imblearn.pipeline import Pipeline as ImbPipeline
 from sklearn.base import BaseEstimator
 
 from experiments.core.data import Dataset
