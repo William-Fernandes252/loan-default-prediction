@@ -121,7 +121,7 @@ class DescribeExperimentContext:
             cv_folds=5,
             cost_grids=[{"cost": [1, 10]}],
         )
-        
+
         context = ExperimentContext(
             identity=identity,
             data=data_paths,
@@ -133,7 +133,7 @@ class DescribeExperimentContext:
         assert context.data == data_paths
         assert context.config == training_config
         assert context.checkpoint_path == Path("/checkpoints/test.parquet")
-        
+
         # Verify nested access works
         assert context.identity.dataset == Dataset.TAIWAN_CREDIT
         assert context.identity.model_type == ModelType.RANDOM_FOREST
@@ -160,7 +160,7 @@ class DescribeExperimentContext:
             cv_folds=5,
             cost_grids=[],
         )
-        
+
         context = ExperimentContext(
             identity=identity,
             data=data_paths,
@@ -186,7 +186,7 @@ class DescribeExperimentContext:
             cv_folds=5,
             cost_grids=[],
         )
-        
+
         context = ExperimentContext(
             identity=identity,
             data=data_paths,
@@ -213,7 +213,7 @@ class DescribeExperimentContext:
             cv_folds=5,
             cost_grids=[],
         )
-        
+
         context = ExperimentContext(
             identity=identity,
             data=data_paths,
