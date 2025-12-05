@@ -4,8 +4,9 @@ This module provides the AnalysisPipeline class that coordinates
 data loading, transformation, and export in a clean, composable way.
 """
 
+from enum import Enum
 from pathlib import Path
-from typing import Protocol
+from typing import Callable, Protocol
 
 from loguru import logger
 
@@ -17,6 +18,17 @@ from experiments.core.analysis.loaders import (
 from experiments.core.analysis.protocols import DataLoader, TranslationFunc
 from experiments.core.analysis.transformers import BaseTransformer
 from experiments.core.data import Dataset
+
+
+class AnalysisType(Enum):
+    """Supported analysis types."""
+
+    STABILITY = "stability"
+    RISK_TRADEOFF = "risk_tradeoff"
+    IMBALANCE_IMPACT = "imbalance_impact"
+    CS_VS_RESAMPLING = "cs_vs_resampling"
+    HYPERPARAMETER = "hyperparameter"
+    EXPERIMENT_SUMMARY = "experiment"
 
 
 class OutputPathProvider(Protocol):
@@ -141,10 +153,10 @@ class AnalysisPipeline:
 
 
 class AnalysisPipelineFactory:
-    """Factory for creating pre-configured analysis pipelines.
+    """Factory for creating analysis pipelines using a registry pattern.
 
-    This factory simplifies creating pipelines for common analysis types
-    by encapsulating the component wiring.
+    This factory uses a registry pattern to create pipelines for different
+    analysis types, making it easy to extend without modifying the class.
     """
 
     def __init__(
@@ -163,12 +175,56 @@ class AnalysisPipelineFactory:
         self._path_provider = path_provider
         self._output_path_provider = output_path_provider
         self._translate = translate
+        self._registry: dict[AnalysisType, Callable[[], AnalysisPipeline]] = {
+            AnalysisType.STABILITY: self._create_stability,
+            AnalysisType.RISK_TRADEOFF: self._create_risk_tradeoff,
+            AnalysisType.IMBALANCE_IMPACT: self._create_imbalance_impact,
+            AnalysisType.CS_VS_RESAMPLING: self._create_cost_sensitive_vs_resampling,
+            AnalysisType.HYPERPARAMETER: self._create_hyperparameter,
+            AnalysisType.EXPERIMENT_SUMMARY: self._create_experiment_summary,
+        }
 
     def _create_loader(self) -> DataLoader:
         """Create a configured data loader."""
         return EnrichedResultsLoader(self._path_provider, self._translate)
 
+    def create(self, analysis_type: AnalysisType) -> AnalysisPipeline:
+        """Create a pipeline for the given analysis type.
+
+        Args:
+            analysis_type: The type of analysis pipeline to create.
+
+        Returns:
+            A configured AnalysisPipeline instance.
+
+        Raises:
+            ValueError: If the analysis type is not registered.
+        """
+        if analysis_type not in self._registry:
+            raise ValueError(f"Unknown analysis type: {analysis_type}")
+        return self._registry[analysis_type]()
+
+    def register(
+        self,
+        analysis_type: AnalysisType,
+        factory_fn: Callable[[], AnalysisPipeline],
+    ) -> None:
+        """Register a custom pipeline factory.
+
+        Args:
+            analysis_type: The analysis type to register.
+            factory_fn: A callable that returns an AnalysisPipeline instance.
+        """
+        self._registry[analysis_type] = factory_fn
+
     def create_stability_pipeline(self) -> AnalysisPipeline:
+        """Create a pipeline for stability analysis.
+
+        Deprecated: Use create(AnalysisType.STABILITY) instead.
+        """
+        return self._create_stability()
+
+    def _create_stability(self) -> AnalysisPipeline:
         """Create a pipeline for stability analysis."""
         from experiments.core.analysis.exporters import StabilityFigureExporter
         from experiments.core.analysis.transformers import StabilityTransformer
@@ -181,6 +237,13 @@ class AnalysisPipelineFactory:
         )
 
     def create_risk_tradeoff_pipeline(self) -> AnalysisPipeline:
+        """Create a pipeline for risk tradeoff analysis.
+
+        Deprecated: Use create(AnalysisType.RISK_TRADEOFF) instead.
+        """
+        return self._create_risk_tradeoff()
+
+    def _create_risk_tradeoff(self) -> AnalysisPipeline:
         """Create a pipeline for risk tradeoff analysis."""
         from experiments.core.analysis.exporters import RiskTradeoffFigureExporter
         from experiments.core.analysis.transformers import RiskTradeoffTransformer
@@ -193,6 +256,13 @@ class AnalysisPipelineFactory:
         )
 
     def create_imbalance_impact_pipeline(self) -> AnalysisPipeline:
+        """Create a pipeline for imbalance impact analysis.
+
+        Deprecated: Use create(AnalysisType.IMBALANCE_IMPACT) instead.
+        """
+        return self._create_imbalance_impact()
+
+    def _create_imbalance_impact(self) -> AnalysisPipeline:
         """Create a pipeline for imbalance impact analysis."""
         from experiments.core.analysis.exporters import ImbalanceImpactFigureExporter
         from experiments.core.analysis.transformers import ImbalanceImpactTransformer
@@ -205,6 +275,13 @@ class AnalysisPipelineFactory:
         )
 
     def create_cost_sensitive_vs_resampling_pipeline(self) -> AnalysisPipeline:
+        """Create a pipeline for cost-sensitive vs resampling analysis.
+
+        Deprecated: Use create(AnalysisType.CS_VS_RESAMPLING) instead.
+        """
+        return self._create_cost_sensitive_vs_resampling()
+
+    def _create_cost_sensitive_vs_resampling(self) -> AnalysisPipeline:
         """Create a pipeline for cost-sensitive vs resampling analysis."""
         from experiments.core.analysis.exporters import (
             CostSensitiveVsResamplingFigureExporter,
@@ -221,6 +298,13 @@ class AnalysisPipelineFactory:
         )
 
     def create_hyperparameter_pipeline(self) -> AnalysisPipeline:
+        """Create a pipeline for hyperparameter effects analysis.
+
+        Deprecated: Use create(AnalysisType.HYPERPARAMETER) instead.
+        """
+        return self._create_hyperparameter()
+
+    def _create_hyperparameter(self) -> AnalysisPipeline:
         """Create a pipeline for hyperparameter effects analysis."""
         from experiments.core.analysis.exporters import HyperparameterFigureExporter
         from experiments.core.analysis.transformers import HyperparameterTransformer
@@ -236,7 +320,13 @@ class AnalysisPipelineFactory:
         """Create a pipeline for experiment summary analysis.
 
         This pipeline exports to multiple formats: PNG tables, CSV, and LaTeX.
+
+        Deprecated: Use create(AnalysisType.EXPERIMENT_SUMMARY) instead.
         """
+        return self._create_experiment_summary()
+
+    def _create_experiment_summary(self) -> AnalysisPipeline:
+        """Create a pipeline for experiment summary analysis."""
         from experiments.core.analysis.exporters import (
             CompositeExporter,
             CsvExporter,
@@ -267,5 +357,6 @@ class AnalysisPipelineFactory:
 __all__ = [
     "AnalysisPipeline",
     "AnalysisPipelineFactory",
+    "AnalysisType",
     "OutputPathProvider",
 ]
