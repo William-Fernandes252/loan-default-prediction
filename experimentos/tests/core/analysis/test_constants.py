@@ -17,6 +17,7 @@ from experiments.core.analysis.constants import (
     MetricConfig,
     get_metric_configs,
     get_metric_display_names,
+    translate_metric,
 )
 from experiments.core.data import Dataset
 
@@ -43,14 +44,23 @@ class DescribeMetricConfig:
 
         assert config.format_str == "{:.2%}"
 
+
+class DescribeTranslateMetric:
     def it_returns_translated_display_name(self):
         config = MetricConfig(id="test", display_name_key="Test Metric")
 
         def custom_translate(s: str) -> str:
             return f"[{s}]"
 
-        assert config.get_display_name(custom_translate) == "[Test Metric]"
+        assert translate_metric(config, custom_translate) == "[Test Metric]"
 
+    def it_uses_identity_translate(self):
+        config = MetricConfig(id="test", display_name_key="Test Metric")
+
+        assert translate_metric(config, identity_translate) == "Test Metric"
+
+
+class DescribeMetricConfigDataClass:
     def it_is_frozen_and_hashable(self):
         config = MetricConfig(id="test", display_name_key="Test")
 

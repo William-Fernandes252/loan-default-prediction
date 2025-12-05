@@ -10,6 +10,7 @@ from experiments.core.analysis.constants import (
     MetricConfig,
     get_metric_configs,
     get_metric_display_names,
+    translate_metric,
 )
 from experiments.core.analysis.exporters import (
     BaseExporter,
@@ -59,6 +60,7 @@ __all__ = [
     "MetricConfig",
     "get_metric_configs",
     "get_metric_display_names",
+    "translate_metric",
     # Loaders
     "ParquetResultsLoader",
     # Transformers
