@@ -1,6 +1,6 @@
 \chapter{Resultados Preliminares}\label{cap:resultados}
 
-Nesta seção, serão discutidos os resultados parciais dos experimentos, onde foi obtida a média das métricas obtidas no treinamento para 5 seeds de cada combinação de modelo (MLP, \textit{Random Forest}, SVM e XGBoost) e técnica (CSSVM, Linha de base, RUS, MetaCost, SMOTE e SMOTE Tomek), resultando em \(120\) execuções com o conjunto de dados de cartão de crédito de Taiwan.
+Nesta seção, serão discutidos os resultados parciais dos experimentos, onde foi obtida a média das métricas do treinamento para 5 seeds de cada combinação de modelo (MLP, \textit{Random Forest}, SVM e XGBoost) e técnica (CSSVM, Linha de base, RUS, MetaCost, SMOTE e SMOTE Tomek), resultando em \(120\) execuções com o conjunto de dados de cartão de crédito de Taiwan.
 
 \section{Métricas de Avaliação e Critério de Escolha}\label{sec:metricas-resultados}
 
@@ -48,7 +48,7 @@ Os experimentos foram realizados utilizando validação cruzada com 5 sementes d
   \label{tab:resultados-smote-tomek}
 \end{table}
 
-Observa-se que a aplicação de técnicas de balanceamento resultou em um ganho significativo de desempenho em relação ao treinamento base. Enquanto este apresentou uma acurácia balanceada média de aproximadamente \(0.6435\), as técnicas de re-amostragem elevaram esse patamar para acima de \(0.70\). Abordagens baseadas em custo (como CSSVM e MetaCost) também superaram a linha de base, mas, no geral, mostraram-se menos eficazes que as abordagens de re-amostragem direta para este cenário.
+Observa-se que a aplicação de técnicas de balanceamento resultou em um ganho significativo de desempenho em relação ao treinamento base. Enquanto este apresentou uma acurácia balanceada média de aproximadamente \(0.6435\), as técnicas de re-amostragem elevaram esse patamar para acima de \(0.7000\). Abordagens baseadas em custo (como CSSVM e MetaCost) também superaram a linha de base, mas, no geral, mostraram-se menos eficazes que as abordagens de re-amostragem direta para este cenário.
 
 \section{Impacto das Técnicas de Balanceamento}\label{impacto-tecnicas-resultados}
 
@@ -58,11 +58,11 @@ A técnica de RUS demonstrou ser a abordagem mais eficaz para este conjunto de d
 
 As técnicas de sobre-amostragem (SMOTE e SMOTE Tomek) também apresentaram resultados competitivos, com o \textit{Random Forest} alcançando \(0.7029\) de acurácia balanceada, mas ficaram ligeiramente abaixo da abordagem de subamostragem.
 
-Além disso, vale ressaltar um fenômeno importante observado nos dados após a aplicação das técnicas para lidar com o desbalanceamento: o aumento da acurácia balanceada e da sensibilidade veio acompanhado de uma redução significativa na precisão. Isso ocorre devido ao deslocamento da fronteira de decisão dos modelos. O classificador treinado com a distribuição original (desbalanceada) tende a ser conservador, privilegiando a classe majoritária para minimizar o erro global, o que resulta em alta precisão (poucos falsos positivos) mas baixíssima capacidade de detecção (muitos falsos negativos). Ao aplicar técnicas como o RUS, remove-se o viés em favor da classe majoritária. O modelo torna-se mais apto em identificar a classe minoritária, aumentando os verdadeiros positivos (e consequentemente a sensibilidade). No entanto, como efeito colateral desse ajuste de sensibilidade, o modelo passa a classificar incorretamente uma maior quantidade de clientes adimplentes ariscados como inadimplentes (aumento de falsos positivos), o que penaliza a métrica de precisão.
+Além disso, vale ressaltar um fenômeno importante observado nos dados após a aplicação das técnicas para lidar com o desbalanceamento: o aumento da acurácia balanceada e da sensibilidade veio acompanhado de uma redução na precisão. Isso ocorre devido ao deslocamento da fronteira de decisão dos modelos. O classificador treinado com a distribuição original (desbalanceada) tende a ser conservador, privilegiando a classe majoritária para minimizar o erro global. Ao aplicar técnicas como o RUS, remove-se o viés em favor da classe majoritária. O modelo torna-se mais apto em identificar a classe minoritária, aumentando os verdadeiros positivos (e consequentemente a sensibilidade). No entanto, como efeito colateral desse ajuste de sensibilidade, o modelo passa a classificar incorretamente uma maior quantidade de clientes adimplentes ariscados como inadimplentes (aumento de falsos positivos), o que penaliza a métrica de precisão.
 
 \section{Estabilidade dos Modelos}\label{estabilidade-resultados}
 
-Como mostra a Figura~\ref{fig:estabilidade-resultados} análise do desvio padrão revela uma alta estabilidade nos modelos propostos. A variação da Acurácia Balanceada para o melhor modelo (\textit{Random Forest} + Subamostragem) foi de apenas \(0.0044\). Isso indica que o método é robusto e pouco sensível a variações na inicialização aleatória ou na partição dos dados de treinamento, validando a confiabilidade dos experimentos realizados.
+Como mostra a Figura~\ref{fig:estabilidade-resultados} análise do desvio padrão revela uma alta estabilidade nos modelos propostos. A variação da acurácia balanceada para o melhor modelo (\textit{Random Forest} + RUS) foi de apenas \(0.0044\). Isso indica que o método é robusto e pouco sensível a variações na inicialização aleatória ou na partição dos dados de treinamento, validando a confiabilidade dos experimentos realizados.
 
 \begin{figure}[H]
   \centering
@@ -73,11 +73,11 @@ Como mostra a Figura~\ref{fig:estabilidade-resultados} análise do desvio padrã
 
 \section{\textit{Trade-off} entre Sensibilidade e Precisão}\label{tradeoff-resultados}
 
-Embora a acurácia balanceada tenha sido o foco, é importante observar o comportamento das métricas componentes. Conforme ilustrado na Figura~\ref{fig:trade-off-risco}, existe um \textit{trade-off} claro. As técnicas que maximizam acurácia balanceada tendem a equilibrar melhor a Sensibilidade (capacidade de detectar fraude) e a Precisão, enquanto o treinamento padrão tende a ter alta Precisão mas baixíssima Sensibilidade, falhando no objetivo principal de detecção de risco. O gráfico mostra como diferentes combinações, apesar de terem apresentado uma acurácia semelhante, atingiram uma sensibilidade notoriamente inferior.
+Embora a acurácia balanceada tenha sido o foco, é importante observar o comportamento das métricas componentes. Conforme ilustrado na Figura~\ref{fig:trade-off-risco}, existe um \textit{trade-off} claro. As técnicas que maximizam acurácia balanceada tendem a equilibrar melhor a sensibilidade (capacidade de detectar fraude) e a precisão, enquanto o treinamento padrão tende a ter alta precisão mas baixíssima sensibilidade, falhando no objetivo principal de detecção de risco. O gráfico mostra como diferentes combinações, apesar de terem apresentado uma acurácia semelhante, atingiram uma sensibilidade notoriamente inferior.
 
 \begin{figure}[H]
   \centering
   \includegraphics[width=\linewidth, keepaspectratio]{experimentos/reports/pt_BR/taiwan_credit/figures/risk_tradeoff_scatter.png}
-  \caption{\textit{Trade-off} entre Precisão e Sensibilidade (média de 5 sementes)}
+  \caption{\textit{Trade-off} entre precisão e sensibilidade (média de 5 sementes)}
   \label{fig:trade-off-risco}
 \end{figure}
