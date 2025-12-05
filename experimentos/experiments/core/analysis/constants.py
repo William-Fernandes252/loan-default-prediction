@@ -12,21 +12,33 @@ from experiments.core.data import Dataset
 
 @dataclass(frozen=True, slots=True)
 class MetricConfig:
-    """Configuration for a metric including display properties.
+    """Metric configuration.
+
+    A pure data container for metric metadata including the DataFrame column ID,
+    translation key, and formatting specification.
 
     Attributes:
         id: The column name in the DataFrame (e.g., 'accuracy_balanced').
         display_name_key: The key for translation lookup.
-        format_str: Format string for displaying values.
+        format_str: Format string for displaying values (default: "{:.4f}").
     """
 
     id: str
     display_name_key: str
     format_str: str = "{:.4f}"
 
-    def get_display_name(self, translate: TranslationFunc) -> str:
-        """Get the translated display name for this metric."""
-        return translate(self.display_name_key)
+
+def translate_metric(metric: MetricConfig, translate: TranslationFunc) -> str:
+    """Translate a metric's display name.
+
+    Args:
+        metric: The metric configuration to translate.
+        translate: Translation function for display names.
+
+    Returns:
+        The translated display name for the metric.
+    """
+    return translate(metric.display_name_key)
 
 
 # Metric definitions - centralized to avoid duplication
@@ -126,7 +138,7 @@ def get_metric_display_names(
         Dictionary mapping metric ID -> translated display name.
     """
     configs = get_metric_configs(metric_ids)
-    return {m.id: m.get_display_name(translate) for m in configs}
+    return {m.id: translate_metric(m, translate) for m in configs}
 
 
 # Estimated Majority/Minority ratios for the datasets
