@@ -12,7 +12,16 @@ from experiments.core.data import Dataset
 
 @dataclass(frozen=True, slots=True)
 class MetricConfig:
-    """Metric configuration."""
+    """Metric configuration.
+
+    A pure data container for metric metadata including the DataFrame column ID,
+    translation key, and formatting specification.
+
+    Attributes:
+        id: The column name in the DataFrame (e.g., 'accuracy_balanced').
+        display_name_key: The key for translation lookup.
+        format_str: Format string for displaying values (default: "{:.4f}").
+    """
 
     id: str
     display_name_key: str
@@ -20,7 +29,15 @@ class MetricConfig:
 
 
 def translate_metric(metric: MetricConfig, translate: TranslationFunc) -> str:
-    """Translate a metric's display name."""
+    """Translate a metric's display name.
+
+    Args:
+        metric: The metric configuration to translate.
+        translate: Translation function for display names.
+
+    Returns:
+        The translated display name for the metric.
+    """
     return translate(metric.display_name_key)
 
 
