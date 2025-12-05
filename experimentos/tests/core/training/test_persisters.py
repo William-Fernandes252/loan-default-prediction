@@ -48,9 +48,13 @@ class DescribeParquetCheckpointPersister:
     def it_initializes_with_path_provider(self) -> None:
         """Verify initialization stores path provider."""
         mock_provider = MagicMock()
-        persister = ParquetCheckpointPersister(path_provider=mock_provider)
+        persister = ParquetCheckpointPersister(
+            checkpoint_path_provider=mock_provider,
+            results_path_provider=mock_provider,
+        )
 
-        assert persister._path_provider is mock_provider
+        assert persister._checkpoint_path_provider is mock_provider
+        assert persister._results_path_provider is mock_provider
 
 
 class DescribeParquetCheckpointPersisterGetCheckpointDir:
@@ -62,7 +66,10 @@ class DescribeParquetCheckpointPersisterGetCheckpointDir:
         mock_provider.get_checkpoint_path.return_value = Path(
             "/results/taiwan_credit/checkpoints/test.parquet"
         )
-        persister = ParquetCheckpointPersister(path_provider=mock_provider)
+        persister = ParquetCheckpointPersister(
+            checkpoint_path_provider=mock_provider,
+            results_path_provider=mock_provider,
+        )
 
         result = persister._get_checkpoint_dir(Dataset.TAIWAN_CREDIT)
 
@@ -96,7 +103,10 @@ class DescribeParquetCheckpointPersisterConsolidate:
         mock_path_provider: MagicMock,
     ) -> None:
         """Verify None is returned when no checkpoints exist."""
-        persister = ParquetCheckpointPersister(path_provider=mock_path_provider)
+        persister = ParquetCheckpointPersister(
+            checkpoint_path_provider=mock_path_provider,
+            results_path_provider=mock_path_provider,
+        )
 
         with patch.object(Path, "glob", return_value=[]):
             result = persister.consolidate(Dataset.TAIWAN_CREDIT)
@@ -109,7 +119,10 @@ class DescribeParquetCheckpointPersisterConsolidate:
         sample_dataframes: list[pd.DataFrame],
     ) -> None:
         """Verify all parquet files are read."""
-        persister = ParquetCheckpointPersister(path_provider=mock_path_provider)
+        persister = ParquetCheckpointPersister(
+            checkpoint_path_provider=mock_path_provider,
+            results_path_provider=mock_path_provider,
+        )
 
         checkpoint_files = [
             Path("/checkpoints/test/0.parquet"),
@@ -136,7 +149,10 @@ class DescribeParquetCheckpointPersisterConsolidate:
         sample_dataframes: list[pd.DataFrame],
     ) -> None:
         """Verify dataframes are concatenated."""
-        persister = ParquetCheckpointPersister(path_provider=mock_path_provider)
+        persister = ParquetCheckpointPersister(
+            checkpoint_path_provider=mock_path_provider,
+            results_path_provider=mock_path_provider,
+        )
 
         checkpoint_files = [
             Path("/checkpoints/test/0.parquet"),
@@ -163,7 +179,10 @@ class DescribeParquetCheckpointPersisterConsolidate:
         sample_dataframes: list[pd.DataFrame],
     ) -> None:
         """Verify output directory is created."""
-        persister = ParquetCheckpointPersister(path_provider=mock_path_provider)
+        persister = ParquetCheckpointPersister(
+            checkpoint_path_provider=mock_path_provider,
+            results_path_provider=mock_path_provider,
+        )
 
         checkpoint_files = [Path("/checkpoints/test/0.parquet")]
 
@@ -187,7 +206,10 @@ class DescribeParquetCheckpointPersisterConsolidate:
         sample_dataframes: list[pd.DataFrame],
     ) -> None:
         """Verify consolidated dataframe is saved."""
-        persister = ParquetCheckpointPersister(path_provider=mock_path_provider)
+        persister = ParquetCheckpointPersister(
+            checkpoint_path_provider=mock_path_provider,
+            results_path_provider=mock_path_provider,
+        )
 
         checkpoint_files = [Path("/checkpoints/test/0.parquet")]
 
@@ -211,7 +233,10 @@ class DescribeParquetCheckpointPersisterConsolidate:
         sample_dataframes: list[pd.DataFrame],
     ) -> None:
         """Verify consolidated results path is retrieved from provider."""
-        persister = ParquetCheckpointPersister(path_provider=mock_path_provider)
+        persister = ParquetCheckpointPersister(
+            checkpoint_path_provider=mock_path_provider,
+            results_path_provider=mock_path_provider,
+        )
 
         checkpoint_files = [Path("/checkpoints/test/0.parquet")]
 
@@ -240,7 +265,10 @@ class DescribeParquetCheckpointPersisterConsolidate:
         mock_path_provider.get_consolidated_results_path.return_value = Path(
             "/output/results.parquet"
         )
-        persister = ParquetCheckpointPersister(path_provider=mock_path_provider)
+        persister = ParquetCheckpointPersister(
+            checkpoint_path_provider=mock_path_provider,
+            results_path_provider=mock_path_provider,
+        )
 
         checkpoint_files = [Path("/checkpoints/test/0.parquet")]
 
@@ -263,7 +291,10 @@ class DescribeParquetCheckpointPersisterConsolidate:
         mock_path_provider: MagicMock,
     ) -> None:
         """Verify None is returned when all reads fail."""
-        persister = ParquetCheckpointPersister(path_provider=mock_path_provider)
+        persister = ParquetCheckpointPersister(
+            checkpoint_path_provider=mock_path_provider,
+            results_path_provider=mock_path_provider,
+        )
 
         checkpoint_files = [Path("/checkpoints/test/0.parquet")]
 

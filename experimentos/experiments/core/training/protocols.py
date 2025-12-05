@@ -68,6 +68,15 @@ class CheckpointPathProvider(Protocol):
 
 
 @runtime_checkable
+class ConsolidatedResultsPathProvider(Protocol):
+    """Protocol for providing consolidated results paths."""
+
+    def get_consolidated_results_path(self, dataset_id: str) -> Path:
+        """Get the path for consolidated results."""
+        ...
+
+
+@runtime_checkable
 class ModelVersioningProvider(Protocol):
     """Protocol for providing model versioning services."""
 

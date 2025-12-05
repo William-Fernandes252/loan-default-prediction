@@ -50,6 +50,7 @@ from experiments.core.training.pipeline import (
 )
 from experiments.core.training.protocols import (
     CheckpointPathProvider,
+    ConsolidatedResultsPathProvider,
     DataProvider,
     ExperimentRunner,
     ExperimentTask,
@@ -63,6 +64,7 @@ __all__ = [
     # Protocols
     "TaskGenerator",
     "CheckpointPathProvider",
+    "ConsolidatedResultsPathProvider",
     "ModelVersioningProvider",
     "DataProvider",
     "TrainingExecutor",

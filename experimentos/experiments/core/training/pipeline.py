@@ -269,7 +269,10 @@ class TrainingPipelineFactory:
             task_generator=ExperimentTaskGenerator(task_config),
             data_provider=self._data_provider,
             executor=ParallelExecutor(n_jobs=n_jobs),
-            persister=ParquetCheckpointPersister(self._consolidation_provider),
+            persister=ParquetCheckpointPersister(
+                checkpoint_path_provider=self._consolidation_provider,
+                results_path_provider=self._consolidation_provider,
+            ),
             consolidation_provider=self._consolidation_provider,
             versioning_provider=self._versioning_provider,
             experiment_runner=self._experiment_runner,
@@ -296,7 +299,10 @@ class TrainingPipelineFactory:
             task_generator=ExperimentTaskGenerator(task_config),
             data_provider=self._data_provider,
             executor=SequentialExecutor(),
-            persister=ParquetCheckpointPersister(self._consolidation_provider),
+            persister=ParquetCheckpointPersister(
+                checkpoint_path_provider=self._consolidation_provider,
+                results_path_provider=self._consolidation_provider,
+            ),
             consolidation_provider=self._consolidation_provider,
             versioning_provider=self._versioning_provider,
             experiment_runner=self._experiment_runner,
