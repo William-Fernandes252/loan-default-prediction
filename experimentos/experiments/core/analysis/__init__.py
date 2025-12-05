@@ -25,7 +25,12 @@ from experiments.core.analysis.exporters import (
     RiskTradeoffFigureExporter,
     StabilityFigureExporter,
 )
-from experiments.core.analysis.loaders import ParquetResultsLoader, ResultsPathProvider
+from experiments.core.analysis.loaders import (
+    DisplayColumnEnricher,
+    EnrichedResultsLoader,
+    ParquetResultsLoader,
+    ResultsPathProvider,
+)
 from experiments.core.analysis.pipeline import (
     AnalysisPipeline,
     AnalysisPipelineFactory,
@@ -63,6 +68,8 @@ __all__ = [
     "translate_metric",
     # Loaders
     "ParquetResultsLoader",
+    "DisplayColumnEnricher",
+    "EnrichedResultsLoader",
     # Transformers
     "BaseTransformer",
     "StabilityTransformer",

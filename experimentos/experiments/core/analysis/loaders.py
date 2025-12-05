@@ -42,27 +42,22 @@ def _get_technique_display(technique_id: str, translate: TranslationFunc) -> str
 class ParquetResultsLoader:
     """Loads experimental results from parquet files.
 
-    This loader reads consolidated results from parquet files and
-    enriches them with display columns for models and techniques.
+    This loader reads consolidated results from parquet files.
 
     Attributes:
         path_provider: Provider for results file paths.
-        translate: Translation function for display names.
     """
 
     def __init__(
         self,
         path_provider: ResultsPathProvider,
-        translate: TranslationFunc,
     ) -> None:
         """Initialize the loader.
 
         Args:
             path_provider: Object providing paths to results files.
-            translate: Translation function for display names.
         """
         self._path_provider = path_provider
-        self._translate = translate
 
     def load(self, dataset: Dataset) -> pd.DataFrame:
         """Load data for the given dataset.
@@ -71,15 +66,52 @@ class ParquetResultsLoader:
             dataset: The dataset to load data for.
 
         Returns:
-            A DataFrame containing the experimental results with
-            added display columns for model and technique names.
+            A DataFrame containing the experimental results.
             Returns an empty DataFrame if no data is found.
         """
         path = self._path_provider.get_latest_consolidated_results_path(dataset.id)
         if path is None or not path.exists():
             return pd.DataFrame()
 
-        df = pd.read_parquet(path)
+        try:
+            df = pd.read_parquet(path)
+            return df
+        except (OSError, ValueError, KeyError):
+            # OSError: File read errors, corrupted files
+            # ValueError: Invalid parquet format
+            # KeyError: Missing required metadata
+            # Return empty DataFrame for consistency with other error cases
+            return pd.DataFrame()
+
+
+class DisplayColumnEnricher:
+    """Enriches data with display columns for visualization.
+
+    This enricher adds translated display columns for models and techniques,
+    making the data ready for presentation and visualization.
+
+    Attributes:
+        translate: Translation function for display names.
+    """
+
+    def __init__(self, translate: TranslationFunc) -> None:
+        """Initialize the enricher.
+
+        Args:
+            translate: Translation function for display names.
+        """
+        self._translate = translate
+
+    def enrich(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Add display columns for models and techniques.
+
+        Args:
+            df: The input DataFrame to enrich.
+
+        Returns:
+            A DataFrame with added display columns for model and technique names.
+            Returns the original DataFrame if it's empty.
+        """
         if df.empty:
             return df
 
@@ -98,9 +130,52 @@ class ParquetResultsLoader:
         return df
 
 
+class EnrichedResultsLoader:
+    """Composite loader that loads data and enriches it with display columns.
+
+    This loader combines the responsibilities of loading raw data and
+    enriching it with display columns, providing a convenient interface
+    for the analysis pipeline.
+
+    Attributes:
+        loader: The underlying data loader.
+        enricher: The display column enricher.
+    """
+
+    def __init__(
+        self,
+        path_provider: ResultsPathProvider,
+        translate: TranslationFunc,
+    ) -> None:
+        """Initialize the composite loader.
+
+        Args:
+            path_provider: Provider for results file paths.
+            translate: Translation function for display names.
+        """
+        self._loader = ParquetResultsLoader(path_provider)
+        self._enricher = DisplayColumnEnricher(translate)
+
+    def load(self, dataset: Dataset) -> pd.DataFrame:
+        """Load and enrich data for the given dataset.
+
+        Args:
+            dataset: The dataset to load data for.
+
+        Returns:
+            A DataFrame containing the experimental results with
+            added display columns for model and technique names.
+            Returns an empty DataFrame if no data is found.
+        """
+        df = self._loader.load(dataset)
+        return self._enricher.enrich(df)
+
+
 # Re-export the protocol for convenience
 __all__ = [
     "DataLoader",
+    "DisplayColumnEnricher",
+    "EnrichedResultsLoader",
     "ParquetResultsLoader",
     "ResultsPathProvider",
 ]
