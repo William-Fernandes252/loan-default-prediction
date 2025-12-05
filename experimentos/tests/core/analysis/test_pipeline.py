@@ -550,8 +550,6 @@ class DescribeAnalysisPipelineFactoryRegistryPattern:
         factory: AnalysisPipelineFactory,
     ) -> None:
         """Verify create() raises ValueError for unknown analysis type."""
-        from experiments.core.analysis.pipeline import AnalysisType
-
         # Create a mock analysis type that's not in the registry
         # We'll just use a string instead of an Enum
         with pytest.raises(ValueError, match="Unknown analysis type"):
@@ -605,6 +603,8 @@ class DescribeAnalysisPipelineFactoryRegistryPattern:
         assert isinstance(new_pipeline, AnalysisPipeline)
 
         # Both should use the same transformer and exporter types
-        assert type(legacy_pipeline._transformer) == type(new_pipeline._transformer)
-        assert type(legacy_pipeline._exporter) == type(new_pipeline._exporter)
+        assert isinstance(
+            legacy_pipeline._transformer, type(new_pipeline._transformer)
+        )
+        assert isinstance(legacy_pipeline._exporter, type(new_pipeline._exporter))
         assert legacy_pipeline._is_figure_output == new_pipeline._is_figure_output

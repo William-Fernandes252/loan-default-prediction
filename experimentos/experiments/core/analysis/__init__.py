@@ -29,6 +29,7 @@ from experiments.core.analysis.loaders import ParquetResultsLoader, ResultsPathP
 from experiments.core.analysis.pipeline import (
     AnalysisPipeline,
     AnalysisPipelineFactory,
+    AnalysisType,
     OutputPathProvider,
 )
 from experiments.core.analysis.protocols import (
@@ -86,4 +87,5 @@ __all__ = [
     # Pipeline
     "AnalysisPipeline",
     "AnalysisPipelineFactory",
+    "AnalysisType",
 ]
