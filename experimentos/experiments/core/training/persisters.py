@@ -1,30 +1,27 @@
 """Results persistence implementations for the training pipeline."""
 
 from pathlib import Path
-from typing import Protocol, cast
+from typing import Protocol, cast, runtime_checkable
 
 from loguru import logger
 import pandas as pd
 
 from experiments.core.data import Dataset
+from experiments.core.training.protocols import (
+    CheckpointPathProvider,
+    ConsolidatedResultsPathProvider,
+)
 
 
-class ConsolidationPathProvider(Protocol):
-    """Protocol for providing consolidation-related paths."""
+@runtime_checkable
+class ConsolidationPathProvider(CheckpointPathProvider, ConsolidatedResultsPathProvider, Protocol):
+    """Protocol for providing consolidation-related paths.
 
-    def get_checkpoint_path(
-        self,
-        dataset_id: str,
-        model_id: str,
-        technique_id: str,
-        seed: int,
-    ) -> Path:
-        """Get the checkpoint path for a specific task."""
-        ...
-
-    def get_consolidated_results_path(self, dataset_id: str) -> Path:
-        """Get the path for consolidated results."""
-        ...
+    This protocol combines checkpoint path and consolidated results path providers
+    for backward compatibility. New code should use the more specific protocols:
+    - CheckpointPathProvider for checkpoint paths
+    - ConsolidatedResultsPathProvider for consolidated results paths
+    """
 
 
 class ParquetCheckpointPersister:
@@ -34,18 +31,24 @@ class ParquetCheckpointPersister:
     into a single results file.
     """
 
-    def __init__(self, path_provider: ConsolidationPathProvider) -> None:
+    def __init__(
+        self,
+        checkpoint_path_provider: CheckpointPathProvider,
+        results_path_provider: ConsolidatedResultsPathProvider,
+    ) -> None:
         """Initialize the persister.
 
         Args:
-            path_provider: Provider for checkpoint and results paths.
+            checkpoint_path_provider: Provider for checkpoint paths.
+            results_path_provider: Provider for consolidated results paths.
         """
-        self._path_provider = path_provider
+        self._checkpoint_path_provider = checkpoint_path_provider
+        self._results_path_provider = results_path_provider
 
     def _get_checkpoint_dir(self, dataset: Dataset) -> Path:
         """Get the checkpoint directory for a dataset."""
         # Use a sample checkpoint path to find the parent directory
-        sample_ckpt = self._path_provider.get_checkpoint_path(dataset.id, "x", "y", 0)
+        sample_ckpt = self._checkpoint_path_provider.get_checkpoint_path(dataset.id, "x", "y", 0)
         return sample_ckpt.parent
 
     def consolidate(self, dataset: Dataset) -> Path | None:
@@ -78,7 +81,7 @@ class ParquetCheckpointPersister:
             return None
 
         df_final = cast(pd.DataFrame, pd.concat(frames, ignore_index=True))
-        final_output = self._path_provider.get_consolidated_results_path(dataset.id)
+        final_output = self._results_path_provider.get_consolidated_results_path(dataset.id)
 
         # Ensure results directory exists
         final_output.parent.mkdir(parents=True, exist_ok=True)
@@ -90,6 +93,8 @@ class ParquetCheckpointPersister:
 
 
 __all__ = [
+    "CheckpointPathProvider",
+    "ConsolidatedResultsPathProvider",
     "ConsolidationPathProvider",
     "ParquetCheckpointPersister",
 ]

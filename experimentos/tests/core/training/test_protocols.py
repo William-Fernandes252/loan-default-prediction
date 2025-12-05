@@ -139,6 +139,22 @@ class DescribeCheckpointPathProviderProtocol:
         assert isinstance(provider, CheckpointPathProvider)
 
 
+class DescribeConsolidatedResultsPathProviderProtocol:
+    """Tests for ConsolidatedResultsPathProvider protocol."""
+
+    def it_is_runtime_checkable(self) -> None:
+        """Verify ConsolidatedResultsPathProvider can be checked at runtime."""
+
+        class ValidProvider:
+            def get_consolidated_results_path(self, dataset_id: str) -> Path:
+                return Path("/results/test.parquet")
+
+        provider = ValidProvider()
+        from experiments.core.training.protocols import ConsolidatedResultsPathProvider
+
+        assert isinstance(provider, ConsolidatedResultsPathProvider)
+
+
 class DescribeModelVersioningProviderProtocol:
     """Tests for ModelVersioningProvider protocol."""
 
