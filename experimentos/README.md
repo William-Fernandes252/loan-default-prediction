@@ -26,9 +26,12 @@ Loan default prediction training and analysis.
 │   │   ├── features.py
 │   │   ├── predict.py
 │   │   └── train.py
-│   ├── core           <- Core domain logic
-│   │   ├── data       <- Data loading and processing logic
-│   │   └── modeling   <- Modeling pipelines and runners
+│   ├── core           <- Core domain logic (pipeline architecture)
+│   │   ├── analysis   <- Results analysis pipeline (load → transform → export)
+│   │   ├── data       <- Data loading and dataset definitions
+│   │   ├── experiment <- Single experiment pipeline (split → train → evaluate → persist)
+│   │   ├── modeling   <- Model factories, estimators, and metrics
+│   │   └── training   <- Training orchestration pipeline (generate → execute → consolidate)
 │   ├── services       <- Application services (DataManager, ModelVersioning)
 │   └── utils          <- Utility functions
 ├── models             <- Trained and serialized models
@@ -39,8 +42,19 @@ Loan default prediction training and analysis.
 └── results            <- Experiment results and checkpoints
 ```
 
---------
+## Architecture
 
+The project follows a **pipeline-based architecture** with dependency injection for maximum flexibility and testability. Each major operation is implemented as a composable pipeline with clearly defined protocols.
+
+### Core Pipelines
+
+| Pipeline | Purpose | Stages |
+|----------|---------|--------|
+| **Training** | Orchestrates batch model training | Generate tasks → Load data → Execute → Consolidate |
+| **Experiment** | Runs a single model experiment | Split data → Train model → Evaluate → Persist results |
+| **Analysis** | Generates reports from results | Load results → Transform data → Export reports |
+
+--------
 
 ## Running training experiments
 
@@ -97,6 +111,8 @@ Run the test suite using `pytest`:
 ```bash
 make test
 ```
+
+The test suite follows a `Describe<ClassName>` / `it_<behavior>` naming convention for clear, behavior-driven test organization.
 
 ### Linting & Formatting
 
