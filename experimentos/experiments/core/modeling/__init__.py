@@ -12,13 +12,11 @@ from .factories import (
     get_params_for_technique,
 )
 from .metrics import g_mean_score, g_mean_scorer
-from .runner import run_experiment_task
 from .types import ModelType, Technique
 
 __all__ = [
     "MetaCostClassifier",
     "get_model_instance",
-    "run_experiment_task",
     "get_hyperparameters",
     "get_params_for_technique",
     "build_pipeline",

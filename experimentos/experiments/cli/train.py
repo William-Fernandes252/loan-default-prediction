@@ -1,20 +1,75 @@
-"""CLI for training models."""
+"""CLI for training models using dependency injection pipeline."""
 
-import gc
 import random
 import sys
 from typing import Optional
 
-from joblib import Parallel, delayed
 import typer
 from typing_extensions import Annotated
 
 from experiments.context import Context
 from experiments.core.data import Dataset
-from experiments.core.modeling import ModelType, Technique, run_experiment_task
-from experiments.core.modeling.schema import ExperimentConfig
+from experiments.core.experiment import (
+    ExperimentPipelineConfig,
+    ExperimentPipelineFactory,
+    create_experiment_runner,
+)
+from experiments.core.modeling.types import ModelType, Technique
+from experiments.core.training import (
+    ExperimentTask,
+    TrainingPipelineConfig,
+    TrainingPipelineFactory,
+)
 from experiments.services.data_manager import ExperimentDataManager
 from experiments.utils.git_state import GitStateTracker
+
+
+def _create_pipeline_factory(ctx: Context) -> TrainingPipelineFactory:
+    """Create a training pipeline factory with the given context.
+
+    The factory uses the ExperimentPipeline architecture for running
+    individual experiments, wrapped in an adapter for compatibility
+    with the training pipeline.
+
+    Args:
+        ctx: The application context.
+
+    Returns:
+        A configured TrainingPipelineFactory.
+    """
+    data_manager = ExperimentDataManager(ctx)
+
+    # Create experiment pipeline factory (for individual experiments)
+    experiment_factory = ExperimentPipelineFactory()
+    experiment_pipeline = experiment_factory.create_default_pipeline(ExperimentPipelineConfig())
+
+    # Wrap the experiment pipeline in an adapter
+    experiment_runner = create_experiment_runner(experiment_pipeline)
+
+    return TrainingPipelineFactory(
+        data_provider=data_manager,
+        consolidation_provider=ctx,
+        versioning_provider=ctx,
+        experiment_runner=experiment_runner,
+    )
+
+
+def _create_pipeline_config(ctx: Context) -> TrainingPipelineConfig:
+    """Create a pipeline configuration from the context.
+
+    Args:
+        ctx: The application context.
+
+    Returns:
+        A configured TrainingPipelineConfig.
+    """
+    return TrainingPipelineConfig(
+        cv_folds=ctx.cfg.cv_folds,
+        cost_grids=ctx.cfg.cost_grids,
+        num_seeds=ctx.cfg.num_seeds,
+        discard_checkpoints=ctx.discard_checkpoints,
+    )
+
 
 MODULE_NAME = "experiments.cli.train"
 
@@ -22,79 +77,6 @@ if __name__ == "__main__":
     sys.modules.setdefault(MODULE_NAME, sys.modules[__name__])
 
 app = typer.Typer()
-
-
-def run_dataset_experiments(
-    ctx: Context,
-    data_manager: ExperimentDataManager,
-    dataset: Dataset,
-    jobs: int,
-    excluded_models: set[ModelType] | None = None,
-):
-    """
-    Prepares data and launches parallel experiment tasks for a dataset.
-    """
-    try:
-        with data_manager.feature_context(dataset) as (X_mmap_path, y_mmap_path):
-            # Generate Task List
-            tasks = []
-            excluded_models_set = excluded_models or set()
-            available_models = [m for m in ModelType if m not in excluded_models_set]
-            if not available_models:
-                ctx.logger.warning(
-                    f"No eligible models left to run for {dataset.display_name} after exclusions."
-                )
-                return
-
-            cfg = ExperimentConfig(
-                cv_folds=ctx.cfg.cv_folds,
-                cost_grids=ctx.cfg.cost_grids,
-                discard_checkpoints=ctx.discard_checkpoints,
-            )
-
-            # Access settings via Context
-            for seed in range(ctx.cfg.num_seeds):
-                for model_type in available_models:
-                    for technique in Technique:
-                        # Skip invalid combinations
-                        if technique == Technique.CS_SVM and model_type != ModelType.SVM:
-                            continue
-
-                        checkpoint_path = ctx.get_checkpoint_path(
-                            dataset.id, model_type.id, technique.id, seed
-                        )
-                        svc = ctx.get_model_versioning_service(dataset.id, model_type, technique)
-
-                        tasks.append(
-                            (
-                                cfg,
-                                dataset.id,
-                                X_mmap_path,
-                                y_mmap_path,
-                                model_type,
-                                technique,
-                                seed,
-                                checkpoint_path,
-                                svc,
-                            )
-                        )
-
-            ctx.logger.info(
-                f"Dataset {dataset.display_name}: Launching {len(tasks)} tasks with {jobs} workers..."
-            )
-
-            # Execute Parallel
-            Parallel(
-                n_jobs=jobs,
-                verbose=5,
-                pre_dispatch="2*n_jobs",
-            )(delayed(run_experiment_task)(*t) for t in tasks)
-
-        # Consolidate results
-        data_manager.consolidate_results(dataset)
-
-    except FileNotFoundError:
-        ctx.logger.error(f"Data missing for {dataset.display_name}")
 
 
 @app.command("experiment")
@@ -138,6 +120,7 @@ def run_experiment(
     changed, previous_commit, current_commit = tracker.has_new_commit()
 
     try:
+        # Git state tracking stays in CLI layer
         if not discard_checkpoints and changed:
             prev_short = (previous_commit or "none")[:7]
             curr_short = (current_commit or "unknown")[:7]
@@ -149,9 +132,10 @@ def run_experiment(
             if typer.confirm(prompt, default=True):
                 discard_checkpoints = True
 
-        # Initialize Context and DataManager
+        # Initialize context and pipeline
         ctx = Context(discard_checkpoints=discard_checkpoints)
-        data_manager = ExperimentDataManager(ctx)
+        factory = _create_pipeline_factory(ctx)
+        config = _create_pipeline_config(ctx)
 
         datasets = [dataset] if dataset is not None else list(Dataset)
         excluded_models = set(exclude_models or [])
@@ -160,22 +144,17 @@ def run_experiment(
             ctx.logger.warning("All model types were excluded. No experiments to run.")
             return
 
-        for ds in datasets:
-            if not data_manager.artifacts_exist(ds):
-                # Logger warning is handled inside data_manager if needed,
-                # but good to check here to skip loop
-                continue
+        # Create pipeline and run
+        n_jobs = jobs if jobs is not None else -1
+        pipeline = factory.create_parallel_pipeline(config, n_jobs=n_jobs)
 
-            gc.collect()
+        # Define job computation function if no fixed jobs
+        compute_jobs_fn = None
+        if jobs is None:
+            compute_jobs_fn = ctx.compute_safe_jobs
 
-            # Calculate jobs using DataManager helper
-            if jobs is None:
-                size_gb = data_manager.get_dataset_size_gb(ds)
-                n_jobs = ctx.compute_safe_jobs(size_gb)
-            else:
-                n_jobs = jobs
+        pipeline.run_all(datasets, excluded_models, compute_jobs_fn)
 
-            run_dataset_experiments(ctx, data_manager, ds, n_jobs, excluded_models)
     finally:
         tracker.record_current_commit()
 
@@ -190,13 +169,15 @@ def consolidate(
     ] = None,
 ):
     """Consolidates checkpoint parquet files into the final results artifact."""
-
     ctx = Context()
-    data_manager = ExperimentDataManager(ctx)
+    factory = _create_pipeline_factory(ctx)
+    config = _create_pipeline_config(ctx)
+    pipeline = factory.create_parallel_pipeline(config)
+
     datasets = [dataset] if dataset is not None else list(Dataset)
 
     for ds in datasets:
-        data_manager.consolidate_results(ds)
+        pipeline.consolidate(ds)
 
 
 @app.command("model")
@@ -230,33 +211,18 @@ def train_model(
 ):
     """Runs a single model training task."""
     ctx = Context()
-    data_manager = ExperimentDataManager(ctx)
+    factory = _create_pipeline_factory(ctx)
+    config = _create_pipeline_config(ctx)
+    pipeline = factory.create_sequential_pipeline(config)
 
-    try:
-        with data_manager.feature_context(dataset) as (X_mmap_path, y_mmap_path):
-            cfg = ExperimentConfig(
-                cv_folds=ctx.cfg.cv_folds,
-                cost_grids=ctx.cfg.cost_grids,
-                discard_checkpoints=ctx.discard_checkpoints,
-            )
-            checkpoint_path = ctx.get_checkpoint_path(
-                dataset.id, model_type.id, technique.id, seed
-            )
-            svc = ctx.get_model_versioning_service(dataset.id, model_type, technique)
+    task = ExperimentTask(
+        dataset=dataset,
+        model_type=model_type,
+        technique=technique,
+        seed=seed,
+    )
 
-            run_experiment_task(
-                cfg,
-                dataset.id,
-                X_mmap_path,
-                y_mmap_path,
-                model_type,
-                technique,
-                seed,
-                checkpoint_path,
-                svc,
-            )
-    except FileNotFoundError:
-        ctx.logger.error(f"Data missing for {dataset.display_name}")
+    pipeline.run_single(task)
 
 
 if __name__ == "__main__":
