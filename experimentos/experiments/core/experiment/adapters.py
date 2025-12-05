@@ -68,12 +68,12 @@ def create_experiment_runner(
             technique=technique,
             seed=seed,
         )
-        
+
         data_paths = DataPaths(
             X_path=X_mmap_path,
             y_path=y_mmap_path,
         )
-        
+
         training_config = TrainingConfig(
             cv_folds=cfg.cv_folds,
             cost_grids=cfg.cost_grids,
