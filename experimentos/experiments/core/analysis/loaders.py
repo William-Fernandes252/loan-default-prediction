@@ -76,8 +76,11 @@ class ParquetResultsLoader:
         try:
             df = pd.read_parquet(path)
             return df
-        except Exception:
-            # Return empty DataFrame if file is corrupted or unreadable
+        except (OSError, ValueError, KeyError):
+            # OSError: File read errors, corrupted files
+            # ValueError: Invalid parquet format
+            # KeyError: Missing required metadata
+            # Return empty DataFrame for consistency with other error cases
             return pd.DataFrame()
 
 
