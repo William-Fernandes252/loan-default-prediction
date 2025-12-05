@@ -515,3 +515,96 @@ class DescribeAnalysisPipelineFactoryCreateMethods:
             factory._create_loader()
 
             mock_loader_class.assert_called_once_with(path_provider, mock_translate)
+
+
+class DescribeAnalysisPipelineFactoryRegistryPattern:
+    """Tests for the registry pattern implementation in AnalysisPipelineFactory."""
+
+    @pytest.fixture
+    def factory(self, mock_translate: MagicMock) -> AnalysisPipelineFactory:
+        """Create a factory for testing."""
+        from experiments.core.analysis.pipeline import AnalysisPipelineFactory
+
+        path_provider = MockResultsPathProvider()
+        output_provider = MockOutputPathProvider(Path("/output"))
+        return AnalysisPipelineFactory(
+            path_provider=path_provider,  # type: ignore[arg-type]
+            output_path_provider=output_provider,
+            translate=mock_translate,
+        )
+
+    def it_creates_pipeline_using_analysis_type_enum(
+        self,
+        factory: AnalysisPipelineFactory,
+    ) -> None:
+        """Verify create() method works with AnalysisType enum."""
+        from experiments.core.analysis.pipeline import AnalysisType
+
+        # Test creating each type
+        for analysis_type in AnalysisType:
+            pipeline = factory.create(analysis_type)
+            assert isinstance(pipeline, AnalysisPipeline)
+
+    def it_raises_value_error_for_unknown_analysis_type(
+        self,
+        factory: AnalysisPipelineFactory,
+    ) -> None:
+        """Verify create() raises ValueError for unknown analysis type."""
+        from experiments.core.analysis.pipeline import AnalysisType
+
+        # Create a mock analysis type that's not in the registry
+        # We'll just use a string instead of an Enum
+        with pytest.raises(ValueError, match="Unknown analysis type"):
+            factory.create("invalid_type")  # type: ignore[arg-type]
+
+    def it_registers_custom_pipeline_factory(
+        self,
+        factory: AnalysisPipelineFactory,
+        mock_loader: MagicMock,
+        mock_transformer: MagicMock,
+        mock_exporter: MagicMock,
+    ) -> None:
+        """Verify register() method allows adding custom pipeline factories."""
+        from experiments.core.analysis.pipeline import AnalysisType
+
+        output_provider = MockOutputPathProvider(Path("/output"))
+
+        # Create a custom factory function
+        def custom_factory() -> AnalysisPipeline:
+            return AnalysisPipeline(
+                loader=mock_loader,
+                transformer=mock_transformer,
+                exporter=mock_exporter,
+                output_path_provider=output_provider,
+            )
+
+        # Register the custom factory
+        factory.register(AnalysisType.STABILITY, custom_factory)
+
+        # Verify it's used when creating the pipeline
+        pipeline = factory.create(AnalysisType.STABILITY)
+
+        assert isinstance(pipeline, AnalysisPipeline)
+        assert pipeline._loader is mock_loader
+        assert pipeline._transformer is mock_transformer
+        assert pipeline._exporter is mock_exporter
+
+    def it_creates_same_pipeline_as_legacy_methods(
+        self,
+        factory: AnalysisPipelineFactory,
+    ) -> None:
+        """Verify new create() method produces same result as legacy methods."""
+        from experiments.core.analysis.pipeline import AnalysisType
+
+        # Test each analysis type
+        legacy_pipeline = factory.create_stability_pipeline()
+        new_pipeline = factory.create(AnalysisType.STABILITY)
+
+        # Both should be AnalysisPipeline instances
+        assert isinstance(legacy_pipeline, AnalysisPipeline)
+        assert isinstance(new_pipeline, AnalysisPipeline)
+
+        # Both should use the same transformer and exporter types
+        assert type(legacy_pipeline._transformer) == type(new_pipeline._transformer)
+        assert type(legacy_pipeline._exporter) == type(new_pipeline._exporter)
+        assert legacy_pipeline._is_figure_output == new_pipeline._is_figure_output
