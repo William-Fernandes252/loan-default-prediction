@@ -33,15 +33,18 @@ from experiments.core.experiment.pipeline import (
     ExperimentPipelineFactory,
 )
 from experiments.core.experiment.protocols import (
+    DataPaths,
     DataSplitter,
     EvaluationResult,
     ExperimentContext,
+    ExperimentIdentity,
     ExperimentPersister,
     ExperimentResult,
     ModelEvaluator,
     ModelTrainer,
     SplitData,
     TrainedModel,
+    TrainingConfig,
 )
 from experiments.core.experiment.splitters import StratifiedDataSplitter
 from experiments.core.experiment.trainers import GridSearchTrainer
@@ -53,6 +56,9 @@ __all__ = [
     "ModelEvaluator",
     "ExperimentPersister",
     # Data classes
+    "DataPaths",
+    "ExperimentIdentity",
+    "TrainingConfig",
     "ExperimentContext",
     "SplitData",
     "TrainedModel",

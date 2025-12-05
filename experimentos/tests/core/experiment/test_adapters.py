@@ -151,12 +151,12 @@ class DescribeCreateExperimentRunner:
         call_args = mock_pipeline.run.call_args
         context = call_args[0][0]
 
-        assert context.dataset == Dataset.TAIWAN_CREDIT
-        assert context.model_type == ModelType.SVM
-        assert context.technique == Technique.SMOTE
-        assert context.seed == 123
-        assert context.cv_folds == 10
-        assert context.cost_grids == [{"cost": [1, 10]}]
+        assert context.identity.dataset == Dataset.TAIWAN_CREDIT
+        assert context.identity.model_type == ModelType.SVM
+        assert context.identity.technique == Technique.SMOTE
+        assert context.identity.seed == 123
+        assert context.config.cv_folds == 10
+        assert context.config.cost_grids == [{"cost": [1, 10]}]
         assert context.checkpoint_path == checkpoint_path
         assert context.discard_checkpoints is True
 
@@ -182,7 +182,7 @@ class DescribeCreateExperimentRunner:
 
         call_args = mock_pipeline.run.call_args
         context = call_args[0][0]
-        assert context.dataset == Dataset.LENDING_CLUB
+        assert context.identity.dataset == Dataset.LENDING_CLUB
 
     def it_runner_passes_mmap_paths_to_pipeline(
         self,
@@ -205,8 +205,9 @@ class DescribeCreateExperimentRunner:
         )
 
         call_args = mock_pipeline.run.call_args
-        assert call_args[0][1] == "/custom/X.joblib"
-        assert call_args[0][2] == "/custom/y.joblib"
+        context = call_args[0][0]
+        assert context.data.X_path == "/custom/X.joblib"
+        assert context.data.y_path == "/custom/y.joblib"
 
 
 class DescribeExperimentRunnerFactory:

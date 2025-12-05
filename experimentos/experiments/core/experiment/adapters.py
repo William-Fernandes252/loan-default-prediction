@@ -12,7 +12,12 @@ from experiments.core.experiment.pipeline import (
     ExperimentPipelineConfig,
     ExperimentPipelineFactory,
 )
-from experiments.core.experiment.protocols import ExperimentContext
+from experiments.core.experiment.protocols import (
+    DataPaths,
+    ExperimentContext,
+    ExperimentIdentity,
+    TrainingConfig,
+)
 from experiments.core.modeling.schema import ExperimentConfig
 from experiments.core.modeling.types import ModelType, Technique
 from experiments.services.models import ModelVersioningService
@@ -56,20 +61,34 @@ def create_experiment_runner(
         except ValueError:
             dataset = Dataset.from_id(str(dataset_val))
 
-        # Create experiment context
-        context = ExperimentContext(
+        # Create experiment context with focused dataclasses
+        identity = ExperimentIdentity(
             dataset=dataset,
             model_type=model_type,
             technique=technique,
             seed=seed,
+        )
+        
+        data_paths = DataPaths(
+            X_path=X_mmap_path,
+            y_path=y_mmap_path,
+        )
+        
+        training_config = TrainingConfig(
             cv_folds=cfg.cv_folds,
             cost_grids=cfg.cost_grids,
+        )
+
+        context = ExperimentContext(
+            identity=identity,
+            data=data_paths,
+            config=training_config,
             checkpoint_path=checkpoint_path,
             discard_checkpoints=cfg.discard_checkpoints,
         )
 
         # Run the experiment
-        result = experiment_pipeline.run(context, X_mmap_path, y_mmap_path)
+        result = experiment_pipeline.run(context)
 
         return result.task_id
 

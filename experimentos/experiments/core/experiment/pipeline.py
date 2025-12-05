@@ -72,15 +72,11 @@ class ExperimentPipeline:
     def run(
         self,
         context: ExperimentContext,
-        X_mmap_path: str,
-        y_mmap_path: str,
     ) -> ExperimentResult:
         """Run a single experiment.
 
         Args:
             context: The experiment context with configuration.
-            X_mmap_path: Path to memory-mapped feature data.
-            y_mmap_path: Path to memory-mapped label data.
 
         Returns:
             ExperimentResult with task_id, metrics, and optionally the model.
@@ -90,36 +86,41 @@ class ExperimentPipeline:
             if context.discard_checkpoints:
                 self._persister.discard_checkpoint(context.checkpoint_path)
             else:
-                logger.info(f"Skipping existing: {context.dataset.id} | seed={context.seed}")
+                logger.info(
+                    f"Skipping existing: {context.identity.dataset.id} | "
+                    f"seed={context.identity.seed}"
+                )
                 return ExperimentResult(task_id=None, metrics={})
 
         logger.info(
-            f"Starting: {context.dataset.display_name} | "
-            f"{context.model_type.name} | {context.technique.name} | "
-            f"seed={context.seed}"
+            f"Starting: {context.identity.dataset.display_name} | "
+            f"{context.identity.model_type.name} | {context.identity.technique.name} | "
+            f"seed={context.identity.seed}"
         )
 
         try:
             # 2. Split data
             data = self._splitter.split(
-                X_mmap_path,
-                y_mmap_path,
-                context.seed,
-                context.cv_folds,
+                context.data.X_path,
+                context.data.y_path,
+                context.identity.seed,
+                context.config.cv_folds,
             )
 
             if data is None:
-                logger.warning(f"Data validation failed for {context.dataset.display_name}")
+                logger.warning(
+                    f"Data validation failed for {context.identity.dataset.display_name}"
+                )
                 return ExperimentResult(task_id=None, metrics={})
 
             # 3. Train model
             trained = self._trainer.train(
                 data,
-                context.model_type,
-                context.technique,
-                context.seed,
-                context.cv_folds,
-                context.cost_grids,
+                context.identity.model_type,
+                context.identity.technique,
+                context.identity.seed,
+                context.config.cv_folds,
+                context.config.cost_grids,
             )
 
             # Free training memory immediately
@@ -134,17 +135,17 @@ class ExperimentPipeline:
             metrics: dict[str, Any] = dict(evaluation.metrics)
             metrics.update(
                 {
-                    "dataset": context.dataset.id,
-                    "seed": context.seed,
-                    "model": context.model_type.id,
-                    "technique": context.technique.id,
+                    "dataset": context.identity.dataset.id,
+                    "seed": context.identity.seed,
+                    "model": context.identity.model_type.id,
+                    "technique": context.identity.technique.id,
                     "best_params": str(trained.best_params),
                 }
             )
 
             logger.success(
-                f"Done: {context.dataset.display_name} | "
-                f"{context.model_type.name} | seed={context.seed} | "
+                f"Done: {context.identity.dataset.display_name} | "
+                f"{context.identity.model_type.name} | seed={context.identity.seed} | "
                 f"AUC={metrics['roc_auc']:.4f}"
             )
 
@@ -152,7 +153,11 @@ class ExperimentPipeline:
             self._persister.save_model(trained.estimator, context)
             self._persister.save_checkpoint(metrics, context.checkpoint_path)
 
-            task_id = f"{context.dataset.id}-{context.model_type.id}-{context.seed}"
+            task_id = (
+                f"{context.identity.dataset.id}-"
+                f"{context.identity.model_type.id}-"
+                f"{context.identity.seed}"
+            )
             return ExperimentResult(
                 task_id=task_id,
                 metrics=metrics,

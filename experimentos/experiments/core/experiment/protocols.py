@@ -16,26 +16,63 @@ from experiments.core.modeling.types import ModelType, Technique
 
 
 @dataclass(frozen=True, slots=True)
-class ExperimentContext:
-    """Context for a single experiment run.
+class DataPaths:
+    """Paths to memory-mapped data.
+
+    Attributes:
+        X_path: Path to memory-mapped feature data.
+        y_path: Path to memory-mapped label data.
+    """
+
+    X_path: str
+    y_path: str
+
+
+@dataclass(frozen=True, slots=True)
+class ExperimentIdentity:
+    """Identifies a unique experiment.
 
     Attributes:
         dataset: The dataset being trained on.
         model_type: The model type to use.
         technique: The technique for handling class imbalance.
         seed: Random seed for reproducibility.
-        cv_folds: Number of cross-validation folds.
-        cost_grids: Cost grid configurations.
-        checkpoint_path: Path to save checkpoint results.
-        discard_checkpoints: Whether to discard existing checkpoints.
     """
 
     dataset: Dataset
     model_type: ModelType
     technique: Technique
     seed: int
+
+
+@dataclass(frozen=True, slots=True)
+class TrainingConfig:
+    """Training hyperparameters.
+
+    Attributes:
+        cv_folds: Number of cross-validation folds.
+        cost_grids: Cost grid configurations.
+    """
+
     cv_folds: int
     cost_grids: list[Any]
+
+
+@dataclass(frozen=True, slots=True)
+class ExperimentContext:
+    """Complete experiment context composed of focused parts.
+
+    Attributes:
+        identity: Experiment identity (dataset, model, technique, seed).
+        data: Paths to memory-mapped data.
+        config: Training hyperparameters.
+        checkpoint_path: Path to save checkpoint results.
+        discard_checkpoints: Whether to discard existing checkpoints.
+    """
+
+    identity: ExperimentIdentity
+    data: DataPaths
+    config: TrainingConfig
     checkpoint_path: Path
     discard_checkpoints: bool = False
 
@@ -224,6 +261,9 @@ class ExperimentPersister(Protocol):
 
 
 __all__ = [
+    "DataPaths",
+    "ExperimentIdentity",
+    "TrainingConfig",
     "ExperimentContext",
     "SplitData",
     "TrainedModel",
