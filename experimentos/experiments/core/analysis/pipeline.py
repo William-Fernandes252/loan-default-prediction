@@ -323,10 +323,7 @@ class AnalysisPipelineFactory:
         return self._create_experiment_summary()
 
     def _create_experiment_summary(self) -> AnalysisPipeline:
-        """Create a pipeline for experiment summary analysis.
-
-        This pipeline exports to multiple formats: PNG tables, CSV, and LaTeX.
-        """
+        """Create a pipeline for experiment summary analysis."""
         from experiments.core.analysis.exporters import (
             CompositeExporter,
             CsvExporter,
