@@ -15,6 +15,7 @@ from experiments.core.experiment.evaluators import ClassificationEvaluator
 from experiments.core.experiment.persisters import ParquetExperimentPersister
 from experiments.core.experiment.protocols import (
     DataSplitter,
+    EstimatorFactory,
     ExperimentContext,
     ExperimentResult,
     ModelEvaluator,
@@ -22,6 +23,7 @@ from experiments.core.experiment.protocols import (
 )
 from experiments.core.experiment.splitters import StratifiedDataSplitter
 from experiments.core.experiment.trainers import GridSearchTrainer
+from experiments.core.modeling.factories import DefaultEstimatorFactory
 from experiments.services.models import ModelVersioningService
 
 
@@ -178,13 +180,17 @@ class ExperimentPipelineFactory:
     def __init__(
         self,
         model_versioning_service: ModelVersioningService | None = None,
+        estimator_factory: EstimatorFactory | None = None,
     ) -> None:
         """Initialize the factory.
 
         Args:
             model_versioning_service: Optional service for model versioning.
+            estimator_factory: Optional factory for creating estimators.
+                If not provided, uses DefaultEstimatorFactory.
         """
         self._model_versioning_service = model_versioning_service
+        self._estimator_factory = estimator_factory or DefaultEstimatorFactory()
 
     def create_default_pipeline(
         self,
@@ -203,6 +209,7 @@ class ExperimentPipelineFactory:
         return ExperimentPipeline(
             splitter=StratifiedDataSplitter(test_size=config.test_size),
             trainer=GridSearchTrainer(
+                estimator_factory=self._estimator_factory,
                 scoring=config.scoring,
                 n_jobs=config.trainer_n_jobs,
                 verbose=config.trainer_verbose,

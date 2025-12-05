@@ -128,3 +128,48 @@ def get_params_for_technique(
         return [meta_cost_params]
 
     return [new_params]
+
+
+class DefaultEstimatorFactory:
+    """Default implementation of EstimatorFactory protocol.
+
+    Provides methods to create pipelines and parameter grids for models
+    with different techniques.
+    """
+
+    def create_pipeline(
+        self,
+        model_type: ModelType,
+        technique: Technique,
+        seed: int,
+    ) -> ImbPipeline:
+        """Create a pipeline for the given model type and technique.
+
+        Args:
+            model_type: Type of model to create.
+            technique: Technique for handling class imbalance.
+            seed: Random seed for reproducibility.
+
+        Returns:
+            The configured pipeline.
+        """
+        return build_pipeline(model_type, technique, seed)
+
+    def get_param_grid(
+        self,
+        model_type: ModelType,
+        technique: Technique,
+        cost_grids: list[Any],
+    ) -> list[dict[str, Any]]:
+        """Get parameter grid for the given model type and technique.
+
+        Args:
+            model_type: Type of model.
+            technique: Technique for handling class imbalance.
+            cost_grids: Cost grid configurations.
+
+        Returns:
+            Parameter grid for hyperparameter search.
+        """
+        base_grid = get_hyperparameters(model_type)
+        return get_params_for_technique(model_type, technique, base_grid, cost_grids)

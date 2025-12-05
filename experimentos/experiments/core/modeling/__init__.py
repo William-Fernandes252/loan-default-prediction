@@ -6,6 +6,7 @@ custom metrics, and functions to run experiments with various techniques and mod
 
 from .estimators import MetaCostClassifier
 from .factories import (
+    DefaultEstimatorFactory,
     build_pipeline,
     get_hyperparameters,
     get_model_instance,
@@ -20,6 +21,7 @@ __all__ = [
     "get_hyperparameters",
     "get_params_for_technique",
     "build_pipeline",
+    "DefaultEstimatorFactory",
     "g_mean_score",
     "g_mean_scorer",
     "ModelType",

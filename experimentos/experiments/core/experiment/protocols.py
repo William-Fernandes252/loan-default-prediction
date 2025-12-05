@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 import numpy as np
+from imblearn.pipeline import Pipeline as ImbPipeline
 from sklearn.base import BaseEstimator
 
 from experiments.core.data import Dataset
@@ -211,6 +212,47 @@ class ModelEvaluator(Protocol):
 
 
 @runtime_checkable
+class EstimatorFactory(Protocol):
+    """Protocol for creating estimators and parameter grids."""
+
+    def create_pipeline(
+        self,
+        model_type: ModelType,
+        technique: Technique,
+        seed: int,
+    ) -> ImbPipeline:
+        """Create a pipeline for the given model type and technique.
+
+        Args:
+            model_type: Type of model to create.
+            technique: Technique for handling class imbalance.
+            seed: Random seed for reproducibility.
+
+        Returns:
+            The configured pipeline.
+        """
+        ...
+
+    def get_param_grid(
+        self,
+        model_type: ModelType,
+        technique: Technique,
+        cost_grids: list[Any],
+    ) -> list[dict[str, Any]]:
+        """Get parameter grid for the given model type and technique.
+
+        Args:
+            model_type: Type of model.
+            technique: Technique for handling class imbalance.
+            cost_grids: Cost grid configurations.
+
+        Returns:
+            Parameter grid for hyperparameter search.
+        """
+        ...
+
+
+@runtime_checkable
 class ExperimentPersister(Protocol):
     """Protocol for persisting experiment results."""
 
@@ -272,5 +314,6 @@ __all__ = [
     "DataSplitter",
     "ModelTrainer",
     "ModelEvaluator",
+    "EstimatorFactory",
     "ExperimentPersister",
 ]
