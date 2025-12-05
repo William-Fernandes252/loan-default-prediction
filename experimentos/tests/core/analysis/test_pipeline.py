@@ -511,7 +511,7 @@ class DescribeAnalysisPipelineFactoryCreateMethods:
             translate=mock_translate,
         )
 
-        with patch("experiments.core.analysis.pipeline.ParquetResultsLoader") as mock_loader_class:
+        with patch("experiments.core.analysis.pipeline.EnrichedResultsLoader") as mock_loader_class:
             factory._create_loader()
 
             mock_loader_class.assert_called_once_with(path_provider, mock_translate)

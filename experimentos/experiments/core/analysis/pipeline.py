@@ -10,8 +10,11 @@ from typing import Protocol
 from loguru import logger
 
 from experiments.core.analysis.exporters import BaseExporter
-from experiments.core.analysis.loaders import ParquetResultsLoader, ResultsPathProvider
-from experiments.core.analysis.protocols import TranslationFunc
+from experiments.core.analysis.loaders import (
+    EnrichedResultsLoader,
+    ResultsPathProvider,
+)
+from experiments.core.analysis.protocols import DataLoader, TranslationFunc
 from experiments.core.analysis.transformers import BaseTransformer
 from experiments.core.data import Dataset
 
@@ -44,7 +47,7 @@ class AnalysisPipeline:
 
     Example:
         ```python
-        loader = ParquetResultsLoader(ctx, translate)
+        loader = EnrichedResultsLoader(ctx, translate)
         transformer = StabilityTransformer(translate)
         exporter = StabilityFigureExporter(translate)
 
@@ -61,7 +64,7 @@ class AnalysisPipeline:
 
     def __init__(
         self,
-        loader: ParquetResultsLoader,
+        loader: "DataLoader",
         transformer: BaseTransformer,
         exporter: BaseExporter,
         output_path_provider: OutputPathProvider,
@@ -161,9 +164,9 @@ class AnalysisPipelineFactory:
         self._output_path_provider = output_path_provider
         self._translate = translate
 
-    def _create_loader(self) -> ParquetResultsLoader:
+    def _create_loader(self) -> DataLoader:
         """Create a configured data loader."""
-        return ParquetResultsLoader(self._path_provider, self._translate)
+        return EnrichedResultsLoader(self._path_provider, self._translate)
 
     def create_stability_pipeline(self) -> AnalysisPipeline:
         """Create a pipeline for stability analysis."""
