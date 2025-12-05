@@ -603,8 +603,6 @@ class DescribeAnalysisPipelineFactoryRegistryPattern:
         assert isinstance(new_pipeline, AnalysisPipeline)
 
         # Both should use the same transformer and exporter types
-        assert isinstance(
-            legacy_pipeline._transformer, type(new_pipeline._transformer)
-        )
-        assert isinstance(legacy_pipeline._exporter, type(new_pipeline._exporter))
+        assert type(legacy_pipeline._transformer) is type(new_pipeline._transformer)
+        assert type(legacy_pipeline._exporter) is type(new_pipeline._exporter)
         assert legacy_pipeline._is_figure_output == new_pipeline._is_figure_output
