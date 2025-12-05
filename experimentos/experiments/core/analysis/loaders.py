@@ -73,8 +73,12 @@ class ParquetResultsLoader:
         if path is None or not path.exists():
             return pd.DataFrame()
 
-        df = pd.read_parquet(path)
-        return df
+        try:
+            df = pd.read_parquet(path)
+            return df
+        except Exception:
+            # Return empty DataFrame if file is corrupted or unreadable
+            return pd.DataFrame()
 
 
 class DisplayColumnEnricher:

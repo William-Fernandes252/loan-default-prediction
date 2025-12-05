@@ -121,6 +121,20 @@ class DescribeParquetResultsLoader:
 
         assert result.empty
 
+    def it_handles_corrupted_file_gracefully(self, tmp_path: Path):
+        """Verify that corrupted files return empty DataFrame."""
+        corrupted_path = tmp_path / "corrupted.parquet"
+        # Create a corrupted file (not a valid parquet file)
+        corrupted_path.write_text("This is not a valid parquet file")
+
+        loader = ParquetResultsLoader(
+            path_provider=FakePathProvider(corrupted_path),
+        )
+
+        result = loader.load(Dataset.TAIWAN_CREDIT)
+
+        assert result.empty
+
 
 class DescribeDisplayColumnEnricher:
     @pytest.fixture
