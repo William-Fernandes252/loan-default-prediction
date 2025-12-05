@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
+from imblearn.pipeline import Pipeline as ImbPipeline
 import numpy as np
 from sklearn.base import BaseEstimator
 
@@ -219,7 +220,7 @@ class EstimatorFactory(Protocol):
         model_type: ModelType,
         technique: Technique,
         seed: int,
-    ) -> Any:
+    ) -> ImbPipeline:
         """Create a pipeline for the given model type and technique.
 
         Args:
