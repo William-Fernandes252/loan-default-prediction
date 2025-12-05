@@ -1,20 +1,15 @@
 """CLI for data processing tasks."""
 
 import sys
-from typing import Any
 
 from joblib import Parallel, delayed
-import polars as pl
 import typer
 from typing_extensions import Annotated
 
 from experiments.context import AppConfig, Context
 from experiments.core.data import (
-    CorporateCreditProcessor,
-    DataProcessor,
+    DataProcessingPipelineFactory,
     Dataset,
-    LendingClubProcessor,
-    TaiwanCreditProcessor,
 )
 from experiments.utils.jobs import get_jobs_from_available_cpus
 from experiments.utils.overwrites import filter_items_for_processing
@@ -27,44 +22,16 @@ if __name__ == "__main__":
 app = typer.Typer()
 
 
-# Factory pattern to get the right processor
-def get_processor(ctx: Context, dataset: Dataset) -> DataProcessor:
-    PROCESSORS = {
-        Dataset.LENDING_CLUB: LendingClubProcessor(use_gpu=ctx.cfg.use_gpu),
-        Dataset.CORPORATE_CREDIT_RATING: CorporateCreditProcessor(use_gpu=ctx.cfg.use_gpu),
-        Dataset.TAIWAN_CREDIT: TaiwanCreditProcessor(use_gpu=ctx.cfg.use_gpu),
-    }
-    return PROCESSORS[dataset]
-
-
 def _process_single_dataset(ctx: Context, dataset: Dataset) -> tuple[Dataset, bool, str | None]:
     """Runs the preprocessing pipeline for a single dataset."""
     try:
-        ctx.logger.info(f"Processing dataset {dataset.display_name}...")
+        # Create pipeline factory with context as path provider
+        factory = DataProcessingPipelineFactory(ctx, use_gpu=ctx.cfg.use_gpu)
 
-        raw_data_path = ctx.get_raw_data_path(dataset.id)
-        output_path = ctx.get_interim_data_path(dataset.id)
+        # Create and run the pipeline for this dataset
+        pipeline = factory.create(dataset)
+        pipeline.run(dataset)
 
-        ctx.logger.info(f"Loading raw data from {raw_data_path}...")
-        read_csv_kwargs: dict[str, Any] = {"low_memory": False, "use_pyarrow": True}
-        read_csv_kwargs.update(dataset.get_extra_params())
-
-        raw_data = pl.read_csv(raw_data_path, **read_csv_kwargs)
-        ctx.logger.info("Raw data loaded.")
-
-        # Get Strategy via Factory
-        processor = get_processor(ctx, dataset)
-
-        # Run transformations
-        processed_data = processor.process(raw_data)
-        processed_data = processor.sanitize(processed_data)
-
-        # Save
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        ctx.logger.info(f"Saving processed data to {output_path}...")
-        processed_data.write_parquet(output_path)
-
-        ctx.logger.success(f"Processing dataset {dataset.display_name} complete.")
         return dataset, True, None
 
     except Exception as exc:  # noqa: BLE001

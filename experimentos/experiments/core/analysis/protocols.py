@@ -2,8 +2,15 @@
 
 This module defines the interfaces (protocols) for the three main stages
 of the analysis pipeline: data loading, transformation, and export.
-Using protocols enables dependency inversion and makes components
-easily testable and replaceable.
+
+The analysis pipeline uses pandas DataFrames (for compatibility with
+visualization libraries), unlike the data processing pipeline which
+uses Polars DataFrames for better performance with large datasets.
+
+Note:
+    The base load/transform/export pattern is defined in
+    `experiments.core.data.protocols`. This module provides
+    analysis-specific protocol variants that work with pandas.
 """
 
 from pathlib import Path
@@ -19,20 +26,21 @@ TranslationFunc = Callable[[str], str]
 
 @runtime_checkable
 class DataLoader(Protocol):
-    """Protocol for loading experimental data.
+    """Protocol for loading experimental data for analysis.
 
-    Implementations are responsible for loading data from a source
-    (e.g., parquet files, databases) and returning a pandas DataFrame.
+    Unlike RawDataLoader in data.protocols (which loads raw CSV data),
+    this loader is designed for loading experiment results from
+    consolidated Parquet files for analysis and visualization.
     """
 
     def load(self, dataset: Dataset) -> pd.DataFrame:
-        """Load data for the given dataset.
+        """Load analysis data for the given dataset.
 
         Args:
             dataset: The dataset to load data for.
 
         Returns:
-            A DataFrame containing the experimental results.
+            A pandas DataFrame containing the experimental results.
             Returns an empty DataFrame if no data is found.
         """
         ...
@@ -40,17 +48,18 @@ class DataLoader(Protocol):
 
 @runtime_checkable
 class DataTransformer(Protocol):
-    """Protocol for transforming loaded data.
+    """Protocol for transforming loaded analysis data.
 
-    Implementations apply specific transformations to prepare data
-    for visualization or export (e.g., aggregation, filtering, pivoting).
+    Unlike DataTransformer in data.protocols (which processes raw data),
+    this transformer prepares data for visualization or export
+    (e.g., aggregation, filtering, pivoting for charts).
     """
 
     def transform(self, df: pd.DataFrame, dataset: Dataset) -> dict[str, Any]:
-        """Transform the input DataFrame.
+        """Transform the input DataFrame for analysis output.
 
         Args:
-            df: The input DataFrame to transform.
+            df: The input pandas DataFrame to transform.
             dataset: The dataset being analyzed (for context).
 
         Returns:
@@ -65,7 +74,7 @@ class DataTransformer(Protocol):
 class DataExporter(Protocol):
     """Protocol for exporting analysis results.
 
-    Implementations handle the final output of the pipeline,
+    Implementations handle the final output of the analysis pipeline,
     whether to files (PNG, CSV, LaTeX) or other destinations.
     """
 

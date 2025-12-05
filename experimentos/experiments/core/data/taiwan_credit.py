@@ -1,30 +1,39 @@
-"""Data processor for the Taiwan Credit dataset."""
+"""Data transformer for the Taiwan Credit dataset."""
+
+from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 import polars as pl
 
-from experiments.core.data.base import DataProcessor
+from experiments.core.data.base import BaseDataTransformer
+
+if TYPE_CHECKING:
+    pass
 
 
-class TaiwanCreditProcessor(DataProcessor):
-    dataset_name = "taiwan_credit"
+class TaiwanCreditTransformer(BaseDataTransformer):
+    """Transformer for the Taiwan Credit Card dataset.
 
-    def process(self, df: pl.DataFrame) -> pl.DataFrame:
-        """
-        Preprocesses the Taiwan Credit Card dataset.
+    Implements the DataTransformer protocol for processing
+    Taiwan Credit Card data based on PGC methodology.
+    """
 
-        This function performs the following steps based on the dataset description
-        and the PGC methodology:
-        1.  Renames the target variable 'default.payment.next.month' to 'target'
-            for consistency.
-        2.  Removes the 'ID' column as it is not predictive.
-        3.  Cleans and groups the categorical features 'EDUCATION' and 'MARRIAGE'
-            to remove "unknown" or "other" values and simplify.
-        4.  Maps 'SEX' to strings ('Male', 'Female') for clarity.
-        5.  Normalizes the columns 'PAY_0' to 'PAY_6', treating "on-time payment"
-            (values <= 0) as 0 and keeping the months of delay (1-9).
-        6.  Converts the cleaned categorical columns to one-hot encoding.
+    @property
+    def dataset_name(self) -> str:
+        return "taiwan_credit"
+
+    def _apply_transformations(self, df: pl.DataFrame) -> pl.DataFrame:
+        """Apply Taiwan Credit specific transformations.
+
+        Processing steps:
+        1. Rename target variable 'default.payment.next.month' to 'target'.
+        2. Remove the 'ID' column as it is not predictive.
+        3. Clean and group categorical features 'EDUCATION' and 'MARRIAGE'.
+        4. Map 'SEX' to strings ('Male', 'Female') for clarity.
+        5. Normalize PAY_0 to PAY_6 columns.
+        6. Convert cleaned categorical columns to one-hot encoding.
 
         Args:
             df: The raw Polars DataFrame of Taiwan Credit.

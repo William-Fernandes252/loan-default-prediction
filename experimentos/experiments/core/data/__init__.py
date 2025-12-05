@@ -1,6 +1,13 @@
 """Data processing modules for various datasets.
 
-Includes dataset definitions and factory methods to obtain appropriate data processors, that does the feature engineering for each dataset.
+This package provides a pipeline-based architecture for data processing:
+- **Protocols**: Interfaces for loaders, transformers, and exporters
+- **Loaders**: Load raw data from various sources (CSV, etc.)
+- **Transformers**: Dataset-specific feature engineering and cleaning
+- **Exporters**: Persist processed data (Parquet, etc.)
+- **Pipeline**: Orchestrates load → transform → export workflow
+
+Also includes dataset definitions and the Dataset enum.
 """
 
 import enum
@@ -11,10 +18,25 @@ from polars import datatypes
 
 from experiments.core.choices import Choice
 
-from .base import DataProcessor
-from .corporate_credit import CorporateCreditProcessor
-from .lending_club import LendingClubProcessor
-from .taiwan_credit import TaiwanCreditProcessor
+from .base import BaseDataTransformer, DataProcessor
+from .corporate_credit import CorporateCreditTransformer
+from .exporters import ParquetDataExporter
+from .lending_club import LendingClubTransformer
+from .loaders import CsvRawDataLoader
+from .pipeline import DataPathProvider, DataProcessingPipeline, DataProcessingPipelineFactory
+from .protocols import (
+    DataTransformer,
+    InterimDataPathProvider,
+    ProcessedDataExporter,
+    RawDataLoader,
+    RawDataPathProvider,
+)
+from .taiwan_credit import TaiwanCreditTransformer
+
+# Backward compatibility aliases
+LendingClubProcessor = LendingClubTransformer
+CorporateCreditProcessor = CorporateCreditTransformer
+TaiwanCreditProcessor = TaiwanCreditTransformer
 
 
 class Dataset(enum.Enum):
@@ -80,7 +102,28 @@ class Dataset(enum.Enum):
 
 
 __all__ = [
+    # Dataset enum
     "Dataset",
+    # Pipeline components
+    "DataProcessingPipeline",
+    "DataProcessingPipelineFactory",
+    # Protocols
+    "DataPathProvider",
+    "DataTransformer",
+    "InterimDataPathProvider",
+    "ProcessedDataExporter",
+    "RawDataLoader",
+    "RawDataPathProvider",
+    # Loaders
+    "CsvRawDataLoader",
+    # Transformers
+    "BaseDataTransformer",
+    "CorporateCreditTransformer",
+    "LendingClubTransformer",
+    "TaiwanCreditTransformer",
+    # Exporters
+    "ParquetDataExporter",
+    # Backward compatibility
     "DataProcessor",
     "LendingClubProcessor",
     "CorporateCreditProcessor",

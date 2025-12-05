@@ -1,26 +1,37 @@
-"""Data processor for the Corporate Credit dataset."""
+"""Data transformer for the Corporate Credit dataset."""
+
+from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 import polars as pl
 
-from experiments.core.data.base import DataProcessor
+from experiments.core.data.base import BaseDataTransformer
+
+if TYPE_CHECKING:
+    pass
 
 
-class CorporateCreditProcessor(DataProcessor):
-    dataset_name = "corporate_credit"
+class CorporateCreditTransformer(BaseDataTransformer):
+    """Transformer for the Corporate Credit Rating dataset.
 
-    def process(self, df: pl.DataFrame) -> pl.DataFrame:
-        """
-        Preprocesses the Corporate Credit dataset.
+    Implements the DataTransformer protocol for processing
+    Corporate Credit data based on PGC methodology.
+    """
 
-        This function performs the following steps based on the PGC methodology:
-        1.  Binarizes the target variable 'Rating':
-            - 'D' (highest risk) becomes 1 (positive/minority class).
-            - All others ('AAA' to 'C') become 0 (negative/majority class).
-        2.  Removes non-predictive metadata columns (e.g., Name, Symbol, Date).
-        3.  One-hot encodes the categorical feature 'Sector'.
-        4.  Selects all financial indicators (Float64) as features.
+    @property
+    def dataset_name(self) -> str:
+        return "corporate_credit"
+
+    def _apply_transformations(self, df: pl.DataFrame) -> pl.DataFrame:
+        """Apply Corporate Credit specific transformations.
+
+        Processing steps:
+        1. Binarize target variable 'Rating' ('D' -> 1, others -> 0).
+        2. Remove non-predictive metadata columns (Name, Symbol, Date).
+        3. One-hot encode the categorical feature 'Sector'.
+        4. Select all financial indicators (Float64) as features.
 
         Args:
             df: The raw Polars DataFrame of Corporate Credit.

@@ -1,28 +1,41 @@
-"""Data processor for the Lending Club dataset."""
+"""Data transformer for the Lending Club dataset."""
+
+from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 import polars as pl
 from polars import datatypes
 
-from experiments.core.data.base import DataProcessor
+from experiments.core.data.base import BaseDataTransformer
+
+if TYPE_CHECKING:
+    pass
 
 
-class LendingClubProcessor(DataProcessor):
-    dataset_name = "lending_club"
+class LendingClubTransformer(BaseDataTransformer):
+    """Transformer for the Lending Club dataset.
 
-    def process(self, df: pl.DataFrame) -> pl.DataFrame:
-        """
-        Processes the Lending Club dataset based on the methodology from
-        Namvar et al. (2018).
+    Implements the DataTransformer protocol for processing
+    Lending Club loan data based on Namvar et al. (2018) methodology.
+    """
 
-        This includes:
-        1.  Binarization of the target variable ('loan_status').
-        2.  Feature engineering (calculation of 'credit_age', 'new_dti', etc.).
-        3.  Cleaning and transformation of columns (e.g., 'emp_length').
-        4.  Log transformation of skewed features.
-        5.  One-hot encoding of categorical features.
-        6.  Final feature selection for the model, removing leaky data.
+    @property
+    def dataset_name(self) -> str:
+        return "lending_club"
+
+    def _apply_transformations(self, df: pl.DataFrame) -> pl.DataFrame:
+        """Apply Lending Club specific transformations.
+
+        Processing based on Namvar et al. (2018) methodology:
+        1. Binarization of the target variable ('loan_status').
+        2. Feature engineering (calculation of 'credit_age', 'new_dti', etc.).
+        3. Cleaning and transformation of columns (e.g., 'emp_length').
+        4. Log transformation of skewed features.
+        5. One-hot encoding of categorical features.
+        6. Final feature selection for the model, removing leaky data.
+
         Args:
             df: The raw Polars DataFrame of the Lending Club dataset.
 
