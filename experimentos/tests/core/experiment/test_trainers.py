@@ -1,6 +1,6 @@
 """Tests for experiments.core.experiment.trainers module."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
@@ -96,33 +96,23 @@ class DescribeGridSearchTrainerTrain:
         mock_grid.best_params_ = {"C": 1.0}
         mock_grid.fit.return_value = mock_grid
 
-        # Create trainer with mocked GridSearchCV
-        trainer = GridSearchTrainer(estimator_factory=mock_estimator_factory, n_jobs=1, verbose=0)
+        trainer = GridSearchTrainer(
+            estimator_factory=mock_estimator_factory, n_jobs=1, verbose=0
+        )
 
-        # Patch GridSearchCV to return our mock
-        with MagicMock() as mock_grid_cv:
-            mock_grid_cv.return_value = mock_grid
-            
-            # Manually patch in the test
-            import experiments.core.experiment.trainers as trainers_module
-            original_grid_search = trainers_module.GridSearchCV
-            try:
-                trainers_module.GridSearchCV = lambda **kwargs: mock_grid
-                
-                result = trainer.train(
-                    data=sample_split_data,
-                    model_type=ModelType.RANDOM_FOREST,
-                    technique=Technique.BASELINE,
-                    seed=42,
-                    cv_folds=5,
-                    cost_grids=[],
-                )
+        with patch("experiments.core.experiment.trainers.GridSearchCV", return_value=mock_grid):
+            result = trainer.train(
+                data=sample_split_data,
+                model_type=ModelType.RANDOM_FOREST,
+                technique=Technique.BASELINE,
+                seed=42,
+                cv_folds=5,
+                cost_grids=[],
+            )
 
-                assert isinstance(result, TrainedModel)
-                assert result.estimator is mock_grid.best_estimator_
-                assert result.best_params == {"C": 1.0}
-            finally:
-                trainers_module.GridSearchCV = original_grid_search
+            assert isinstance(result, TrainedModel)
+            assert result.estimator is mock_grid.best_estimator_
+            assert result.best_params == {"C": 1.0}
 
     def it_calls_factory_methods(
         self, sample_split_data: SplitData, mock_estimator_factory: MagicMock
@@ -136,12 +126,7 @@ class DescribeGridSearchTrainerTrain:
 
         trainer = GridSearchTrainer(estimator_factory=mock_estimator_factory)
 
-        # Patch GridSearchCV
-        import experiments.core.experiment.trainers as trainers_module
-        original_grid_search = trainers_module.GridSearchCV
-        try:
-            trainers_module.GridSearchCV = lambda **kwargs: mock_grid
-            
+        with patch("experiments.core.experiment.trainers.GridSearchCV", return_value=mock_grid):
             trainer.train(
                 data=sample_split_data,
                 model_type=ModelType.SVM,
@@ -158,8 +143,6 @@ class DescribeGridSearchTrainerTrain:
             mock_estimator_factory.get_param_grid.assert_called_once_with(
                 ModelType.SVM, Technique.SMOTE, []
             )
-        finally:
-            trainers_module.GridSearchCV = original_grid_search
 
     def it_adjusts_cv_folds_for_small_class_counts(
         self, imbalanced_split_data: SplitData, mock_estimator_factory: MagicMock
@@ -173,19 +156,9 @@ class DescribeGridSearchTrainerTrain:
 
         trainer = GridSearchTrainer(estimator_factory=mock_estimator_factory)
 
-        # Track GridSearchCV calls
-        grid_search_kwargs = {}
-
-        def capture_grid_search(**kwargs):
-            grid_search_kwargs.update(kwargs)
-            return mock_grid
-
-        # Patch GridSearchCV
-        import experiments.core.experiment.trainers as trainers_module
-        original_grid_search = trainers_module.GridSearchCV
-        try:
-            trainers_module.GridSearchCV = capture_grid_search
-            
+        with patch(
+            "experiments.core.experiment.trainers.GridSearchCV", return_value=mock_grid
+        ) as mock_grid_cv:
             trainer.train(
                 data=imbalanced_split_data,
                 model_type=ModelType.RANDOM_FOREST,
@@ -196,11 +169,10 @@ class DescribeGridSearchTrainerTrain:
             )
 
             # StratifiedKFold should be created with adjusted n_splits
-            cv_obj = grid_search_kwargs.get("cv")
+            call_kwargs = mock_grid_cv.call_args[1]
+            cv_obj = call_kwargs.get("cv")
             assert cv_obj is not None
             assert cv_obj.n_splits <= 5  # Should be capped at min class count (5) or lower
-        finally:
-            trainers_module.GridSearchCV = original_grid_search
 
     def it_uses_correct_scoring_metric(
         self, sample_split_data: SplitData, mock_estimator_factory: MagicMock
@@ -214,19 +186,9 @@ class DescribeGridSearchTrainerTrain:
 
         trainer = GridSearchTrainer(estimator_factory=mock_estimator_factory, scoring="f1")
 
-        # Track GridSearchCV calls
-        grid_search_kwargs = {}
-
-        def capture_grid_search(**kwargs):
-            grid_search_kwargs.update(kwargs)
-            return mock_grid
-
-        # Patch GridSearchCV
-        import experiments.core.experiment.trainers as trainers_module
-        original_grid_search = trainers_module.GridSearchCV
-        try:
-            trainers_module.GridSearchCV = capture_grid_search
-            
+        with patch(
+            "experiments.core.experiment.trainers.GridSearchCV", return_value=mock_grid
+        ) as mock_grid_cv:
             trainer.train(
                 data=sample_split_data,
                 model_type=ModelType.RANDOM_FOREST,
@@ -236,9 +198,8 @@ class DescribeGridSearchTrainerTrain:
                 cost_grids=[],
             )
 
-            assert grid_search_kwargs.get("scoring") == "f1"
-        finally:
-            trainers_module.GridSearchCV = original_grid_search
+            call_kwargs = mock_grid_cv.call_args[1]
+            assert call_kwargs.get("scoring") == "f1"
 
     def it_passes_n_jobs_to_grid_search(
         self, sample_split_data: SplitData, mock_estimator_factory: MagicMock
@@ -252,19 +213,9 @@ class DescribeGridSearchTrainerTrain:
 
         trainer = GridSearchTrainer(estimator_factory=mock_estimator_factory, n_jobs=4)
 
-        # Track GridSearchCV calls
-        grid_search_kwargs = {}
-
-        def capture_grid_search(**kwargs):
-            grid_search_kwargs.update(kwargs)
-            return mock_grid
-
-        # Patch GridSearchCV
-        import experiments.core.experiment.trainers as trainers_module
-        original_grid_search = trainers_module.GridSearchCV
-        try:
-            trainers_module.GridSearchCV = capture_grid_search
-            
+        with patch(
+            "experiments.core.experiment.trainers.GridSearchCV", return_value=mock_grid
+        ) as mock_grid_cv:
             trainer.train(
                 data=sample_split_data,
                 model_type=ModelType.RANDOM_FOREST,
@@ -274,9 +225,8 @@ class DescribeGridSearchTrainerTrain:
                 cost_grids=[],
             )
 
-            assert grid_search_kwargs.get("n_jobs") == 4
-        finally:
-            trainers_module.GridSearchCV = original_grid_search
+            call_kwargs = mock_grid_cv.call_args[1]
+            assert call_kwargs.get("n_jobs") == 4
 
     def it_fits_grid_search_on_training_data(
         self, sample_split_data: SplitData, mock_estimator_factory: MagicMock
@@ -290,12 +240,7 @@ class DescribeGridSearchTrainerTrain:
 
         trainer = GridSearchTrainer(estimator_factory=mock_estimator_factory)
 
-        # Patch GridSearchCV
-        import experiments.core.experiment.trainers as trainers_module
-        original_grid_search = trainers_module.GridSearchCV
-        try:
-            trainers_module.GridSearchCV = lambda **kwargs: mock_grid
-            
+        with patch("experiments.core.experiment.trainers.GridSearchCV", return_value=mock_grid):
             trainer.train(
                 data=sample_split_data,
                 model_type=ModelType.RANDOM_FOREST,
@@ -309,5 +254,3 @@ class DescribeGridSearchTrainerTrain:
             call_args = mock_grid.fit.call_args[0]
             np.testing.assert_array_equal(call_args[0], sample_split_data.X_train)
             np.testing.assert_array_equal(call_args[1], sample_split_data.y_train)
-        finally:
-            trainers_module.GridSearchCV = original_grid_search
