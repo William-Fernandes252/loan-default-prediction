@@ -41,6 +41,25 @@ class DescribeConsolidationPathProvider:
         # Check protocol has the method
         assert hasattr(ConsolidationPathProvider, "get_consolidated_results_path")
 
+    def it_is_runtime_checkable(self) -> None:
+        """Verify ConsolidationPathProvider can be checked at runtime."""
+
+        class ValidProvider:
+            def get_checkpoint_path(
+                self,
+                dataset_id: str,
+                model_id: str,
+                technique_id: str,
+                seed: int,
+            ) -> Path:
+                return Path("/checkpoints")
+
+            def get_consolidated_results_path(self, dataset_id: str) -> Path:
+                return Path("/output.parquet")
+
+        provider = ValidProvider()
+        assert isinstance(provider, ConsolidationPathProvider)
+
 
 class DescribeParquetCheckpointPersister:
     """Tests for ParquetCheckpointPersister class."""

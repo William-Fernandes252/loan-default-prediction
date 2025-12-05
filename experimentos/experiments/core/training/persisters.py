@@ -1,7 +1,7 @@
 """Results persistence implementations for the training pipeline."""
 
 from pathlib import Path
-from typing import Protocol, cast
+from typing import Protocol, cast, runtime_checkable
 
 from loguru import logger
 import pandas as pd
@@ -13,6 +13,7 @@ from experiments.core.training.protocols import (
 )
 
 
+@runtime_checkable
 class ConsolidationPathProvider(CheckpointPathProvider, ConsolidatedResultsPathProvider, Protocol):
     """Protocol for providing consolidation-related paths.
 
