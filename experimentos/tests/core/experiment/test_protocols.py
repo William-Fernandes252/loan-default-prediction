@@ -8,17 +8,98 @@ from sklearn.linear_model import LogisticRegression
 
 from experiments.core.data import Dataset
 from experiments.core.experiment.protocols import (
+    DataPaths,
     DataSplitter,
     EvaluationResult,
     ExperimentContext,
+    ExperimentIdentity,
     ExperimentPersister,
     ExperimentResult,
     ModelEvaluator,
     ModelTrainer,
     SplitData,
     TrainedModel,
+    TrainingConfig,
 )
 from experiments.core.modeling.types import ModelType, Technique
+
+
+class DescribeDataPaths:
+    """Tests for DataPaths dataclass."""
+
+    def it_stores_data_paths(self) -> None:
+        """Verify DataPaths stores X and y paths."""
+        data_paths = DataPaths(
+            X_path="/data/X.mmap",
+            y_path="/data/y.mmap",
+        )
+
+        assert data_paths.X_path == "/data/X.mmap"
+        assert data_paths.y_path == "/data/y.mmap"
+
+    def it_is_frozen(self) -> None:
+        """Verify DataPaths is immutable."""
+        data_paths = DataPaths(
+            X_path="/data/X.mmap",
+            y_path="/data/y.mmap",
+        )
+
+        with pytest.raises(AttributeError):
+            data_paths.X_path = "/new/path"  # type: ignore[misc]
+
+
+class DescribeExperimentIdentity:
+    """Tests for ExperimentIdentity dataclass."""
+
+    def it_stores_experiment_identity(self) -> None:
+        """Verify ExperimentIdentity stores dataset, model, technique, and seed."""
+        identity = ExperimentIdentity(
+            dataset=Dataset.TAIWAN_CREDIT,
+            model_type=ModelType.RANDOM_FOREST,
+            technique=Technique.BASELINE,
+            seed=42,
+        )
+
+        assert identity.dataset == Dataset.TAIWAN_CREDIT
+        assert identity.model_type == ModelType.RANDOM_FOREST
+        assert identity.technique == Technique.BASELINE
+        assert identity.seed == 42
+
+    def it_is_frozen(self) -> None:
+        """Verify ExperimentIdentity is immutable."""
+        identity = ExperimentIdentity(
+            dataset=Dataset.TAIWAN_CREDIT,
+            model_type=ModelType.RANDOM_FOREST,
+            technique=Technique.BASELINE,
+            seed=42,
+        )
+
+        with pytest.raises(AttributeError):
+            identity.seed = 100  # type: ignore[misc]
+
+
+class DescribeTrainingConfig:
+    """Tests for TrainingConfig dataclass."""
+
+    def it_stores_training_configuration(self) -> None:
+        """Verify TrainingConfig stores cv_folds and cost_grids."""
+        config = TrainingConfig(
+            cv_folds=5,
+            cost_grids=[{"cost": [1, 10]}],
+        )
+
+        assert config.cv_folds == 5
+        assert config.cost_grids == [{"cost": [1, 10]}]
+
+    def it_is_frozen(self) -> None:
+        """Verify TrainingConfig is immutable."""
+        config = TrainingConfig(
+            cv_folds=5,
+            cost_grids=[],
+        )
+
+        with pytest.raises(AttributeError):
+            config.cv_folds = 10  # type: ignore[misc]
 
 
 class DescribeExperimentContext:
@@ -26,33 +107,64 @@ class DescribeExperimentContext:
 
     def it_stores_all_experiment_configuration(self) -> None:
         """Verify ExperimentContext stores all configuration fields."""
-        context = ExperimentContext(
+        identity = ExperimentIdentity(
             dataset=Dataset.TAIWAN_CREDIT,
             model_type=ModelType.RANDOM_FOREST,
             technique=Technique.BASELINE,
             seed=42,
+        )
+        data_paths = DataPaths(
+            X_path="/data/X.mmap",
+            y_path="/data/y.mmap",
+        )
+        training_config = TrainingConfig(
             cv_folds=5,
             cost_grids=[{"cost": [1, 10]}],
+        )
+
+        context = ExperimentContext(
+            identity=identity,
+            data=data_paths,
+            config=training_config,
             checkpoint_path=Path("/checkpoints/test.parquet"),
         )
 
-        assert context.dataset == Dataset.TAIWAN_CREDIT
-        assert context.model_type == ModelType.RANDOM_FOREST
-        assert context.technique == Technique.BASELINE
-        assert context.seed == 42
-        assert context.cv_folds == 5
-        assert context.cost_grids == [{"cost": [1, 10]}]
+        assert context.identity == identity
+        assert context.data == data_paths
+        assert context.config == training_config
         assert context.checkpoint_path == Path("/checkpoints/test.parquet")
+
+        # Verify nested access works
+        assert context.identity.dataset == Dataset.TAIWAN_CREDIT
+        assert context.identity.model_type == ModelType.RANDOM_FOREST
+        assert context.identity.technique == Technique.BASELINE
+        assert context.identity.seed == 42
+        assert context.data.X_path == "/data/X.mmap"
+        assert context.data.y_path == "/data/y.mmap"
+        assert context.config.cv_folds == 5
+        assert context.config.cost_grids == [{"cost": [1, 10]}]
 
     def it_has_default_discard_checkpoints_false(self) -> None:
         """Verify discard_checkpoints defaults to False."""
-        context = ExperimentContext(
+        identity = ExperimentIdentity(
             dataset=Dataset.TAIWAN_CREDIT,
             model_type=ModelType.RANDOM_FOREST,
             technique=Technique.BASELINE,
             seed=42,
+        )
+        data_paths = DataPaths(
+            X_path="/data/X.mmap",
+            y_path="/data/y.mmap",
+        )
+        training_config = TrainingConfig(
             cv_folds=5,
             cost_grids=[],
+        )
+
+        context = ExperimentContext(
+            identity=identity,
+            data=data_paths,
+            config=training_config,
             checkpoint_path=Path("/checkpoints/test.parquet"),
         )
 
@@ -60,13 +172,25 @@ class DescribeExperimentContext:
 
     def it_allows_discard_checkpoints_true(self) -> None:
         """Verify discard_checkpoints can be set to True."""
-        context = ExperimentContext(
+        identity = ExperimentIdentity(
             dataset=Dataset.TAIWAN_CREDIT,
             model_type=ModelType.RANDOM_FOREST,
             technique=Technique.BASELINE,
             seed=42,
+        )
+        data_paths = DataPaths(
+            X_path="/data/X.mmap",
+            y_path="/data/y.mmap",
+        )
+        training_config = TrainingConfig(
             cv_folds=5,
             cost_grids=[],
+        )
+
+        context = ExperimentContext(
+            identity=identity,
+            data=data_paths,
+            config=training_config,
             checkpoint_path=Path("/checkpoints/test.parquet"),
             discard_checkpoints=True,
         )
@@ -75,18 +199,30 @@ class DescribeExperimentContext:
 
     def it_is_frozen(self) -> None:
         """Verify ExperimentContext is immutable."""
-        context = ExperimentContext(
+        identity = ExperimentIdentity(
             dataset=Dataset.TAIWAN_CREDIT,
             model_type=ModelType.RANDOM_FOREST,
             technique=Technique.BASELINE,
             seed=42,
+        )
+        data_paths = DataPaths(
+            X_path="/data/X.mmap",
+            y_path="/data/y.mmap",
+        )
+        training_config = TrainingConfig(
             cv_folds=5,
             cost_grids=[],
+        )
+
+        context = ExperimentContext(
+            identity=identity,
+            data=data_paths,
+            config=training_config,
             checkpoint_path=Path("/checkpoints/test.parquet"),
         )
 
         with pytest.raises(AttributeError):
-            context.seed = 100  # type: ignore[misc]
+            context.identity = identity  # type: ignore[misc]
 
 
 class DescribeSplitData:

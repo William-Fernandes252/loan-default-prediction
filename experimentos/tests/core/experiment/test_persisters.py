@@ -13,20 +13,36 @@ from experiments.core.experiment.persisters import (
     CompositeExperimentPersister,
     ParquetExperimentPersister,
 )
-from experiments.core.experiment.protocols import ExperimentContext
+from experiments.core.experiment.protocols import (
+    DataPaths,
+    ExperimentContext,
+    ExperimentIdentity,
+    TrainingConfig,
+)
 from experiments.core.modeling.types import ModelType, Technique
 
 
 @pytest.fixture
 def sample_context() -> ExperimentContext:
     """Create a sample experiment context."""
-    return ExperimentContext(
+    identity = ExperimentIdentity(
         dataset=Dataset.TAIWAN_CREDIT,
         model_type=ModelType.RANDOM_FOREST,
         technique=Technique.BASELINE,
         seed=42,
+    )
+    data_paths = DataPaths(
+        X_path="/data/X.mmap",
+        y_path="/data/y.mmap",
+    )
+    training_config = TrainingConfig(
         cv_folds=5,
         cost_grids=[],
+    )
+    return ExperimentContext(
+        identity=identity,
+        data=data_paths,
+        config=training_config,
         checkpoint_path=Path("/tmp/test_checkpoint.parquet"),
     )
 

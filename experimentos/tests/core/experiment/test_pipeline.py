@@ -14,11 +14,14 @@ from experiments.core.experiment.pipeline import (
     ExperimentPipelineFactory,
 )
 from experiments.core.experiment.protocols import (
+    DataPaths,
     EvaluationResult,
     ExperimentContext,
+    ExperimentIdentity,
     ExperimentResult,
     SplitData,
     TrainedModel,
+    TrainingConfig,
 )
 from experiments.core.modeling.types import ModelType, Technique
 
@@ -26,13 +29,24 @@ from experiments.core.modeling.types import ModelType, Technique
 @pytest.fixture
 def sample_context(tmp_path: Path) -> ExperimentContext:
     """Create a sample experiment context."""
-    return ExperimentContext(
+    identity = ExperimentIdentity(
         dataset=Dataset.TAIWAN_CREDIT,
         model_type=ModelType.RANDOM_FOREST,
         technique=Technique.BASELINE,
         seed=42,
+    )
+    data_paths = DataPaths(
+        X_path="/data/X.mmap",
+        y_path="/data/y.mmap",
+    )
+    training_config = TrainingConfig(
         cv_folds=5,
         cost_grids=[],
+    )
+    return ExperimentContext(
+        identity=identity,
+        data=data_paths,
+        config=training_config,
         checkpoint_path=tmp_path / "checkpoint.parquet",
     )
 
@@ -162,7 +176,7 @@ class DescribeExperimentPipelineRun:
             persister=mock_persister,
         )
 
-        result = pipeline.run(sample_context, "/path/X.joblib", "/path/y.joblib")
+        result = pipeline.run(sample_context)
 
         assert isinstance(result, ExperimentResult)
         assert result.task_id is not None
@@ -186,7 +200,7 @@ class DescribeExperimentPipelineRun:
             persister=mock_persister,
         )
 
-        result = pipeline.run(sample_context, "/path/X.joblib", "/path/y.joblib")
+        result = pipeline.run(sample_context)
 
         assert result.task_id is None
         assert result.metrics == {}
@@ -203,13 +217,24 @@ class DescribeExperimentPipelineRun:
         """Verify checkpoint is discarded when discard_checkpoints=True."""
         mock_persister.checkpoint_exists.return_value = True
 
-        context = ExperimentContext(
+        identity = ExperimentIdentity(
             dataset=Dataset.TAIWAN_CREDIT,
             model_type=ModelType.RANDOM_FOREST,
             technique=Technique.BASELINE,
             seed=42,
+        )
+        data_paths = DataPaths(
+            X_path="/data/X.mmap",
+            y_path="/data/y.mmap",
+        )
+        training_config = TrainingConfig(
             cv_folds=5,
             cost_grids=[],
+        )
+        context = ExperimentContext(
+            identity=identity,
+            data=data_paths,
+            config=training_config,
             checkpoint_path=tmp_path / "checkpoint.parquet",
             discard_checkpoints=True,
         )
@@ -221,7 +246,7 @@ class DescribeExperimentPipelineRun:
             persister=mock_persister,
         )
 
-        pipeline.run(context, "/path/X.joblib", "/path/y.joblib")
+        pipeline.run(context)
 
         mock_persister.discard_checkpoint.assert_called_once()
 
@@ -243,7 +268,7 @@ class DescribeExperimentPipelineRun:
             persister=mock_persister,
         )
 
-        result = pipeline.run(sample_context, "/path/X.joblib", "/path/y.joblib")
+        result = pipeline.run(sample_context)
 
         assert result.task_id is None
         assert result.metrics == {}
@@ -266,7 +291,7 @@ class DescribeExperimentPipelineRun:
             persister=mock_persister,
         )
 
-        pipeline.run(sample_context, "/path/X.joblib", "/path/y.joblib")
+        pipeline.run(sample_context)
 
         # Verify call order
         mock_splitter.split.assert_called_once()
@@ -291,12 +316,12 @@ class DescribeExperimentPipelineRun:
             persister=mock_persister,
         )
 
-        result = pipeline.run(sample_context, "/path/X.joblib", "/path/y.joblib")
+        result = pipeline.run(sample_context)
 
-        assert result.metrics["dataset"] == sample_context.dataset.id
-        assert result.metrics["seed"] == sample_context.seed
-        assert result.metrics["model"] == sample_context.model_type.id
-        assert result.metrics["technique"] == sample_context.technique.id
+        assert result.metrics["dataset"] == sample_context.identity.dataset.id
+        assert result.metrics["seed"] == sample_context.identity.seed
+        assert result.metrics["model"] == sample_context.identity.model_type.id
+        assert result.metrics["technique"] == sample_context.identity.technique.id
         assert "best_params" in result.metrics
 
     def it_generates_correct_task_id(
@@ -315,10 +340,12 @@ class DescribeExperimentPipelineRun:
             persister=mock_persister,
         )
 
-        result = pipeline.run(sample_context, "/path/X.joblib", "/path/y.joblib")
+        result = pipeline.run(sample_context)
 
         expected_task_id = (
-            f"{sample_context.dataset.id}-{sample_context.model_type.id}-{sample_context.seed}"
+            f"{sample_context.identity.dataset.id}-"
+            f"{sample_context.identity.model_type.id}-"
+            f"{sample_context.identity.seed}"
         )
         assert result.task_id == expected_task_id
 
@@ -338,7 +365,7 @@ class DescribeExperimentPipelineRun:
             persister=mock_persister,
         )
 
-        result = pipeline.run(sample_context, "/path/X.joblib", "/path/y.joblib")
+        result = pipeline.run(sample_context)
 
         assert result.model is not None
         assert isinstance(result.model, LogisticRegression)
@@ -361,7 +388,7 @@ class DescribeExperimentPipelineRun:
             persister=mock_persister,
         )
 
-        result = pipeline.run(sample_context, "/path/X.joblib", "/path/y.joblib")
+        result = pipeline.run(sample_context)
 
         assert result.task_id is None
         assert result.metrics == {}
