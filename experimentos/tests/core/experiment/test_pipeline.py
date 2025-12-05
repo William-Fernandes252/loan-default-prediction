@@ -1,0 +1,436 @@
+"""Tests for experiments.core.experiment.pipeline module."""
+
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import numpy as np
+import pytest
+from sklearn.linear_model import LogisticRegression
+
+from experiments.core.data import Dataset
+from experiments.core.experiment.pipeline import (
+    ExperimentPipeline,
+    ExperimentPipelineConfig,
+    ExperimentPipelineFactory,
+)
+from experiments.core.experiment.protocols import (
+    EvaluationResult,
+    ExperimentContext,
+    ExperimentResult,
+    SplitData,
+    TrainedModel,
+)
+from experiments.core.modeling.types import ModelType, Technique
+
+
+@pytest.fixture
+def sample_context(tmp_path: Path) -> ExperimentContext:
+    """Create a sample experiment context."""
+    return ExperimentContext(
+        dataset=Dataset.TAIWAN_CREDIT,
+        model_type=ModelType.RANDOM_FOREST,
+        technique=Technique.BASELINE,
+        seed=42,
+        cv_folds=5,
+        cost_grids=[],
+        checkpoint_path=tmp_path / "checkpoint.parquet",
+    )
+
+
+@pytest.fixture
+def sample_split_data() -> SplitData:
+    """Create sample split data."""
+    return SplitData(
+        X_train=np.random.rand(100, 10),
+        y_train=np.array([0] * 50 + [1] * 50),
+        X_test=np.random.rand(30, 10),
+        y_test=np.array([0] * 15 + [1] * 15),
+    )
+
+
+@pytest.fixture
+def mock_splitter(sample_split_data: SplitData) -> MagicMock:
+    """Create a mock splitter."""
+    splitter = MagicMock()
+    splitter.split.return_value = sample_split_data
+    return splitter
+
+
+@pytest.fixture
+def mock_trainer() -> MagicMock:
+    """Create a mock trainer."""
+    trainer = MagicMock()
+    trainer.train.return_value = TrainedModel(
+        estimator=LogisticRegression(),
+        best_params={"C": 1.0},
+    )
+    return trainer
+
+
+@pytest.fixture
+def mock_evaluator() -> MagicMock:
+    """Create a mock evaluator."""
+    evaluator = MagicMock()
+    evaluator.evaluate.return_value = EvaluationResult(
+        metrics={
+            "accuracy_balanced": 0.85,
+            "g_mean": 0.84,
+            "f1_score": 0.80,
+            "precision": 0.82,
+            "recall": 0.78,
+            "roc_auc": 0.90,
+        }
+    )
+    return evaluator
+
+
+@pytest.fixture
+def mock_persister() -> MagicMock:
+    """Create a mock persister."""
+    persister = MagicMock()
+    persister.checkpoint_exists.return_value = False
+    return persister
+
+
+class DescribeExperimentPipelineConfig:
+    """Tests for ExperimentPipelineConfig dataclass."""
+
+    def it_has_default_values(self) -> None:
+        """Verify default configuration values."""
+        config = ExperimentPipelineConfig()
+
+        assert config.test_size == 0.30
+        assert config.scoring == "roc_auc"
+        assert config.trainer_n_jobs == 1
+        assert config.trainer_verbose == 0
+
+    def it_accepts_custom_values(self) -> None:
+        """Verify custom values are stored."""
+        config = ExperimentPipelineConfig(
+            test_size=0.20,
+            scoring="f1",
+            trainer_n_jobs=4,
+            trainer_verbose=2,
+        )
+
+        assert config.test_size == 0.20
+        assert config.scoring == "f1"
+        assert config.trainer_n_jobs == 4
+        assert config.trainer_verbose == 2
+
+
+class DescribeExperimentPipeline:
+    """Tests for ExperimentPipeline class."""
+
+    def it_initializes_with_all_components(
+        self,
+        mock_splitter: MagicMock,
+        mock_trainer: MagicMock,
+        mock_evaluator: MagicMock,
+        mock_persister: MagicMock,
+    ) -> None:
+        """Verify pipeline stores all components."""
+        pipeline = ExperimentPipeline(
+            splitter=mock_splitter,
+            trainer=mock_trainer,
+            evaluator=mock_evaluator,
+            persister=mock_persister,
+        )
+
+        assert pipeline._splitter is mock_splitter
+        assert pipeline._trainer is mock_trainer
+        assert pipeline._evaluator is mock_evaluator
+        assert pipeline._persister is mock_persister
+
+
+class DescribeExperimentPipelineRun:
+    """Tests for ExperimentPipeline.run() method."""
+
+    def it_returns_experiment_result(
+        self,
+        sample_context: ExperimentContext,
+        mock_splitter: MagicMock,
+        mock_trainer: MagicMock,
+        mock_evaluator: MagicMock,
+        mock_persister: MagicMock,
+    ) -> None:
+        """Verify run returns ExperimentResult."""
+        pipeline = ExperimentPipeline(
+            splitter=mock_splitter,
+            trainer=mock_trainer,
+            evaluator=mock_evaluator,
+            persister=mock_persister,
+        )
+
+        result = pipeline.run(sample_context, "/path/X.joblib", "/path/y.joblib")
+
+        assert isinstance(result, ExperimentResult)
+        assert result.task_id is not None
+        assert "accuracy_balanced" in result.metrics
+
+    def it_skips_existing_checkpoint_by_default(
+        self,
+        sample_context: ExperimentContext,
+        mock_splitter: MagicMock,
+        mock_trainer: MagicMock,
+        mock_evaluator: MagicMock,
+        mock_persister: MagicMock,
+    ) -> None:
+        """Verify existing checkpoints are skipped."""
+        mock_persister.checkpoint_exists.return_value = True
+
+        pipeline = ExperimentPipeline(
+            splitter=mock_splitter,
+            trainer=mock_trainer,
+            evaluator=mock_evaluator,
+            persister=mock_persister,
+        )
+
+        result = pipeline.run(sample_context, "/path/X.joblib", "/path/y.joblib")
+
+        assert result.task_id is None
+        assert result.metrics == {}
+        mock_splitter.split.assert_not_called()
+
+    def it_discards_checkpoint_when_flag_is_set(
+        self,
+        tmp_path: Path,
+        mock_splitter: MagicMock,
+        mock_trainer: MagicMock,
+        mock_evaluator: MagicMock,
+        mock_persister: MagicMock,
+    ) -> None:
+        """Verify checkpoint is discarded when discard_checkpoints=True."""
+        mock_persister.checkpoint_exists.return_value = True
+
+        context = ExperimentContext(
+            dataset=Dataset.TAIWAN_CREDIT,
+            model_type=ModelType.RANDOM_FOREST,
+            technique=Technique.BASELINE,
+            seed=42,
+            cv_folds=5,
+            cost_grids=[],
+            checkpoint_path=tmp_path / "checkpoint.parquet",
+            discard_checkpoints=True,
+        )
+
+        pipeline = ExperimentPipeline(
+            splitter=mock_splitter,
+            trainer=mock_trainer,
+            evaluator=mock_evaluator,
+            persister=mock_persister,
+        )
+
+        pipeline.run(context, "/path/X.joblib", "/path/y.joblib")
+
+        mock_persister.discard_checkpoint.assert_called_once()
+
+    def it_returns_empty_result_when_split_fails(
+        self,
+        sample_context: ExperimentContext,
+        mock_trainer: MagicMock,
+        mock_evaluator: MagicMock,
+        mock_persister: MagicMock,
+    ) -> None:
+        """Verify empty result when splitter returns None."""
+        mock_splitter = MagicMock()
+        mock_splitter.split.return_value = None
+
+        pipeline = ExperimentPipeline(
+            splitter=mock_splitter,
+            trainer=mock_trainer,
+            evaluator=mock_evaluator,
+            persister=mock_persister,
+        )
+
+        result = pipeline.run(sample_context, "/path/X.joblib", "/path/y.joblib")
+
+        assert result.task_id is None
+        assert result.metrics == {}
+        mock_trainer.train.assert_not_called()
+
+    def it_calls_pipeline_stages_in_order(
+        self,
+        sample_context: ExperimentContext,
+        sample_split_data: SplitData,
+        mock_splitter: MagicMock,
+        mock_trainer: MagicMock,
+        mock_evaluator: MagicMock,
+        mock_persister: MagicMock,
+    ) -> None:
+        """Verify pipeline stages are called in correct order."""
+        pipeline = ExperimentPipeline(
+            splitter=mock_splitter,
+            trainer=mock_trainer,
+            evaluator=mock_evaluator,
+            persister=mock_persister,
+        )
+
+        pipeline.run(sample_context, "/path/X.joblib", "/path/y.joblib")
+
+        # Verify call order
+        mock_splitter.split.assert_called_once()
+        mock_trainer.train.assert_called_once()
+        mock_evaluator.evaluate.assert_called_once()
+        mock_persister.save_model.assert_called_once()
+        mock_persister.save_checkpoint.assert_called_once()
+
+    def it_includes_metadata_in_metrics(
+        self,
+        sample_context: ExperimentContext,
+        mock_splitter: MagicMock,
+        mock_trainer: MagicMock,
+        mock_evaluator: MagicMock,
+        mock_persister: MagicMock,
+    ) -> None:
+        """Verify metadata is added to metrics."""
+        pipeline = ExperimentPipeline(
+            splitter=mock_splitter,
+            trainer=mock_trainer,
+            evaluator=mock_evaluator,
+            persister=mock_persister,
+        )
+
+        result = pipeline.run(sample_context, "/path/X.joblib", "/path/y.joblib")
+
+        assert result.metrics["dataset"] == sample_context.dataset.id
+        assert result.metrics["seed"] == sample_context.seed
+        assert result.metrics["model"] == sample_context.model_type.id
+        assert result.metrics["technique"] == sample_context.technique.id
+        assert "best_params" in result.metrics
+
+    def it_generates_correct_task_id(
+        self,
+        sample_context: ExperimentContext,
+        mock_splitter: MagicMock,
+        mock_trainer: MagicMock,
+        mock_evaluator: MagicMock,
+        mock_persister: MagicMock,
+    ) -> None:
+        """Verify task_id is correctly formatted."""
+        pipeline = ExperimentPipeline(
+            splitter=mock_splitter,
+            trainer=mock_trainer,
+            evaluator=mock_evaluator,
+            persister=mock_persister,
+        )
+
+        result = pipeline.run(sample_context, "/path/X.joblib", "/path/y.joblib")
+
+        expected_task_id = (
+            f"{sample_context.dataset.id}-{sample_context.model_type.id}-{sample_context.seed}"
+        )
+        assert result.task_id == expected_task_id
+
+    def it_returns_trained_model_in_result(
+        self,
+        sample_context: ExperimentContext,
+        mock_splitter: MagicMock,
+        mock_trainer: MagicMock,
+        mock_evaluator: MagicMock,
+        mock_persister: MagicMock,
+    ) -> None:
+        """Verify trained model is included in result."""
+        pipeline = ExperimentPipeline(
+            splitter=mock_splitter,
+            trainer=mock_trainer,
+            evaluator=mock_evaluator,
+            persister=mock_persister,
+        )
+
+        result = pipeline.run(sample_context, "/path/X.joblib", "/path/y.joblib")
+
+        assert result.model is not None
+        assert isinstance(result.model, LogisticRegression)
+
+    def it_handles_training_errors_gracefully(
+        self,
+        sample_context: ExperimentContext,
+        mock_splitter: MagicMock,
+        mock_evaluator: MagicMock,
+        mock_persister: MagicMock,
+    ) -> None:
+        """Verify errors during training are caught."""
+        mock_trainer = MagicMock()
+        mock_trainer.train.side_effect = RuntimeError("Training failed")
+
+        pipeline = ExperimentPipeline(
+            splitter=mock_splitter,
+            trainer=mock_trainer,
+            evaluator=mock_evaluator,
+            persister=mock_persister,
+        )
+
+        result = pipeline.run(sample_context, "/path/X.joblib", "/path/y.joblib")
+
+        assert result.task_id is None
+        assert result.metrics == {}
+
+
+class DescribeExperimentPipelineFactory:
+    """Tests for ExperimentPipelineFactory class."""
+
+    def it_initializes_without_versioning_service(self) -> None:
+        """Verify factory works without versioning service."""
+        factory = ExperimentPipelineFactory()
+
+        assert factory._model_versioning_service is None
+
+    def it_initializes_with_versioning_service(self) -> None:
+        """Verify factory stores versioning service."""
+        mock_service = MagicMock()
+        factory = ExperimentPipelineFactory(model_versioning_service=mock_service)
+
+        assert factory._model_versioning_service is mock_service
+
+
+class DescribeExperimentPipelineFactoryCreateDefaultPipeline:
+    """Tests for ExperimentPipelineFactory.create_default_pipeline() method."""
+
+    def it_creates_pipeline_with_default_config(self) -> None:
+        """Verify pipeline is created with default components."""
+        factory = ExperimentPipelineFactory()
+
+        pipeline = factory.create_default_pipeline()
+
+        assert isinstance(pipeline, ExperimentPipeline)
+
+    def it_uses_custom_config_when_provided(self) -> None:
+        """Verify custom config is applied."""
+        factory = ExperimentPipelineFactory()
+        config = ExperimentPipelineConfig(test_size=0.20)
+
+        with (
+            patch(
+                "experiments.core.experiment.pipeline.StratifiedDataSplitter"
+            ) as mock_splitter_class,
+            patch("experiments.core.experiment.pipeline.GridSearchTrainer"),
+            patch("experiments.core.experiment.pipeline.ClassificationEvaluator"),
+            patch("experiments.core.experiment.pipeline.ParquetExperimentPersister"),
+        ):
+            factory.create_default_pipeline(config)
+
+            mock_splitter_class.assert_called_once_with(test_size=0.20)
+
+
+class DescribeExperimentPipelineFactoryCreatePipeline:
+    """Tests for ExperimentPipelineFactory.create_pipeline() method."""
+
+    def it_creates_pipeline_with_custom_components(self) -> None:
+        """Verify custom components are used."""
+        factory = ExperimentPipelineFactory()
+
+        mock_splitter = MagicMock()
+        mock_trainer = MagicMock()
+        mock_evaluator = MagicMock()
+
+        pipeline = factory.create_pipeline(
+            splitter=mock_splitter,
+            trainer=mock_trainer,
+            evaluator=mock_evaluator,
+        )
+
+        assert isinstance(pipeline, ExperimentPipeline)
+        assert pipeline._splitter is mock_splitter
+        assert pipeline._trainer is mock_trainer
+        assert pipeline._evaluator is mock_evaluator
