@@ -68,7 +68,31 @@ Para a aprendizagem sensível a custos, foram empregadas duas abordagens distint
   \item \textbf{\textit{Cost-sensitive SVM} (CSSVM):} Uma implementação do SVM sensível a custos proposta por Iranmehr, Masnadi-Shirazi e Vasconcelos (\citeyear{Iranmehr2019}), como exemplo de abordagem algorítmica.
 \end{itemize}
 
-Dada a ausência de uma matriz de custos predefinida para os conjuntos de dados, os custos de classificação incorreta foram tratados como hiper-parâmetros. Estes foram otimizados por meio de busca em grade (\textit{grid search}), uma metodologia também adotada por Cao, Zhao e Zaiane (\citeyear{Cao2013}). Por convenção, este trabalho rotula a classe minoritária (ex: inadimplentes) como positiva (1) e a classe majoritária (ex: adimplentes) como negativa (0).
+Dada a ausência de uma matriz de custos predefinida para os conjuntos de dados, os custos de classificação incorreta foram tratados como hiper-parâmetros. Estes foram otimizados por meio de busca em grade (\textit{grid search}), uma metodologia também adotada por Cao, Zhao e Zaiane (\citeyear{Cao2013}), utilizando a grade da Tabela \ref{tab:grid-search-params}. Por convenção, este trabalho rotula a classe minoritária (ex: inadimplentes) como positiva (1) e a classe majoritária (ex: adimplentes) como negativa (0).
+
+\begin{table}[H]
+  \centering
+  \caption{Grade de hiperparâmetros utilizada na busca em grade (\textit{Grid Search})}
+  \label{tab:grid-search-params}
+  \begin{tabular}{|l|l|l|}
+    \hline
+    \textbf{Algoritmo} & \textbf{Hiperparâmetro} & \textbf{Valores Testados} \\ \hline
+    \multirow{3}{*}{MLP} & Camadas Ocultas & (50,), (100,), (50, 50) \\
+    & Função de Ativação & relu, tanh \\
+    & Alpha (Regularização) & 0.0001, 0.01 \\ \hline
+    \multirow{3}{*}{Random Forest} & Nº de Estimadores & 100, 200 \\
+    & Profundidade Máxima & None, 10, 20 \\
+    & Min. Amostras por Folha & 1, 5 \\ \hline
+    \multirow{2}{*}{SVM} & C (Regularização) & 0.1, 1, 10, 100 \\
+    & Kernel & rbf \\ \hline
+    \multirow{5}{*}{XGBoost} & Nº de Estimadores & 100, 200 \\
+    & Taxa de Aprendizado & 0.01, 0.1, 0.3 \\
+    & Profundidade Máxima & 3, 6, 10 \\
+    & Subamostra (Linhas) & 0.8, 1.0 \\
+    & Subamostra (Colunas) & 0.8, 1.0 \\ \hline
+    \multirow{1}{*}{Custos} & Pesos da Classe Minoritária & 1, 5, 10, balanced \\ \hline
+  \end{tabular}
+\end{table}
 
 \section{Métricas de Avaliação}\label{sec:metricas}
 
