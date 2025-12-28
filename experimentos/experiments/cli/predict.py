@@ -1,3 +1,5 @@
+"""CLI for running predictions using trained models."""
+
 from pathlib import Path
 import sys
 from typing import Any
@@ -7,7 +9,7 @@ from loguru import logger
 import pandas as pd
 import typer
 
-from experiments.context import Context
+from experiments.containers import container
 
 MODULE_NAME = "experiments.cli.predict"
 
@@ -17,11 +19,10 @@ if __name__ == "__main__":
 app = typer.Typer()
 
 
-def _find_model_path(ctx: Context, model_id: str) -> Path:
+def _find_model_path(models_dir: Path, model_id: str) -> Path:
     """Finds the model file path by ID."""
-    # The models are stored in ctx.cfg.models_dir / dataset / model_type / technique / {id}.joblib
+    # The models are stored in models_dir / dataset / model_type / technique / {id}.joblib
     # We search recursively.
-    models_dir = ctx.cfg.models_dir
     matches = list(models_dir.rglob(f"{model_id}.joblib"))
 
     if not matches:
@@ -86,12 +87,13 @@ def predict_with_model(
     ),
 ):
     """Runs predictions using a specified trained model."""
-    ctx = Context()
+    # Resolve dependencies from container
+    path_manager = container.path_manager()
 
     try:
         # 1. Find and Load Model
         logger.info(f"Searching for model '{model_id}'...")
-        model_path = _find_model_path(ctx, model_id)
+        model_path = _find_model_path(path_manager.models_dir, model_id)
         logger.info(f"Loading model from {model_path}")
         model = joblib.load(model_path)
 
@@ -144,3 +146,7 @@ def predict_with_model(
     except Exception as e:
         logger.exception(f"An error occurred: {e}")
         raise typer.Exit(code=1)
+
+
+if __name__ == "__main__":
+    app()

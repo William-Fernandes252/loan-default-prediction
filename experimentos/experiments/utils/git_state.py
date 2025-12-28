@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Optional, Tuple
 
 from git import Repo
 from git.exc import GitCommandError, InvalidGitRepositoryError, NoSuchPathError
 
-from experiments import config
+from experiments.settings import PathSettings
 
-STATE_DIR = config.PROJ_ROOT / ".ldp"
+
+def _get_default_project_root() -> Path:
+    """Get the default project root from settings."""
+    return PathSettings().project_root
 
 
 @dataclass
@@ -18,13 +22,14 @@ class GitStateTracker:
     """Tracks last processed commit to detect new code changes."""
 
     key: str
+    project_root: Path = field(default_factory=_get_default_project_root)
 
     def __post_init__(self) -> None:
-        self._state_dir = STATE_DIR
+        self._state_dir = self.project_root / ".ldp"
         self._state_dir.mkdir(parents=True, exist_ok=True)
         safe_key = self.key.replace("/", "_").replace("\\", "_")
         self._state_file = self._state_dir / f"{safe_key}.commit"
-        self._repo_root = config.PROJ_ROOT
+        self._repo_root = self.project_root
 
     def _current_commit(self) -> Optional[str]:
         try:

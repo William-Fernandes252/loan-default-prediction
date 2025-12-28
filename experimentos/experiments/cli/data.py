@@ -3,14 +3,16 @@
 import sys
 
 from joblib import Parallel, delayed
+from loguru import logger
 import typer
 from typing_extensions import Annotated
 
-from experiments.context import AppConfig, Context
+from experiments.containers import container
 from experiments.core.data import (
     DataProcessingPipelineFactory,
     Dataset,
 )
+from experiments.services.path_manager import PathManager
 from experiments.utils.jobs import get_jobs_from_available_cpus
 from experiments.utils.overwrites import filter_items_for_processing
 
@@ -22,11 +24,15 @@ if __name__ == "__main__":
 app = typer.Typer()
 
 
-def _process_single_dataset(ctx: Context, dataset: Dataset) -> tuple[Dataset, bool, str | None]:
+def _process_single_dataset(
+    path_manager: PathManager,
+    use_gpu: bool,
+    dataset: Dataset,
+) -> tuple[Dataset, bool, str | None]:
     """Runs the preprocessing pipeline for a single dataset."""
     try:
-        # Create pipeline factory with context as path provider
-        factory = DataProcessingPipelineFactory(ctx, use_gpu=ctx.cfg.use_gpu)
+        # Create pipeline factory with path manager as path provider
+        factory = DataProcessingPipelineFactory(path_manager, use_gpu=use_gpu)
 
         # Create and run the pipeline for this dataset
         pipeline = factory.create(dataset)
@@ -35,7 +41,7 @@ def _process_single_dataset(ctx: Context, dataset: Dataset) -> tuple[Dataset, bo
         return dataset, True, None
 
     except Exception as exc:  # noqa: BLE001
-        ctx.logger.exception(f"Failed to process dataset {dataset.display_name}: {exc}")
+        logger.exception(f"Failed to process dataset {dataset.display_name}: {exc}")
         return dataset, False, str(exc)
 
 
@@ -80,40 +86,46 @@ def main(
     ] = False,
 ):
     """Processes one or all datasets."""
-    ctx = Context(AppConfig(use_gpu=use_gpu))
+    # Resolve dependencies from container
+    path_manager = container.path_manager()
+    resource_settings = container.settings().resources
+
+    # Override use_gpu from settings if flag is set
+    effective_use_gpu = use_gpu or resource_settings.use_gpu
 
     datasets_to_process = [dataset] if dataset is not None else list(Dataset)
 
-    # Use context for path checking in filter
+    # Use path_manager for path checking in filter
     datasets_to_process = filter_items_for_processing(
         datasets_to_process,
-        exists_fn=lambda ds: ctx.get_interim_data_path(ds.id).exists(),
-        prompt_fn=lambda ds: f"File '{ctx.get_interim_data_path(ds.id)}' exists. Overwrite?",
+        exists_fn=lambda ds: path_manager.get_interim_data_path(ds.id).exists(),
+        prompt_fn=lambda ds: f"File '{path_manager.get_interim_data_path(ds.id)}' exists. Overwrite?",
         force=force,
-        on_skip=lambda ds: ctx.logger.info(f"Skipping dataset {ds.display_name} per user choice."),
+        on_skip=lambda ds: logger.info(f"Skipping dataset {ds.display_name} per user choice."),
     )
 
     if not datasets_to_process:
-        ctx.logger.info("No datasets selected for processing. Exiting.")
+        logger.info("No datasets selected for processing. Exiting.")
         return
 
     dataset_names = ", ".join(ds.display_name for ds in datasets_to_process)
-    ctx.logger.info(f"Scheduling preprocessing for: {dataset_names}")
+    logger.info(f"Scheduling preprocessing for: {dataset_names}")
 
     n_jobs = get_jobs_from_available_cpus(jobs)
 
-    # Pass ctx to workers
+    # Pass path_manager to workers
     results = Parallel(n_jobs=n_jobs, prefer="processes")(
-        delayed(_process_single_dataset)(ctx, ds) for ds in datasets_to_process
+        delayed(_process_single_dataset)(path_manager, effective_use_gpu, ds)
+        for ds in datasets_to_process
     )
 
     failed = [ds for ds, success, _ in results if not success]
     if failed:
         failed_names = ", ".join(ds.display_name for ds in failed)
-        ctx.logger.error(f"Processing failed for: {failed_names}")
+        logger.error(f"Processing failed for: {failed_names}")
         raise typer.Exit(code=1)
 
-    ctx.logger.success("All requested datasets processed successfully.")
+    logger.success("All requested datasets processed successfully.")
 
 
 if __name__ == "__main__":

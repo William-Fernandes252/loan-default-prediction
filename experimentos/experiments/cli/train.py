@@ -4,72 +4,18 @@ import random
 import sys
 from typing import Optional
 
+from loguru import logger
 import typer
 from typing_extensions import Annotated
 
-from experiments.context import Context
+from experiments.containers import container
 from experiments.core.data import Dataset
-from experiments.core.experiment import (
-    ExperimentPipelineConfig,
-    ExperimentPipelineFactory,
-    create_experiment_runner,
-)
 from experiments.core.modeling.types import ModelType, Technique
 from experiments.core.training import (
     ExperimentTask,
     TrainingPipelineConfig,
-    TrainingPipelineFactory,
 )
-from experiments.services.data_manager import ExperimentDataManager
 from experiments.utils.git_state import GitStateTracker
-
-
-def _create_pipeline_factory(ctx: Context) -> TrainingPipelineFactory:
-    """Create a training pipeline factory with the given context.
-
-    The factory uses the ExperimentPipeline architecture for running
-    individual experiments, wrapped in an adapter for compatibility
-    with the training pipeline.
-
-    Args:
-        ctx: The application context.
-
-    Returns:
-        A configured TrainingPipelineFactory.
-    """
-    data_manager = ExperimentDataManager(ctx)
-
-    # Create experiment pipeline factory (for individual experiments)
-    experiment_factory = ExperimentPipelineFactory()
-    experiment_pipeline = experiment_factory.create_default_pipeline(ExperimentPipelineConfig())
-
-    # Wrap the experiment pipeline in an adapter
-    experiment_runner = create_experiment_runner(experiment_pipeline)
-
-    return TrainingPipelineFactory(
-        data_provider=data_manager,
-        consolidation_provider=ctx,
-        versioning_provider=ctx,
-        experiment_runner=experiment_runner,
-    )
-
-
-def _create_pipeline_config(ctx: Context) -> TrainingPipelineConfig:
-    """Create a pipeline configuration from the context.
-
-    Args:
-        ctx: The application context.
-
-    Returns:
-        A configured TrainingPipelineConfig.
-    """
-    return TrainingPipelineConfig(
-        cv_folds=ctx.cfg.cv_folds,
-        cost_grids=ctx.cfg.cost_grids,
-        num_seeds=ctx.cfg.num_seeds,
-        discard_checkpoints=ctx.discard_checkpoints,
-    )
-
 
 MODULE_NAME = "experiments.cli.train"
 
@@ -116,6 +62,11 @@ def run_experiment(
     ] = None,
 ):
     """Runs the training experiments."""
+    # Resolve dependencies from container
+    training_factory = container.training_pipeline_factory()
+    resource_calculator = container.resource_calculator()
+    experiment_settings = container.settings().experiment
+
     tracker = GitStateTracker("train_cli")
     changed, previous_commit, current_commit = tracker.has_new_commit()
 
@@ -132,26 +83,29 @@ def run_experiment(
             if typer.confirm(prompt, default=True):
                 discard_checkpoints = True
 
-        # Initialize context and pipeline
-        ctx = Context(discard_checkpoints=discard_checkpoints)
-        factory = _create_pipeline_factory(ctx)
-        config = _create_pipeline_config(ctx)
+        # Create pipeline configuration
+        config = TrainingPipelineConfig(
+            cv_folds=experiment_settings.cv_folds,
+            cost_grids=experiment_settings.cost_grids,
+            num_seeds=experiment_settings.num_seeds,
+            discard_checkpoints=discard_checkpoints,
+        )
 
         datasets = [dataset] if dataset is not None else list(Dataset)
         excluded_models = set(exclude_models or [])
 
         if len(excluded_models) == len(ModelType):
-            ctx.logger.warning("All model types were excluded. No experiments to run.")
+            logger.warning("All model types were excluded. No experiments to run.")
             return
 
         # Create pipeline and run
         n_jobs = jobs if jobs is not None else -1
-        pipeline = factory.create_parallel_pipeline(config, n_jobs=n_jobs)
+        pipeline = training_factory.create_parallel_pipeline(config, n_jobs=n_jobs)
 
         # Define job computation function if no fixed jobs
         compute_jobs_fn = None
         if jobs is None:
-            compute_jobs_fn = ctx.compute_safe_jobs
+            compute_jobs_fn = resource_calculator.compute_safe_jobs
 
         pipeline.run_all(datasets, excluded_models, compute_jobs_fn)
 
@@ -169,10 +123,16 @@ def consolidate(
     ] = None,
 ):
     """Consolidates checkpoint parquet files into the final results artifact."""
-    ctx = Context()
-    factory = _create_pipeline_factory(ctx)
-    config = _create_pipeline_config(ctx)
-    pipeline = factory.create_parallel_pipeline(config)
+    # Resolve dependencies from container
+    training_factory = container.training_pipeline_factory()
+    experiment_settings = container.settings().experiment
+
+    config = TrainingPipelineConfig(
+        cv_folds=experiment_settings.cv_folds,
+        cost_grids=experiment_settings.cost_grids,
+        num_seeds=experiment_settings.num_seeds,
+    )
+    pipeline = training_factory.create_parallel_pipeline(config)
 
     datasets = [dataset] if dataset is not None else list(Dataset)
 
@@ -210,10 +170,16 @@ def train_model(
     ],
 ):
     """Runs a single model training task."""
-    ctx = Context()
-    factory = _create_pipeline_factory(ctx)
-    config = _create_pipeline_config(ctx)
-    pipeline = factory.create_sequential_pipeline(config)
+    # Resolve dependencies from container
+    training_factory = container.training_pipeline_factory()
+    experiment_settings = container.settings().experiment
+
+    config = TrainingPipelineConfig(
+        cv_folds=experiment_settings.cv_folds,
+        cost_grids=experiment_settings.cost_grids,
+        num_seeds=experiment_settings.num_seeds,
+    )
+    pipeline = training_factory.create_sequential_pipeline(config)
 
     task = ExperimentTask(
         dataset=dataset,
