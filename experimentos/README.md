@@ -36,8 +36,7 @@ Loan default prediction training and analysis.
 │   │   ├── data_manager.py      <- Dataset artifact management
 │   │   ├── path_manager.py      <- Centralized path resolution
 │   │   ├── resource_calculator.py <- RAM-based parallelization
-│   │   ├── model_versioning.py  <- Model versioning factory
-│   │   └── models.py            <- Model persistence and loading
+│   │   ├── model_versioning.py  <- Model versioning, persistence and loading
 │   └── utils          <- Utility functions
 ├── models             <- Trained and serialized models
 ├── notebooks          <- Jupyter notebooks

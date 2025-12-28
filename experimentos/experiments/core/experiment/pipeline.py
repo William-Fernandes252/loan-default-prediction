@@ -24,7 +24,7 @@ from experiments.core.experiment.protocols import (
 from experiments.core.experiment.splitters import StratifiedDataSplitter
 from experiments.core.experiment.trainers import GridSearchTrainer
 from experiments.core.modeling.factories import DefaultEstimatorFactory
-from experiments.services.models import ModelVersioningService
+from experiments.services.model_versioning import ModelVersioningService
 
 
 @dataclass

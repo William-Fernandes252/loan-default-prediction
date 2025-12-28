@@ -5,8 +5,7 @@ including path management, resource calculation, model versioning, and data mana
 """
 
 from experiments.services.data_manager import ExperimentDataManager
-from experiments.services.model_versioning import ModelVersioningServiceFactory
-from experiments.services.models import (
+from experiments.services.model_versioning import (
     Classifier,
     FileSystemModelRepository,
     ModelNotFoundError,
@@ -14,6 +13,7 @@ from experiments.services.models import (
     ModelSaveError,
     ModelVersion,
     ModelVersioningService,
+    ModelVersioningServiceFactory,
     ModelVersioningServiceImpl,
 )
 from experiments.services.path_manager import PathManager

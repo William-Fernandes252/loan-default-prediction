@@ -8,7 +8,7 @@ import pandas as pd
 from sklearn.base import BaseEstimator
 
 from experiments.core.experiment.protocols import ExperimentContext
-from experiments.services.models import ModelVersioningService
+from experiments.services.model_versioning import ModelVersioningService
 
 
 class ParquetExperimentPersister:

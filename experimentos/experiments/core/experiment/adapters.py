@@ -20,7 +20,7 @@ from experiments.core.experiment.protocols import (
 )
 from experiments.core.modeling.schema import ExperimentConfig
 from experiments.core.modeling.types import ModelType, Technique
-from experiments.services.models import ModelVersioningService
+from experiments.services.model_versioning import ModelVersioningService
 
 
 def create_experiment_runner(

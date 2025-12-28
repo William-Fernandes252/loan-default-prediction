@@ -11,7 +11,7 @@ from typing import Any, Callable, Generator, Protocol, runtime_checkable
 
 from experiments.core.data import Dataset
 from experiments.core.modeling.types import ModelType, Technique
-from experiments.services.models import ModelVersioningService
+from experiments.services.model_versioning import ModelVersioningService
 
 
 @dataclass(frozen=True, slots=True)
