@@ -18,8 +18,8 @@ Loan default prediction training and analysis.
 ├── docs               <- Documentation files (MkDocs).
 ├── experiments        <- Source code for use in this project.
 │   ├── __init__.py
-│   ├── config.py      <- Store useful variables and configuration
-│   ├── context.py     <- Context management for the application
+│   ├── settings.py    <- Application settings using Pydantic Settings
+│   ├── containers.py  <- Dependency injection container (dependency-injector)
 │   ├── cli            <- Command Line Interface entry points
 │   │   ├── analysis.py
 │   │   ├── data.py
@@ -32,7 +32,12 @@ Loan default prediction training and analysis.
 │   │   ├── experiment <- Single experiment pipeline (split → train → evaluate → persist)
 │   │   ├── modeling   <- Model factories, estimators, and metrics
 │   │   └── training   <- Training orchestration pipeline (generate → execute → consolidate)
-│   ├── services       <- Application services (DataManager, ModelVersioning)
+│   ├── services       <- Application services
+│   │   ├── data_manager.py      <- Dataset artifact management
+│   │   ├── path_manager.py      <- Centralized path resolution
+│   │   ├── resource_calculator.py <- RAM-based parallelization
+│   │   ├── model_versioning.py  <- Model versioning factory
+│   │   └── models.py            <- Model persistence and loading
 │   └── utils          <- Utility functions
 ├── models             <- Trained and serialized models
 ├── notebooks          <- Jupyter notebooks
@@ -44,7 +49,21 @@ Loan default prediction training and analysis.
 
 ## Architecture
 
-The project follows a **pipeline-based architecture** with dependency injection for maximum flexibility and testability. Each major operation is implemented as a composable pipeline with clearly defined protocols.
+The project follows a **pipeline-based architecture** with a **dependency injection container** for maximum flexibility and testability. Each major operation is implemented as a composable pipeline with clearly defined protocols.
+
+### Dependency Injection
+
+The application uses `dependency-injector` with a centralized `Container` class that wires all services:
+
+| Service | Responsibility |
+|---------|----------------|
+| **ExperimentsSettings** | Configuration from environment variables / `.env` files (Pydantic Settings) |
+| **PathManager** | Centralized path resolution for data, models, and results |
+| **ResourceCalculator** | RAM-based calculation of safe parallel job counts |
+| **ModelVersioningServiceFactory** | Factory for model versioning services |
+| **ExperimentDataManager** | Dataset artifact management and consolidation |
+
+CLI commands resolve dependencies directly from the container at runtime.
 
 ### Core Pipelines
 
