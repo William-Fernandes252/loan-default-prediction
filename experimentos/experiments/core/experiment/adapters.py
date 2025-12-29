@@ -83,7 +83,7 @@ def create_experiment_runner(
             identity=identity,
             data=data_paths,
             config=training_config,
-            checkpoint_path=checkpoint_path,
+            checkpoint_uri=str(checkpoint_path),
             discard_checkpoints=cfg.discard_checkpoints,
         )
 

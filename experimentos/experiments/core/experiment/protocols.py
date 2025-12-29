@@ -5,7 +5,6 @@ data splitting, model training, evaluation, and persistence.
 """
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 from imblearn.pipeline import Pipeline as ImbPipeline
@@ -67,14 +66,14 @@ class ExperimentContext:
         identity: Experiment identity (dataset, model, technique, seed).
         data: Paths to memory-mapped data.
         config: Training hyperparameters.
-        checkpoint_path: Path to save checkpoint results.
+        checkpoint_uri: URI to save checkpoint results.
         discard_checkpoints: Whether to discard existing checkpoints.
     """
 
     identity: ExperimentIdentity
     data: DataPaths
     config: TrainingConfig
-    checkpoint_path: Path
+    checkpoint_uri: str
     discard_checkpoints: bool = False
 
 
@@ -259,13 +258,13 @@ class ExperimentPersister(Protocol):
     def save_checkpoint(
         self,
         metrics: dict[str, Any],
-        checkpoint_path: Path,
+        checkpoint_uri: str,
     ) -> None:
         """Save experiment results to a checkpoint file.
 
         Args:
             metrics: Metrics dictionary to save.
-            checkpoint_path: Path to save the checkpoint.
+            checkpoint_uri: URI to save the checkpoint.
         """
         ...
 
@@ -282,22 +281,22 @@ class ExperimentPersister(Protocol):
         """
         ...
 
-    def checkpoint_exists(self, checkpoint_path: Path) -> bool:
+    def checkpoint_exists(self, checkpoint_uri: str) -> bool:
         """Check if a checkpoint already exists.
 
         Args:
-            checkpoint_path: Path to check.
+            checkpoint_uri: URI to check.
 
         Returns:
             True if checkpoint exists.
         """
         ...
 
-    def discard_checkpoint(self, checkpoint_path: Path) -> None:
+    def discard_checkpoint(self, checkpoint_uri: str) -> None:
         """Discard an existing checkpoint.
 
         Args:
-            checkpoint_path: Path to discard.
+            checkpoint_uri: URI to discard.
         """
         ...
 

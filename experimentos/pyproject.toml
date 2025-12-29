@@ -16,8 +16,10 @@ classifiers = [
     
 ]
 dependencies = [
+  "boto3>=1.42.17",
   "dependency-injector>=4.48.3",
   "GitPython>=3.1.43",
+  "google-cloud-storage>=3.7.0",
   "imbalanced-learn>=0.14.0",
   "ipykernel>=6.30.1",
   "joblib>=1.5.2",
@@ -64,3 +66,8 @@ disable_error_code = ["import-untyped"]
 testpaths = ["tests"]
 python_classes = ["Test*", "Describe*", "For*"]
 python_functions = ["test_*", "it_*", "should_*"]
+
+[dependency-groups]
+dev = [
+    "types-boto3>=1.42.17",
+]

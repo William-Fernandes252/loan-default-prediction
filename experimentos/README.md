@@ -37,6 +37,14 @@ Loan default prediction training and analysis.
 │   │   ├── path_manager.py      <- Centralized path resolution
 │   │   ├── resource_calculator.py <- RAM-based parallelization
 │   │   ├── model_versioning.py  <- Model versioning, persistence and loading
+│   │   ├── storage_manager.py   <- High-level storage operations
+│   │   └── storage              <- Storage abstraction layer
+│   │       ├── __init__.py
+│   │       ├── base.py          <- StorageService abstract base class
+│   │       ├── errors.py        <- StorageError and FileDoesNotExistError
+│   │       ├── local.py         <- LocalStorageService (filesystem)
+│   │       ├── s3.py            <- S3StorageService (AWS S3, boto3)
+│   │       └── gcs.py           <- GCSStorageService (Google Cloud Storage)
 │   └── utils          <- Utility functions
 ├── models             <- Trained and serialized models
 ├── notebooks          <- Jupyter notebooks
@@ -61,8 +69,28 @@ The application uses `dependency-injector` with a centralized `Container` class 
 | **ResourceCalculator** | RAM-based calculation of safe parallel job counts |
 | **ModelVersioningServiceFactory** | Factory for model versioning services |
 | **ExperimentDataManager** | Dataset artifact management and consolidation |
+| **StorageService** | Unified file I/O abstraction (local, S3, GCS) |
+| **StorageManager** | High-level storage operations for data and checkpoints |
 
 CLI commands resolve dependencies directly from the container at runtime.
+
+### Storage Layer
+
+The storage layer provides a unified interface for file operations across different backends:
+
+| Backend | Implementation | URI Scheme |
+|---------|----------------|------------|
+| **Local Filesystem** | `LocalStorageService` | `file://` |
+| **AWS S3** | `S3StorageService` | `s3://` |
+| **Google Cloud Storage** | `GCSStorageService` | `gs://` |
+
+Cloud storage services use **composition-based dependency injection** — the boto3/GCS clients are created by the DI container and injected into the storage services. This enables:
+
+- Easy mocking for unit tests
+- Centralized credential management
+- Swappable storage backends via configuration
+
+The `StorageManager` provides high-level operations for reading/writing datasets, checkpoints, and model artifacts through URI-based addressing.
 
 ### Core Pipelines
 

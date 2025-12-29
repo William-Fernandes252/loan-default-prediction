@@ -20,6 +20,14 @@ from experiments.core.experiment.protocols import (
     TrainingConfig,
 )
 from experiments.core.modeling.types import ModelType, Technique
+from experiments.services.storage import StorageService
+from experiments.services.storage.local import LocalStorageService
+
+
+@pytest.fixture
+def storage() -> StorageService:
+    """Create a local storage service for testing."""
+    return LocalStorageService()
 
 
 @pytest.fixture
@@ -43,7 +51,7 @@ def sample_context() -> ExperimentContext:
         identity=identity,
         data=data_paths,
         config=training_config,
-        checkpoint_path=Path("/tmp/test_checkpoint.parquet"),
+        checkpoint_uri="/tmp/test_checkpoint.parquet",
     )
 
 
@@ -64,16 +72,18 @@ def sample_metrics() -> dict[str, Any]:
 class DescribeParquetExperimentPersister:
     """Tests for ParquetExperimentPersister class."""
 
-    def it_initializes_without_versioning_service(self) -> None:
+    def it_initializes_without_versioning_service(self, storage: StorageService) -> None:
         """Verify persister can be initialized without versioning service."""
-        persister = ParquetExperimentPersister()
+        persister = ParquetExperimentPersister(storage=storage)
 
         assert persister._model_versioning_service is None
 
-    def it_initializes_with_versioning_service(self) -> None:
+    def it_initializes_with_versioning_service(self, storage: StorageService) -> None:
         """Verify persister stores versioning service."""
         mock_service = MagicMock()
-        persister = ParquetExperimentPersister(model_versioning_service=mock_service)
+        persister = ParquetExperimentPersister(
+            storage=storage, model_versioning_service=mock_service
+        )
 
         assert persister._model_versioning_service is mock_service
 
@@ -85,17 +95,18 @@ class DescribeParquetExperimentPersisterSaveCheckpoint:
         self,
         sample_metrics: dict[str, Any],
         tmp_path: Path,
+        storage: StorageService,
     ) -> None:
         """Verify metrics are saved to parquet file."""
-        checkpoint_path = tmp_path / "checkpoint.parquet"
-        persister = ParquetExperimentPersister()
+        checkpoint_uri = str(tmp_path / "checkpoint.parquet")
+        persister = ParquetExperimentPersister(storage=storage)
 
-        persister.save_checkpoint(sample_metrics, checkpoint_path)
+        persister.save_checkpoint(sample_metrics, checkpoint_uri)
 
-        assert checkpoint_path.exists()
+        assert Path(checkpoint_uri).exists()
 
         # Read back and verify
-        df = pd.read_parquet(checkpoint_path)
+        df = pd.read_parquet(checkpoint_uri)
         assert len(df) == 1
         assert df.iloc[0]["accuracy_balanced"] == 0.85
         assert df.iloc[0]["dataset"] == "taiwan_credit"
@@ -104,15 +115,15 @@ class DescribeParquetExperimentPersisterSaveCheckpoint:
         self,
         sample_metrics: dict[str, Any],
         tmp_path: Path,
+        storage: StorageService,
     ) -> None:
         """Verify parent directories are created if needed."""
-        checkpoint_path = tmp_path / "subdir" / "nested" / "checkpoint.parquet"
-        checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+        checkpoint_uri = str(tmp_path / "subdir" / "nested" / "checkpoint.parquet")
 
-        persister = ParquetExperimentPersister()
-        persister.save_checkpoint(sample_metrics, checkpoint_path)
+        persister = ParquetExperimentPersister(storage=storage)
+        persister.save_checkpoint(sample_metrics, checkpoint_uri)
 
-        assert checkpoint_path.exists()
+        assert Path(checkpoint_uri).exists()
 
 
 class DescribeParquetExperimentPersisterSaveModel:
@@ -121,9 +132,10 @@ class DescribeParquetExperimentPersisterSaveModel:
     def it_does_nothing_when_no_versioning_service(
         self,
         sample_context: ExperimentContext,
+        storage: StorageService,
     ) -> None:
         """Verify no error when versioning service is None."""
-        persister = ParquetExperimentPersister()
+        persister = ParquetExperimentPersister(storage=storage)
         model = LogisticRegression()
 
         # Should not raise
@@ -132,10 +144,13 @@ class DescribeParquetExperimentPersisterSaveModel:
     def it_calls_versioning_service_save(
         self,
         sample_context: ExperimentContext,
+        storage: StorageService,
     ) -> None:
         """Verify versioning service save_model is called."""
         mock_service = MagicMock()
-        persister = ParquetExperimentPersister(model_versioning_service=mock_service)
+        persister = ParquetExperimentPersister(
+            storage=storage, model_versioning_service=mock_service
+        )
         model = LogisticRegression()
 
         persister.save_model(model, sample_context)
@@ -145,11 +160,14 @@ class DescribeParquetExperimentPersisterSaveModel:
     def it_handles_versioning_service_errors_gracefully(
         self,
         sample_context: ExperimentContext,
+        storage: StorageService,
     ) -> None:
         """Verify errors from versioning service are caught."""
         mock_service = MagicMock()
         mock_service.save_model.side_effect = RuntimeError("Save failed")
-        persister = ParquetExperimentPersister(model_versioning_service=mock_service)
+        persister = ParquetExperimentPersister(
+            storage=storage, model_versioning_service=mock_service
+        )
         model = LogisticRegression()
 
         # Should not raise, just log warning
@@ -159,55 +177,61 @@ class DescribeParquetExperimentPersisterSaveModel:
 class DescribeParquetExperimentPersisterCheckpointExists:
     """Tests for ParquetExperimentPersister.checkpoint_exists() method."""
 
-    def it_returns_true_when_checkpoint_exists(self, tmp_path: Path) -> None:
+    def it_returns_true_when_checkpoint_exists(
+        self, tmp_path: Path, storage: StorageService
+    ) -> None:
         """Verify returns True when file exists."""
         checkpoint_path = tmp_path / "checkpoint.parquet"
         checkpoint_path.touch()
 
-        persister = ParquetExperimentPersister()
+        persister = ParquetExperimentPersister(storage=storage)
 
-        assert persister.checkpoint_exists(checkpoint_path) is True
+        assert persister.checkpoint_exists(str(checkpoint_path)) is True
 
-    def it_returns_false_when_checkpoint_not_exists(self, tmp_path: Path) -> None:
+    def it_returns_false_when_checkpoint_not_exists(
+        self, tmp_path: Path, storage: StorageService
+    ) -> None:
         """Verify returns False when file doesn't exist."""
-        checkpoint_path = tmp_path / "nonexistent.parquet"
+        checkpoint_uri = str(tmp_path / "nonexistent.parquet")
 
-        persister = ParquetExperimentPersister()
+        persister = ParquetExperimentPersister(storage=storage)
 
-        assert persister.checkpoint_exists(checkpoint_path) is False
+        assert persister.checkpoint_exists(checkpoint_uri) is False
 
 
 class DescribeParquetExperimentPersisterDiscardCheckpoint:
     """Tests for ParquetExperimentPersister.discard_checkpoint() method."""
 
-    def it_removes_existing_checkpoint(self, tmp_path: Path) -> None:
+    def it_removes_existing_checkpoint(self, tmp_path: Path, storage: StorageService) -> None:
         """Verify checkpoint file is removed."""
         checkpoint_path = tmp_path / "checkpoint.parquet"
         checkpoint_path.touch()
         assert checkpoint_path.exists()
 
-        persister = ParquetExperimentPersister()
-        persister.discard_checkpoint(checkpoint_path)
+        persister = ParquetExperimentPersister(storage=storage)
+        persister.discard_checkpoint(str(checkpoint_path))
 
         assert not checkpoint_path.exists()
 
-    def it_handles_nonexistent_checkpoint_gracefully(self, tmp_path: Path) -> None:
+    def it_handles_nonexistent_checkpoint_gracefully(
+        self, tmp_path: Path, storage: StorageService
+    ) -> None:
         """Verify no error when checkpoint doesn't exist."""
-        checkpoint_path = tmp_path / "nonexistent.parquet"
+        checkpoint_uri = str(tmp_path / "nonexistent.parquet")
 
-        persister = ParquetExperimentPersister()
+        persister = ParquetExperimentPersister(storage=storage)
 
         # Should not raise
-        persister.discard_checkpoint(checkpoint_path)
+        persister.discard_checkpoint(checkpoint_uri)
 
 
 class DescribeCompositeExperimentPersister:
     """Tests for CompositeExperimentPersister class."""
 
-    def it_initializes_with_list_of_persisters(self) -> None:
+    def it_initializes_with_list_of_persisters(self, storage: StorageService) -> None:
         """Verify composite stores list of persisters."""
-        persister1 = ParquetExperimentPersister()
-        persister2 = ParquetExperimentPersister()
+        persister1 = ParquetExperimentPersister(storage=storage)
+        persister2 = ParquetExperimentPersister(storage=storage)
 
         composite = CompositeExperimentPersister([persister1, persister2])
 
@@ -233,11 +257,11 @@ class DescribeCompositeExperimentPersisterSaveCheckpoint:
         mock2 = MagicMock()
         composite = CompositeExperimentPersister([mock1, mock2])
 
-        checkpoint_path = tmp_path / "checkpoint.parquet"
-        composite.save_checkpoint(sample_metrics, checkpoint_path)
+        checkpoint_uri = str(tmp_path / "checkpoint.parquet")
+        composite.save_checkpoint(sample_metrics, checkpoint_uri)
 
-        mock1.save_checkpoint.assert_called_once_with(sample_metrics, checkpoint_path)
-        mock2.save_checkpoint.assert_called_once_with(sample_metrics, checkpoint_path)
+        mock1.save_checkpoint.assert_called_once_with(sample_metrics, checkpoint_uri)
+        mock2.save_checkpoint.assert_called_once_with(sample_metrics, checkpoint_uri)
 
 
 class DescribeCompositeExperimentPersisterSaveModel:
@@ -271,19 +295,19 @@ class DescribeCompositeExperimentPersisterCheckpointExists:
 
         composite = CompositeExperimentPersister([mock1, mock2])
 
-        checkpoint_path = tmp_path / "checkpoint.parquet"
-        result = composite.checkpoint_exists(checkpoint_path)
+        checkpoint_uri = str(tmp_path / "checkpoint.parquet")
+        result = composite.checkpoint_exists(checkpoint_uri)
 
         assert result is True
-        mock1.checkpoint_exists.assert_called_once_with(checkpoint_path)
+        mock1.checkpoint_exists.assert_called_once_with(checkpoint_uri)
         mock2.checkpoint_exists.assert_not_called()
 
     def it_returns_false_when_no_persisters(self, tmp_path: Path) -> None:
         """Verify returns False when persister list is empty."""
         composite = CompositeExperimentPersister([])
 
-        checkpoint_path = tmp_path / "checkpoint.parquet"
-        result = composite.checkpoint_exists(checkpoint_path)
+        checkpoint_uri = str(tmp_path / "checkpoint.parquet")
+        result = composite.checkpoint_exists(checkpoint_uri)
 
         assert result is False
 
@@ -297,8 +321,8 @@ class DescribeCompositeExperimentPersisterDiscardCheckpoint:
         mock2 = MagicMock()
         composite = CompositeExperimentPersister([mock1, mock2])
 
-        checkpoint_path = tmp_path / "checkpoint.parquet"
-        composite.discard_checkpoint(checkpoint_path)
+        checkpoint_uri = str(tmp_path / "checkpoint.parquet")
+        composite.discard_checkpoint(checkpoint_uri)
 
-        mock1.discard_checkpoint.assert_called_once_with(checkpoint_path)
-        mock2.discard_checkpoint.assert_called_once_with(checkpoint_path)
+        mock1.discard_checkpoint.assert_called_once_with(checkpoint_uri)
+        mock2.discard_checkpoint.assert_called_once_with(checkpoint_uri)

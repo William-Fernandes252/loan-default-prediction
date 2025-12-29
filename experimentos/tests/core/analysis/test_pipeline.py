@@ -11,6 +11,8 @@ from experiments.core.analysis.pipeline import (
     AnalysisPipelineFactory,
 )
 from experiments.core.data import Dataset
+from experiments.services.storage import StorageService
+from experiments.services.storage.local import LocalStorageService
 
 
 class MockOutputPathProvider:
@@ -27,8 +29,17 @@ class MockOutputPathProvider:
 class MockResultsPathProvider:
     """Mock implementation of ResultsPathProvider."""
 
+    def __init__(self, storage: StorageService | None = None) -> None:
+        self.storage = storage
+
     def get_results_file(self, dataset_id: str) -> Path:
         return Path(f"/mock/results/{dataset_id}.parquet")
+
+
+@pytest.fixture
+def storage() -> StorageService:
+    """Create a local storage service for testing."""
+    return LocalStorageService()
 
 
 @pytest.fixture
@@ -351,9 +362,10 @@ class DescribeAnalysisPipelineFactory:
     def it_initializes_with_providers_and_translate(
         self,
         mock_translate: MagicMock,
+        storage: StorageService,
     ) -> None:
         """Verify factory initializes correctly with dependencies."""
-        path_provider = MockResultsPathProvider()
+        path_provider = MockResultsPathProvider(storage=storage)
         output_provider = MockOutputPathProvider(Path("/output"))
 
         factory = AnalysisPipelineFactory(
@@ -371,9 +383,11 @@ class DescribeAnalysisPipelineFactoryCreateMethods:
     """Tests for AnalysisPipelineFactory create_* methods."""
 
     @pytest.fixture
-    def factory(self, mock_translate: MagicMock) -> AnalysisPipelineFactory:
+    def factory(
+        self, mock_translate: MagicMock, storage: StorageService
+    ) -> AnalysisPipelineFactory:
         """Create a factory for testing."""
-        path_provider = MockResultsPathProvider()
+        path_provider = MockResultsPathProvider(storage=storage)
         output_provider = MockOutputPathProvider(Path("/output"))
         return AnalysisPipelineFactory(
             path_provider=path_provider,  # type: ignore[arg-type]
@@ -501,9 +515,10 @@ class DescribeAnalysisPipelineFactoryCreateMethods:
     def it_creates_loader_using_path_provider(
         self,
         mock_translate: MagicMock,
+        storage: StorageService,
     ) -> None:
-        """Verify _create_loader uses the path provider."""
-        path_provider = MockResultsPathProvider()
+        """Verify _create_loader uses the path provider and storage."""
+        path_provider = MockResultsPathProvider(storage=storage)
         output_provider = MockOutputPathProvider(Path("/output"))
         factory = AnalysisPipelineFactory(
             path_provider=path_provider,  # type: ignore[arg-type]
@@ -511,21 +526,25 @@ class DescribeAnalysisPipelineFactoryCreateMethods:
             translate=mock_translate,
         )
 
-        with patch("experiments.core.analysis.pipeline.EnrichedResultsLoader") as mock_loader_class:
+        with patch(
+            "experiments.core.analysis.pipeline.EnrichedResultsLoader"
+        ) as mock_loader_class:
             factory._create_loader()
 
-            mock_loader_class.assert_called_once_with(path_provider, mock_translate)
+            mock_loader_class.assert_called_once_with(path_provider, storage, mock_translate)
 
 
 class DescribeAnalysisPipelineFactoryRegistryPattern:
     """Tests for the registry pattern implementation in AnalysisPipelineFactory."""
 
     @pytest.fixture
-    def factory(self, mock_translate: MagicMock) -> AnalysisPipelineFactory:
+    def factory(
+        self, mock_translate: MagicMock, storage: StorageService
+    ) -> AnalysisPipelineFactory:
         """Create a factory for testing."""
         from experiments.core.analysis.pipeline import AnalysisPipelineFactory
 
-        path_provider = MockResultsPathProvider()
+        path_provider = MockResultsPathProvider(storage=storage)
         output_provider = MockOutputPathProvider(Path("/output"))
         return AnalysisPipelineFactory(
             path_provider=path_provider,  # type: ignore[arg-type]

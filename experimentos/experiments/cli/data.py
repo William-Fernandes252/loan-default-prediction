@@ -12,7 +12,8 @@ from experiments.core.data import (
     DataProcessingPipelineFactory,
     Dataset,
 )
-from experiments.services.path_manager import PathManager
+from experiments.services.storage import StorageService
+from experiments.services.storage_manager import StorageManager
 from experiments.utils.jobs import get_jobs_from_available_cpus
 from experiments.utils.overwrites import filter_items_for_processing
 
@@ -25,14 +26,23 @@ app = typer.Typer()
 
 
 def _process_single_dataset(
-    path_manager: PathManager,
+    storage_manager: StorageManager,
     use_gpu: bool,
     dataset: Dataset,
 ) -> tuple[Dataset, bool, str | None]:
     """Runs the preprocessing pipeline for a single dataset."""
     try:
-        # Create pipeline factory with path manager as path provider
-        factory = DataProcessingPipelineFactory(path_manager, use_gpu=use_gpu)
+        # Get settings for URI construction
+        settings = container.settings()
+        storage = storage_manager.storage
+
+        # Create pipeline factory with storage layer
+        factory = DataProcessingPipelineFactory(
+            storage=storage,
+            raw_data_uri=StorageService.to_uri(settings.paths.raw_data_dir),
+            interim_data_uri=StorageService.to_uri(settings.paths.interim_data_dir),
+            use_gpu=use_gpu,
+        )
 
         # Create and run the pipeline for this dataset
         pipeline = factory.create(dataset)
@@ -87,7 +97,8 @@ def main(
 ):
     """Processes one or all datasets."""
     # Resolve dependencies from container
-    path_manager = container.path_manager()
+    storage_manager = container.storage_manager()
+    storage = storage_manager.storage
     resource_settings = container.settings().resources
 
     # Override use_gpu from settings if flag is set
@@ -95,11 +106,11 @@ def main(
 
     datasets_to_process = [dataset] if dataset is not None else list(Dataset)
 
-    # Use path_manager for path checking in filter
+    # Use storage_manager for URI checking in filter
     datasets_to_process = filter_items_for_processing(
         datasets_to_process,
-        exists_fn=lambda ds: path_manager.get_interim_data_path(ds.id).exists(),
-        prompt_fn=lambda ds: f"File '{path_manager.get_interim_data_path(ds.id)}' exists. Overwrite?",
+        exists_fn=lambda ds: storage.exists(storage_manager.get_interim_data_uri(ds.id)),
+        prompt_fn=lambda ds: f"File '{storage_manager.get_interim_data_uri(ds.id)}' exists. Overwrite?",
         force=force,
         on_skip=lambda ds: logger.info(f"Skipping dataset {ds.display_name} per user choice."),
     )
@@ -113,9 +124,9 @@ def main(
 
     n_jobs = get_jobs_from_available_cpus(jobs)
 
-    # Pass path_manager to workers
+    # Pass storage_manager to workers
     results = Parallel(n_jobs=n_jobs, prefer="processes")(
-        delayed(_process_single_dataset)(path_manager, effective_use_gpu, ds)
+        delayed(_process_single_dataset)(storage_manager, effective_use_gpu, ds)
         for ds in datasets_to_process
     )
 

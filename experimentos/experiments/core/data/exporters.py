@@ -1,45 +1,49 @@
 """Data exporters for the data processing pipeline.
 
 This module provides implementations of the ProcessedDataExporter protocol
-for persisting processed data to various storage formats.
+for persisting processed data to various storage formats using the
+storage abstraction layer.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import polars as pl
 
-from experiments.core.data.protocols import InterimDataPathProvider
-
 if TYPE_CHECKING:
     from experiments.core.data import Dataset
+    from experiments.services.storage import StorageService
 
 
 class ParquetDataExporter:
-    """Exports processed data to Parquet files.
+    """Exports processed data to Parquet files using the storage layer.
 
     This exporter writes processed DataFrames to the interim data
-    directory using the path provider to resolve output locations.
+    directory using the storage service to handle file operations.
 
     Example:
         ```python
-        exporter = ParquetDataExporter(context)  # Context implements InterimDataPathProvider
-        path = exporter.export(processed_df, Dataset.TAIWAN_CREDIT)
+        exporter = ParquetDataExporter(storage, base_uri)
+        uri = exporter.export(processed_df, Dataset.TAIWAN_CREDIT)
         ```
     """
 
-    def __init__(self, path_provider: InterimDataPathProvider) -> None:
+    def __init__(self, storage: StorageService, base_uri: str) -> None:
         """Initialize the exporter.
 
         Args:
-            path_provider: Provider for interim data file paths.
-                Must implement the InterimDataPathProvider protocol.
+            storage: Storage service for file operations.
+            base_uri: Base URI for interim data files.
         """
-        self._path_provider = path_provider
+        self._storage = storage
+        self._base_uri = base_uri.rstrip("/")
 
-    def export(self, df: pl.DataFrame, dataset: Dataset) -> Path:
+    def _get_uri(self, dataset_id: str) -> str:
+        """Get the URI for a dataset's interim parquet file."""
+        return f"{self._base_uri}/{dataset_id}.parquet"
+
+    def export(self, df: pl.DataFrame, dataset: Dataset) -> str:
         """Export processed data to a Parquet file.
 
         Args:
@@ -47,14 +51,11 @@ class ParquetDataExporter:
             dataset: The dataset being processed.
 
         Returns:
-            The path to the exported Parquet file.
+            The URI to the exported Parquet file.
         """
-        output_path = self._path_provider.get_interim_data_path(dataset.id)
+        output_uri = self._get_uri(dataset.id)
 
-        # Ensure the output directory exists
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+        # Write the DataFrame to Parquet via storage layer
+        self._storage.write_parquet(df, output_uri)
 
-        # Write the DataFrame to Parquet
-        df.write_parquet(output_path)
-
-        return output_path
+        return output_uri

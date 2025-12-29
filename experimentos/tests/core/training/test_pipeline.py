@@ -17,6 +17,14 @@ from experiments.core.training.pipeline import (
     TrainingPipelineFactory,
 )
 from experiments.core.training.protocols import ExperimentTask
+from experiments.services.storage import StorageService
+from experiments.services.storage.local import LocalStorageService
+
+
+@pytest.fixture
+def storage() -> StorageService:
+    """Create a local storage service for testing."""
+    return LocalStorageService()
 
 
 class DescribeTrainingPipelineConfig:
@@ -721,6 +729,7 @@ class DescribeTrainingPipelineFactory:
     @pytest.fixture
     def factory(
         self,
+        storage: StorageService,
         mock_data_provider: MagicMock,
         mock_consolidation_provider: MagicMock,
         mock_versioning_provider: MagicMock,
@@ -728,6 +737,7 @@ class DescribeTrainingPipelineFactory:
     ) -> TrainingPipelineFactory:
         """Create factory with mocked dependencies."""
         return TrainingPipelineFactory(
+            storage=storage,
             data_provider=mock_data_provider,
             consolidation_provider=mock_consolidation_provider,
             versioning_provider=mock_versioning_provider,
@@ -742,12 +752,14 @@ class DescribeTrainingPipelineFactory:
     def it_stores_dependencies(
         self,
         factory: TrainingPipelineFactory,
+        storage: StorageService,
         mock_data_provider: MagicMock,
         mock_consolidation_provider: MagicMock,
         mock_versioning_provider: MagicMock,
         mock_experiment_runner: MagicMock,
     ) -> None:
         """Verify dependencies are stored."""
+        assert factory._storage is storage
         assert factory._data_provider is mock_data_provider
         assert factory._consolidation_provider is mock_consolidation_provider
         assert factory._versioning_provider is mock_versioning_provider
@@ -780,6 +792,7 @@ class DescribeTrainingPipelineFactoryCreateParallel:
     @pytest.fixture
     def factory(
         self,
+        storage: StorageService,
         mock_data_provider: MagicMock,
         mock_consolidation_provider: MagicMock,
         mock_versioning_provider: MagicMock,
@@ -787,6 +800,7 @@ class DescribeTrainingPipelineFactoryCreateParallel:
     ) -> TrainingPipelineFactory:
         """Create factory with mocked dependencies."""
         return TrainingPipelineFactory(
+            storage=storage,
             data_provider=mock_data_provider,
             consolidation_provider=mock_consolidation_provider,
             versioning_provider=mock_versioning_provider,
@@ -855,6 +869,7 @@ class DescribeTrainingPipelineFactoryCreateSequential:
     @pytest.fixture
     def factory(
         self,
+        storage: StorageService,
         mock_data_provider: MagicMock,
         mock_consolidation_provider: MagicMock,
         mock_versioning_provider: MagicMock,
@@ -862,6 +877,7 @@ class DescribeTrainingPipelineFactoryCreateSequential:
     ) -> TrainingPipelineFactory:
         """Create factory with mocked dependencies."""
         return TrainingPipelineFactory(
+            storage=storage,
             data_provider=mock_data_provider,
             consolidation_provider=mock_consolidation_provider,
             versioning_provider=mock_versioning_provider,

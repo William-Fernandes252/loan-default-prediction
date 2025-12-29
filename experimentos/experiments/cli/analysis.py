@@ -18,7 +18,7 @@ from experiments.containers import container
 from experiments.core.analysis.pipeline import AnalysisPipelineFactory
 from experiments.core.analysis.protocols import TranslationFunc
 from experiments.core.data import Dataset
-from experiments.services.path_manager import PathManager
+from experiments.services.storage_manager import StorageManager
 from experiments.settings import PathSettings
 
 
@@ -116,7 +116,7 @@ class _OutputPathProvider:
 
 
 def _create_pipeline_factory(
-    path_manager: PathManager,
+    storage_manager: StorageManager,
     path_settings: PathSettings,
     language: _Language,
     translate: TranslationFunc,
@@ -124,7 +124,7 @@ def _create_pipeline_factory(
     """Create a configured pipeline factory.
 
     Args:
-        path_manager: Path manager service.
+        storage_manager: Storage manager service.
         path_settings: Path settings configuration.
         language: Language for output paths.
         translate: Translation function.
@@ -134,7 +134,7 @@ def _create_pipeline_factory(
     """
     output_provider = _OutputPathProvider(path_settings, language)
     return AnalysisPipelineFactory(
-        path_provider=path_manager,
+        path_provider=storage_manager,
         output_path_provider=output_provider,
         translate=translate,
     )
@@ -176,11 +176,11 @@ def analyze_stability_and_variance(
     3. Outliers: Cases where the model failed significantly.
     """
     # Resolve dependencies from container
-    path_manager = container.path_manager()
+    storage_manager = container.storage_manager()
     path_settings = container.settings().paths
 
     translate = _setup_i18n(language)
-    factory = _create_pipeline_factory(path_manager, path_settings, language, translate)
+    factory = _create_pipeline_factory(storage_manager, path_settings, language, translate)
 
     pipeline = factory.create_stability_pipeline()
     datasets = _resolve_datasets(dataset)
@@ -203,11 +203,11 @@ def analyze_risk_tradeoff(
     The F1-Score helps summarize this, but the graph tells the full story.
     """
     # Resolve dependencies from container
-    path_manager = container.path_manager()
+    storage_manager = container.storage_manager()
     path_settings = container.settings().paths
 
     translate = _setup_i18n(language)
-    factory = _create_pipeline_factory(path_manager, path_settings, language, translate)
+    factory = _create_pipeline_factory(storage_manager, path_settings, language, translate)
 
     pipeline = factory.create_risk_tradeoff_pipeline()
     datasets = _resolve_datasets(dataset)
@@ -229,11 +229,11 @@ def analyze_imbalance_impact(
     ratio and key performance metrics (Balanced Accuracy, F1-Score, G-mean and Sensitivity).
     """
     # Resolve dependencies from container
-    path_manager = container.path_manager()
+    storage_manager = container.storage_manager()
     path_settings = container.settings().paths
 
     translate = _setup_i18n(language)
-    factory = _create_pipeline_factory(path_manager, path_settings, language, translate)
+    factory = _create_pipeline_factory(storage_manager, path_settings, language, translate)
 
     pipeline = factory.create_imbalance_impact_pipeline()
     datasets = _resolve_datasets(dataset)
@@ -254,11 +254,11 @@ def compare_cost_sensitive_and_resampling(
     cost-sensitive classifiers (e.g., MetaCost) against various resampling methods.
     """
     # Resolve dependencies from container
-    path_manager = container.path_manager()
+    storage_manager = container.storage_manager()
     path_settings = container.settings().paths
 
     translate = _setup_i18n(language)
-    factory = _create_pipeline_factory(path_manager, path_settings, language, translate)
+    factory = _create_pipeline_factory(storage_manager, path_settings, language, translate)
 
     pipeline = factory.create_cost_sensitive_vs_resampling_pipeline()
     datasets = _resolve_datasets(dataset)
@@ -282,11 +282,11 @@ def analyze_hyperparameter_effects(
     across models and techniques.
     """
     # Resolve dependencies from container
-    path_manager = container.path_manager()
+    storage_manager = container.storage_manager()
     path_settings = container.settings().paths
 
     translate = _setup_i18n(language)
-    factory = _create_pipeline_factory(path_manager, path_settings, language, translate)
+    factory = _create_pipeline_factory(storage_manager, path_settings, language, translate)
 
     pipeline = factory.create_hyperparameter_pipeline()
     datasets = _resolve_datasets(dataset)
@@ -309,11 +309,11 @@ def analyze_results(
     exported as CSV, LaTeX, and PNG table images.
     """
     # Resolve dependencies from container
-    path_manager = container.path_manager()
+    storage_manager = container.storage_manager()
     path_settings = container.settings().paths
 
     translate = _setup_i18n(language)
-    factory = _create_pipeline_factory(path_manager, path_settings, language, translate)
+    factory = _create_pipeline_factory(storage_manager, path_settings, language, translate)
 
     pipeline = factory.create_experiment_summary_pipeline()
     datasets = _resolve_datasets(dataset)

@@ -11,7 +11,6 @@ the same load → transform → export pattern.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 import polars as pl
@@ -21,41 +20,41 @@ if TYPE_CHECKING:
 
 
 @runtime_checkable
-class RawDataPathProvider(Protocol):
-    """Protocol for providing paths to raw data files.
+class RawDataUriProvider(Protocol):
+    """Protocol for providing URIs to raw data files.
 
     Implementations are responsible for resolving dataset identifiers
-    to their corresponding raw data file paths.
+    to their corresponding raw data file URIs.
     """
 
-    def get_raw_data_path(self, dataset_id: str) -> Path:
-        """Get the path to the raw data file for a dataset.
+    def get_raw_data_uri(self, dataset_id: str) -> str:
+        """Get the URI to the raw data file for a dataset.
 
         Args:
             dataset_id: The dataset identifier (e.g., 'taiwan_credit').
 
         Returns:
-            The path to the raw data file.
+            The URI to the raw data file.
         """
         ...
 
 
 @runtime_checkable
-class InterimDataPathProvider(Protocol):
-    """Protocol for providing paths to interim (processed) data files.
+class InterimDataUriProvider(Protocol):
+    """Protocol for providing URIs to interim (processed) data files.
 
     Implementations are responsible for resolving dataset identifiers
-    to their corresponding interim data file paths.
+    to their corresponding interim data file URIs.
     """
 
-    def get_interim_data_path(self, dataset_id: str) -> Path:
-        """Get the path to the interim data file for a dataset.
+    def get_interim_data_uri(self, dataset_id: str) -> str:
+        """Get the URI to the interim data file for a dataset.
 
         Args:
             dataset_id: The dataset identifier (e.g., 'taiwan_credit').
 
         Returns:
-            The path to the interim data file.
+            The URI to the interim data file.
         """
         ...
 
@@ -109,7 +108,7 @@ class ProcessedDataExporter(Protocol):
     to storage (e.g., Parquet files).
     """
 
-    def export(self, df: pl.DataFrame, dataset: Dataset) -> Path:
+    def export(self, df: pl.DataFrame, dataset: Dataset) -> str:
         """Export the processed data.
 
         Args:
@@ -117,6 +116,11 @@ class ProcessedDataExporter(Protocol):
             dataset: The dataset being processed.
 
         Returns:
-            The path to the exported file.
+            The URI to the exported file.
         """
         ...
+
+
+# Backwards compatibility aliases (deprecated)
+RawDataPathProvider = RawDataUriProvider
+InterimDataPathProvider = InterimDataUriProvider

@@ -6,7 +6,6 @@ task generation, data loading, training execution, and results persistence.
 
 from contextlib import contextmanager
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Callable, Generator, Protocol, runtime_checkable
 
 from experiments.core.data import Dataset
@@ -53,26 +52,26 @@ class TaskGenerator(Protocol):
 
 
 @runtime_checkable
-class CheckpointPathProvider(Protocol):
-    """Protocol for providing checkpoint paths."""
+class CheckpointUriProvider(Protocol):
+    """Protocol for providing checkpoint URIs."""
 
-    def get_checkpoint_path(
+    def get_checkpoint_uri(
         self,
         dataset_id: str,
         model_id: str,
         technique_id: str,
         seed: int,
-    ) -> Path:
-        """Get the checkpoint path for a specific task."""
+    ) -> str:
+        """Get the checkpoint URI for a specific task."""
         ...
 
 
 @runtime_checkable
-class ConsolidatedResultsPathProvider(Protocol):
-    """Protocol for providing consolidated results paths."""
+class ConsolidatedResultsUriProvider(Protocol):
+    """Protocol for providing consolidated results URIs."""
 
-    def get_consolidated_results_path(self, dataset_id: str) -> Path:
-        """Get the path for consolidated results."""
+    def get_consolidated_results_uri(self, dataset_id: str) -> str:
+        """Get the URI for consolidated results."""
         ...
 
 
@@ -126,7 +125,7 @@ class TrainingExecutor(Protocol):
         runner: ExperimentRunner,
         data_paths: tuple[str, str],
         config: Any,
-        checkpoint_provider: CheckpointPathProvider,
+        checkpoint_provider: CheckpointUriProvider,
         versioning_provider: ModelVersioningProvider,
     ) -> list[str | None]:
         """Execute the training tasks.
@@ -136,7 +135,7 @@ class TrainingExecutor(Protocol):
             runner: The function to run for each task.
             data_paths: Tuple of (X_mmap_path, y_mmap_path).
             config: Experiment configuration.
-            checkpoint_provider: Provider for checkpoint paths.
+            checkpoint_provider: Provider for checkpoint URIs.
             versioning_provider: Provider for model versioning services.
 
         Returns:
@@ -149,13 +148,18 @@ class TrainingExecutor(Protocol):
 class ResultsConsolidator(Protocol):
     """Protocol for consolidating experiment results."""
 
-    def consolidate(self, dataset: Dataset) -> Path | None:
+    def consolidate(self, dataset: Dataset) -> str | None:
         """Consolidate checkpoint results for a dataset.
 
         Args:
             dataset: The dataset to consolidate results for.
 
         Returns:
-            Path to the consolidated results file, or None if no results.
+            URI to the consolidated results file, or None if no results.
         """
         ...
+
+
+# Backwards compatibility aliases (deprecated)
+CheckpointPathProvider = CheckpointUriProvider
+ConsolidatedResultsPathProvider = ConsolidatedResultsUriProvider

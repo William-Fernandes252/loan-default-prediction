@@ -168,7 +168,7 @@ class AnalysisPipelineFactory:
         """Initialize the factory.
 
         Args:
-            path_provider: Provider for results file paths.
+            path_provider: Provider for results file URIs (must have a 'storage' attribute).
             output_path_provider: Provider for output directory paths.
             translate: Translation function.
         """
@@ -186,7 +186,11 @@ class AnalysisPipelineFactory:
 
     def _create_loader(self) -> DataLoader:
         """Create a configured data loader."""
-        return EnrichedResultsLoader(self._path_provider, self._translate)
+        # The path_provider is expected to be a StorageManager which has a 'storage' attribute
+        storage = getattr(self._path_provider, "storage", None)
+        if storage is None:
+            raise ValueError("path_provider must have a 'storage' attribute (use StorageManager)")
+        return EnrichedResultsLoader(self._path_provider, storage, self._translate)
 
     def create(self, analysis_type: AnalysisType) -> AnalysisPipeline:
         """Create a pipeline for the given analysis type.

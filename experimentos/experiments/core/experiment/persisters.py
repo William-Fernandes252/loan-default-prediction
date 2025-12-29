@@ -1,48 +1,52 @@
 """Experiment persistence implementations for the experiment pipeline."""
 
-from pathlib import Path
 from typing import Any
 
 from loguru import logger
-import pandas as pd
+import polars as pl
 from sklearn.base import BaseEstimator
 
 from experiments.core.experiment.protocols import ExperimentContext
 from experiments.services.model_versioning import ModelVersioningService
+from experiments.services.storage import StorageService
 
 
 class ParquetExperimentPersister:
     """Persists experiment results to parquet files and models via versioning service.
 
     This implementation:
-    - Saves metrics to parquet checkpoint files
+    - Saves metrics to parquet checkpoint files using storage layer
     - Uses ModelVersioningService for model persistence
     - Manages checkpoint lifecycle (exists, discard)
     """
 
     def __init__(
         self,
+        storage: StorageService,
         model_versioning_service: ModelVersioningService | None = None,
     ) -> None:
         """Initialize the persister.
 
         Args:
+            storage: Storage service for file operations.
             model_versioning_service: Optional service for model versioning.
         """
+        self._storage = storage
         self._model_versioning_service = model_versioning_service
 
     def save_checkpoint(
         self,
         metrics: dict[str, Any],
-        checkpoint_path: Path,
+        checkpoint_uri: str,
     ) -> None:
         """Save experiment results to a checkpoint file.
 
         Args:
             metrics: Metrics dictionary to save.
-            checkpoint_path: Path to save the checkpoint.
+            checkpoint_uri: URI to save the checkpoint.
         """
-        pd.DataFrame([metrics]).to_parquet(checkpoint_path)
+        df = pl.DataFrame([metrics])
+        self._storage.write_parquet(df, checkpoint_uri)
 
     def save_model(
         self,
@@ -63,24 +67,24 @@ class ParquetExperimentPersister:
         except Exception as e:
             logger.warning(f"Model save failed: {e}")
 
-    def checkpoint_exists(self, checkpoint_path: Path) -> bool:
+    def checkpoint_exists(self, checkpoint_uri: str) -> bool:
         """Check if a checkpoint already exists.
 
         Args:
-            checkpoint_path: Path to check.
+            checkpoint_uri: URI to check.
 
         Returns:
             True if checkpoint exists.
         """
-        return checkpoint_path.exists()
+        return self._storage.exists(checkpoint_uri)
 
-    def discard_checkpoint(self, checkpoint_path: Path) -> None:
+    def discard_checkpoint(self, checkpoint_uri: str) -> None:
         """Discard an existing checkpoint.
 
         Args:
-            checkpoint_path: Path to discard.
+            checkpoint_uri: URI to discard.
         """
-        checkpoint_path.unlink(missing_ok=True)
+        self._storage.delete(checkpoint_uri)
 
 
 class CompositeExperimentPersister:
@@ -101,11 +105,11 @@ class CompositeExperimentPersister:
     def save_checkpoint(
         self,
         metrics: dict[str, Any],
-        checkpoint_path: Path,
+        checkpoint_uri: str,
     ) -> None:
         """Save checkpoint using all persisters."""
         for persister in self._persisters:
-            persister.save_checkpoint(metrics, checkpoint_path)
+            persister.save_checkpoint(metrics, checkpoint_uri)
 
     def save_model(
         self,
@@ -116,16 +120,16 @@ class CompositeExperimentPersister:
         for persister in self._persisters:
             persister.save_model(model, context)
 
-    def checkpoint_exists(self, checkpoint_path: Path) -> bool:
+    def checkpoint_exists(self, checkpoint_uri: str) -> bool:
         """Check if checkpoint exists (uses first persister)."""
         if self._persisters:
-            return self._persisters[0].checkpoint_exists(checkpoint_path)
+            return self._persisters[0].checkpoint_exists(checkpoint_uri)
         return False
 
-    def discard_checkpoint(self, checkpoint_path: Path) -> None:
+    def discard_checkpoint(self, checkpoint_uri: str) -> None:
         """Discard checkpoint using all persisters."""
         for persister in self._persisters:
-            persister.discard_checkpoint(checkpoint_path)
+            persister.discard_checkpoint(checkpoint_uri)
 
 
 __all__ = [

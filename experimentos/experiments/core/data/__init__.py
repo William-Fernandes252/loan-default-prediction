@@ -23,13 +23,15 @@ from .corporate_credit import CorporateCreditTransformer
 from .exporters import ParquetDataExporter
 from .lending_club import LendingClubTransformer
 from .loaders import CsvRawDataLoader
-from .pipeline import DataPathProvider, DataProcessingPipeline, DataProcessingPipelineFactory
+from .pipeline import DataProcessingPipeline, DataProcessingPipelineFactory
 from .protocols import (
     DataTransformer,
     InterimDataPathProvider,
+    InterimDataUriProvider,
     ProcessedDataExporter,
     RawDataLoader,
     RawDataPathProvider,
+    RawDataUriProvider,
 )
 from .taiwan_credit import TaiwanCreditTransformer
 
@@ -107,13 +109,12 @@ __all__ = [
     # Pipeline components
     "DataProcessingPipeline",
     "DataProcessingPipelineFactory",
-    # Protocols
-    "DataPathProvider",
+    # Protocols (URI-based, new names)
     "DataTransformer",
-    "InterimDataPathProvider",
+    "InterimDataUriProvider",
     "ProcessedDataExporter",
     "RawDataLoader",
-    "RawDataPathProvider",
+    "RawDataUriProvider",
     # Loaders
     "CsvRawDataLoader",
     # Transformers
@@ -128,4 +129,6 @@ __all__ = [
     "LendingClubProcessor",
     "CorporateCreditProcessor",
     "TaiwanCreditProcessor",
+    "InterimDataPathProvider",  # Deprecated alias
+    "RawDataPathProvider",  # Deprecated alias
 ]

@@ -4,12 +4,12 @@ from pathlib import Path
 import sys
 from typing import Any
 
-import joblib
 from loguru import logger
 import pandas as pd
 import typer
 
 from experiments.containers import container
+from experiments.services.storage import StorageService
 
 MODULE_NAME = "experiments.cli.predict"
 
@@ -19,14 +19,15 @@ if __name__ == "__main__":
 app = typer.Typer()
 
 
-def _find_model_path(models_dir: Path, model_id: str) -> Path:
-    """Finds the model file path by ID."""
-    # The models are stored in models_dir / dataset / model_type / technique / {id}.joblib
+def _find_model_uri(storage: StorageService, models_base_uri: str, model_id: str) -> str:
+    """Finds the model file URI by ID."""
+    # The models are stored in models_base_uri / dataset / model_type / technique / {id}.joblib
     # We search recursively.
-    matches = list(models_dir.rglob(f"{model_id}.joblib"))
+    all_files = storage.list_files(models_base_uri, pattern="**/*.joblib")
+    matches = [f for f in all_files if f.endswith(f"{model_id}.joblib")]
 
     if not matches:
-        raise FileNotFoundError(f"Model '{model_id}' not found in {models_dir}")
+        raise FileNotFoundError(f"Model '{model_id}' not found in {models_base_uri}")
 
     if len(matches) > 1:
         logger.warning(
@@ -88,14 +89,17 @@ def predict_with_model(
 ):
     """Runs predictions using a specified trained model."""
     # Resolve dependencies from container
-    path_manager = container.path_manager()
+    storage_manager = container.storage_manager()
+    storage = storage_manager.storage
+    settings = container.settings()
 
     try:
         # 1. Find and Load Model
         logger.info(f"Searching for model '{model_id}'...")
-        model_path = _find_model_path(path_manager.models_dir, model_id)
-        logger.info(f"Loading model from {model_path}")
-        model = joblib.load(model_path)
+        models_base_uri = StorageService.to_uri(settings.paths.models_dir)
+        model_uri = _find_model_uri(storage, models_base_uri, model_id)
+        logger.info(f"Loading model from {model_uri}")
+        model = storage.read_joblib(model_uri)
 
         # 2. Load Input Data
         logger.info(f"Loading input data from {input_path}")

@@ -11,24 +11,8 @@ from experiments.core.data.pipeline import (
     DataProcessingPipeline,
     DataProcessingPipelineFactory,
 )
-from experiments.core.data.protocols import (
-    InterimDataPathProvider,
-    RawDataPathProvider,
-)
-
-
-class FakeDataPathProvider:
-    """Fake implementation of DataPathProvider for testing."""
-
-    def __init__(self, raw_path: Path, interim_path: Path) -> None:
-        self._raw_path = raw_path
-        self._interim_path = interim_path
-
-    def get_raw_data_path(self, dataset_id: str) -> Path:
-        return self._raw_path / f"{dataset_id}.csv"
-
-    def get_interim_data_path(self, dataset_id: str) -> Path:
-        return self._interim_path / f"{dataset_id}.parquet"
+from experiments.services.storage import StorageService
+from experiments.services.storage.local import LocalStorageService
 
 
 @pytest.fixture
@@ -63,23 +47,15 @@ def mock_transformer(sample_dataframe: pl.DataFrame) -> MagicMock:
 def mock_exporter(tmp_path: Path) -> MagicMock:
     """Create a mock exporter."""
     exporter = MagicMock()
-    output_path = tmp_path / "output.parquet"
-    exporter.export.return_value = output_path
+    output_uri = str(tmp_path / "output.parquet")
+    exporter.export.return_value = output_uri
     return exporter
 
 
-class DescribeDataPathProvider:
-    """Tests for the DataPathProvider protocol."""
-
-    def it_satisfies_raw_data_path_provider_protocol(self, tmp_path: Path) -> None:
-        """Verify DataPathProvider extends RawDataPathProvider."""
-        provider = FakeDataPathProvider(tmp_path / "raw", tmp_path / "interim")
-        assert isinstance(provider, RawDataPathProvider)
-
-    def it_satisfies_interim_data_path_provider_protocol(self, tmp_path: Path) -> None:
-        """Verify DataPathProvider extends InterimDataPathProvider."""
-        provider = FakeDataPathProvider(tmp_path / "raw", tmp_path / "interim")
-        assert isinstance(provider, InterimDataPathProvider)
+@pytest.fixture
+def storage() -> StorageService:
+    """Create a local storage service for testing."""
+    return LocalStorageService()
 
 
 class DescribeDataProcessingPipeline:
@@ -173,47 +149,69 @@ class DescribeDataProcessingPipeline:
 class DescribeDataProcessingPipelineFactory:
     """Tests for DataProcessingPipelineFactory."""
 
-    def it_creates_pipeline_for_taiwan_credit(self, tmp_path: Path) -> None:
+    def it_creates_pipeline_for_taiwan_credit(
+        self, tmp_path: Path, storage: StorageService
+    ) -> None:
         """Verify factory creates pipeline for Taiwan Credit dataset."""
-        provider = FakeDataPathProvider(tmp_path / "raw", tmp_path / "interim")
-        factory = DataProcessingPipelineFactory(provider)
+        factory = DataProcessingPipelineFactory(
+            storage=storage,
+            raw_data_uri=str(tmp_path / "raw"),
+            interim_data_uri=str(tmp_path / "interim"),
+        )
 
         pipeline = factory.create(Dataset.TAIWAN_CREDIT)
 
         assert isinstance(pipeline, DataProcessingPipeline)
 
-    def it_creates_pipeline_for_lending_club(self, tmp_path: Path) -> None:
+    def it_creates_pipeline_for_lending_club(
+        self, tmp_path: Path, storage: StorageService
+    ) -> None:
         """Verify factory creates pipeline for Lending Club dataset."""
-        provider = FakeDataPathProvider(tmp_path / "raw", tmp_path / "interim")
-        factory = DataProcessingPipelineFactory(provider)
+        factory = DataProcessingPipelineFactory(
+            storage=storage,
+            raw_data_uri=str(tmp_path / "raw"),
+            interim_data_uri=str(tmp_path / "interim"),
+        )
 
         pipeline = factory.create(Dataset.LENDING_CLUB)
 
         assert isinstance(pipeline, DataProcessingPipeline)
 
-    def it_creates_pipeline_for_corporate_credit(self, tmp_path: Path) -> None:
+    def it_creates_pipeline_for_corporate_credit(
+        self, tmp_path: Path, storage: StorageService
+    ) -> None:
         """Verify factory creates pipeline for Corporate Credit dataset."""
-        provider = FakeDataPathProvider(tmp_path / "raw", tmp_path / "interim")
-        factory = DataProcessingPipelineFactory(provider)
+        factory = DataProcessingPipelineFactory(
+            storage=storage,
+            raw_data_uri=str(tmp_path / "raw"),
+            interim_data_uri=str(tmp_path / "interim"),
+        )
 
         pipeline = factory.create(Dataset.CORPORATE_CREDIT_RATING)
 
         assert isinstance(pipeline, DataProcessingPipeline)
 
-    def it_passes_use_gpu_to_transformer(self, tmp_path: Path) -> None:
+    def it_passes_use_gpu_to_transformer(self, tmp_path: Path, storage: StorageService) -> None:
         """Verify GPU flag is passed to transformer."""
-        provider = FakeDataPathProvider(tmp_path / "raw", tmp_path / "interim")
-        factory = DataProcessingPipelineFactory(provider, use_gpu=True)
+        factory = DataProcessingPipelineFactory(
+            storage=storage,
+            raw_data_uri=str(tmp_path / "raw"),
+            interim_data_uri=str(tmp_path / "interim"),
+            use_gpu=True,
+        )
 
         pipeline = factory.create(Dataset.TAIWAN_CREDIT)
 
         # Access the transformer through the pipeline's private attribute
         assert pipeline._transformer.use_gpu is True
 
-    def it_raises_for_unknown_dataset(self, tmp_path: Path) -> None:
+    def it_raises_for_unknown_dataset(self, tmp_path: Path, storage: StorageService) -> None:
         """Verify factory raises ValueError for unregistered datasets."""
-        provider = FakeDataPathProvider(tmp_path / "raw", tmp_path / "interim")
-        factory = DataProcessingPipelineFactory(provider)
+        factory = DataProcessingPipelineFactory(
+            storage=storage,
+            raw_data_uri=str(tmp_path / "raw"),
+            interim_data_uri=str(tmp_path / "interim"),
+        )
 
         # Create a mock dataset that's not in the registry
         mock_dataset = MagicMock()

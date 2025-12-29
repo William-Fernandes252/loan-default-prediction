@@ -24,6 +24,14 @@ from experiments.core.experiment.protocols import (
     TrainingConfig,
 )
 from experiments.core.modeling.types import ModelType, Technique
+from experiments.services.storage import StorageService
+from experiments.services.storage.local import LocalStorageService
+
+
+@pytest.fixture
+def storage() -> StorageService:
+    """Create a local storage service for testing."""
+    return LocalStorageService()
 
 
 @pytest.fixture
@@ -47,7 +55,7 @@ def sample_context(tmp_path: Path) -> ExperimentContext:
         identity=identity,
         data=data_paths,
         config=training_config,
-        checkpoint_path=tmp_path / "checkpoint.parquet",
+        checkpoint_uri=str(tmp_path / "checkpoint.parquet"),
     )
 
 
@@ -235,7 +243,7 @@ class DescribeExperimentPipelineRun:
             identity=identity,
             data=data_paths,
             config=training_config,
-            checkpoint_path=tmp_path / "checkpoint.parquet",
+            checkpoint_uri=str(tmp_path / "checkpoint.parquet"),
             discard_checkpoints=True,
         )
 
@@ -397,16 +405,16 @@ class DescribeExperimentPipelineRun:
 class DescribeExperimentPipelineFactory:
     """Tests for ExperimentPipelineFactory class."""
 
-    def it_initializes_without_versioning_service(self) -> None:
+    def it_initializes_without_versioning_service(self, storage: StorageService) -> None:
         """Verify factory works without versioning service."""
-        factory = ExperimentPipelineFactory()
+        factory = ExperimentPipelineFactory(storage=storage)
 
         assert factory._model_versioning_service is None
 
-    def it_initializes_with_versioning_service(self) -> None:
+    def it_initializes_with_versioning_service(self, storage: StorageService) -> None:
         """Verify factory stores versioning service."""
         mock_service = MagicMock()
-        factory = ExperimentPipelineFactory(model_versioning_service=mock_service)
+        factory = ExperimentPipelineFactory(storage=storage, model_versioning_service=mock_service)
 
         assert factory._model_versioning_service is mock_service
 
@@ -414,17 +422,17 @@ class DescribeExperimentPipelineFactory:
 class DescribeExperimentPipelineFactoryCreateDefaultPipeline:
     """Tests for ExperimentPipelineFactory.create_default_pipeline() method."""
 
-    def it_creates_pipeline_with_default_config(self) -> None:
+    def it_creates_pipeline_with_default_config(self, storage: StorageService) -> None:
         """Verify pipeline is created with default components."""
-        factory = ExperimentPipelineFactory()
+        factory = ExperimentPipelineFactory(storage=storage)
 
         pipeline = factory.create_default_pipeline()
 
         assert isinstance(pipeline, ExperimentPipeline)
 
-    def it_uses_custom_config_when_provided(self) -> None:
+    def it_uses_custom_config_when_provided(self, storage: StorageService) -> None:
         """Verify custom config is applied."""
-        factory = ExperimentPipelineFactory()
+        factory = ExperimentPipelineFactory(storage=storage)
         config = ExperimentPipelineConfig(test_size=0.20)
 
         with (
@@ -443,9 +451,9 @@ class DescribeExperimentPipelineFactoryCreateDefaultPipeline:
 class DescribeExperimentPipelineFactoryCreatePipeline:
     """Tests for ExperimentPipelineFactory.create_pipeline() method."""
 
-    def it_creates_pipeline_with_custom_components(self) -> None:
+    def it_creates_pipeline_with_custom_components(self, storage: StorageService) -> None:
         """Verify custom components are used."""
-        factory = ExperimentPipelineFactory()
+        factory = ExperimentPipelineFactory(storage=storage)
 
         mock_splitter = MagicMock()
         mock_trainer = MagicMock()

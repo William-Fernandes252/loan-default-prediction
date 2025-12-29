@@ -25,6 +25,7 @@ from experiments.core.experiment.splitters import StratifiedDataSplitter
 from experiments.core.experiment.trainers import GridSearchTrainer
 from experiments.core.modeling.factories import DefaultEstimatorFactory
 from experiments.services.model_versioning import ModelVersioningService
+from experiments.services.storage import StorageService
 
 
 @dataclass
@@ -84,9 +85,9 @@ class ExperimentPipeline:
             ExperimentResult with task_id, metrics, and optionally the model.
         """
         # 1. Check checkpoint
-        if self._persister.checkpoint_exists(context.checkpoint_path):
+        if self._persister.checkpoint_exists(context.checkpoint_uri):
             if context.discard_checkpoints:
-                self._persister.discard_checkpoint(context.checkpoint_path)
+                self._persister.discard_checkpoint(context.checkpoint_uri)
             else:
                 logger.info(
                     f"Skipping existing: {context.identity.dataset.id} | "
@@ -153,7 +154,7 @@ class ExperimentPipeline:
 
             # 6. Persist results
             self._persister.save_model(trained.estimator, context)
-            self._persister.save_checkpoint(metrics, context.checkpoint_path)
+            self._persister.save_checkpoint(metrics, context.checkpoint_uri)
 
             task_id = (
                 f"{context.identity.dataset.id}-"
@@ -179,16 +180,19 @@ class ExperimentPipelineFactory:
 
     def __init__(
         self,
+        storage: StorageService,
         model_versioning_service: ModelVersioningService | None = None,
         estimator_factory: EstimatorFactory | None = None,
     ) -> None:
         """Initialize the factory.
 
         Args:
+            storage: Storage service for file operations.
             model_versioning_service: Optional service for model versioning.
             estimator_factory: Optional factory for creating estimators.
                 If not provided, uses DefaultEstimatorFactory.
         """
+        self._storage = storage
         self._model_versioning_service = model_versioning_service
         self._estimator_factory = estimator_factory or DefaultEstimatorFactory()
 
@@ -216,6 +220,7 @@ class ExperimentPipelineFactory:
             ),
             evaluator=ClassificationEvaluator(),
             persister=ParquetExperimentPersister(
+                storage=self._storage,
                 model_versioning_service=self._model_versioning_service,
             ),
         )
@@ -243,6 +248,7 @@ class ExperimentPipelineFactory:
             trainer=trainer,
             evaluator=evaluator,
             persister=ParquetExperimentPersister(
+                storage=self._storage,
                 model_versioning_service=self._model_versioning_service,
             ),
         )

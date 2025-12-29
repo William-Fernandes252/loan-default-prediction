@@ -1,20 +1,12 @@
 """Service for managing experiment data, memory mapping, and result artifacts."""
 
 from contextlib import contextmanager
-import gc
-import os
-import tempfile
-from typing import TYPE_CHECKING, Generator, cast
-
-import joblib
-from loguru import logger
-import pandas as pd
-import polars as pl
+from typing import TYPE_CHECKING, Generator
 
 from experiments.core.data import Dataset
 
 if TYPE_CHECKING:
-    from experiments.services.path_manager import PathManager
+    from experiments.services.storage_manager import StorageManager
 
 
 class ExperimentDataManager:
@@ -25,115 +17,60 @@ class ExperimentDataManager:
     - Verifying existence of feature artifacts.
     - Creating efficient memory-mapped views of data for parallel processing.
     - Consolidating distributed checkpoint results into final artifacts.
+
+    This class is a thin wrapper around StorageManager that implements
+    the DataProvider protocol with URI-based operations.
     """
 
-    def __init__(self, path_manager: "PathManager"):
-        self._path_manager = path_manager
+    def __init__(self, storage_manager: "StorageManager"):
+        """Initialize with a storage manager.
+
+        Args:
+            storage_manager: Storage manager for all file operations.
+        """
+        self._storage_manager = storage_manager
 
     def artifacts_exist(self, dataset: Dataset) -> bool:
         """Checks if the necessary feature engineering artifacts exist."""
-        paths = self._path_manager.get_feature_paths(dataset.id)
-        exists = paths["X"].exists() and paths["y"].exists()
-
-        if not exists:
-            logger.warning(f"Artifacts not found for {dataset.display_name}.")
-
-        return exists
+        return self._storage_manager.artifacts_exist(dataset)
 
     def get_dataset_size_gb(self, dataset: Dataset) -> float:
         """Estimates the size of the raw dataset in GB for job calculation."""
-        raw_path = self._path_manager.get_raw_data_path(dataset.id)
-        if raw_path.exists():
-            return raw_path.stat().st_size / (1024**3)
-        return 1.0  # Default fallback
+        return self._storage_manager.get_dataset_size_gb(dataset)
 
     @contextmanager
     def feature_context(self, dataset: Dataset) -> Generator[tuple[str, str], None, None]:
         """
         Context manager that prepares data for parallel access.
 
+        Delegates to StorageManager's feature_context which handles:
         1. Loads Parquet files into memory.
         2. Dumps them to a temporary memory-mapped file (joblib format).
         3. Yields the paths to these memory maps.
         4. Cleans up temporary files and forces garbage collection on exit.
 
+        Args:
+            dataset: The dataset to load.
+
         Yields:
             tuple[str, str]: Paths to (X_mmap, y_mmap).
+
+        Raises:
+            FileNotFoundError: If feature artifacts don't exist.
         """
-        paths = self._path_manager.get_feature_paths(dataset.id)
-        x_path, y_path = paths["X"], paths["y"]
+        with self._storage_manager.feature_context(dataset) as paths:
+            yield paths
 
-        if not x_path.exists() or not y_path.exists():
-            raise FileNotFoundError(f"Data missing for {dataset.display_name}")
-
-        logger.info(f"Loading data for {dataset.display_name}...")
-
-        # Load original data into RAM
-        # Note: We convert Polars to Pandas here because joblib/sklearn
-        # integration with numpy arrays via Pandas is currently more robust for memmapping.
-        X_df = pl.read_parquet(x_path).to_pandas()
-        y_df = pl.read_parquet(y_path).to_pandas().iloc[:, 0]
-
-        # Create a temporary directory for memory mapping
-        with tempfile.TemporaryDirectory() as temp_dir:
-            X_mmap_path = os.path.join(temp_dir, "X.mmap")
-            y_mmap_path = os.path.join(temp_dir, "y.mmap")
-
-            # Dump data using joblib (optimized for numpy persistence)
-            joblib.dump(X_df.to_numpy(), X_mmap_path)
-            joblib.dump(y_df.to_numpy(), y_mmap_path)
-
-            # Quick verification load to ensure integrity
-            _ = joblib.load(X_mmap_path, mmap_mode="r")
-
-            # aggressively free the original RAM before yielding control
-            del X_df, y_df
-            gc.collect()
-
-            logger.info(f"Data memory-mapped for {dataset.display_name}")
-
-            try:
-                yield X_mmap_path, y_mmap_path
-            finally:
-                # Context exit: temp_dir cleanup handles file deletion,
-                # but explicit GC helps ensure file handles are released.
-                gc.collect()
-
-    def consolidate_results(self, dataset: Dataset) -> None:
+    def consolidate_results(self, dataset: Dataset) -> str | None:
         """
         Aggregates individual task checkpoints into a single results file.
 
-        It looks for all .parquet files in the dataset's checkpoint directory,
-        concatenates them, and saves the result to the consolidated path.
+        Delegates to StorageManager's consolidate_checkpoints method.
+
+        Args:
+            dataset: The dataset to consolidate results for.
+
+        Returns:
+            URI to the consolidated results file, or None if no checkpoints.
         """
-        # We use a sample checkpoint path to find the parent directory
-        # logic relies on structure: .../checkpoints/{dataset_id}/...
-        sample_ckpt = self._path_manager.get_checkpoint_path(dataset.id, "x", "y", 0)
-        ckpt_dir = sample_ckpt.parent
-
-        all_files = list(ckpt_dir.glob("*.parquet"))
-
-        if not all_files:
-            logger.warning(f"No results found for {dataset.display_name}")
-            return
-
-        logger.info(f"Consolidating {len(all_files)} results for {dataset.display_name}...")
-
-        frames = []
-        for fp in all_files:
-            try:
-                frames.append(pd.read_parquet(fp))
-            except Exception as e:
-                logger.warning(f"Failed to read checkpoint {fp.name}: {e}")
-
-        if frames:
-            df_final = cast(pd.DataFrame, pd.concat(frames, ignore_index=True))
-            final_output = self._path_manager.get_consolidated_results_path(dataset.id)
-
-            # Ensure results directory exists
-            final_output.parent.mkdir(parents=True, exist_ok=True)
-
-            df_final.to_parquet(final_output)
-            logger.success(f"Saved consolidated results to {final_output}")
-        else:
-            logger.warning("No valid data frames could be loaded.")
+        return self._storage_manager.consolidate_checkpoints(dataset.id)

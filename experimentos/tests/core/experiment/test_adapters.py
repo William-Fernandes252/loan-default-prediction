@@ -157,7 +157,7 @@ class DescribeCreateExperimentRunner:
         assert context.identity.seed == 123
         assert context.config.cv_folds == 10
         assert context.config.cost_grids == [{"cost": [1, 10]}]
-        assert context.checkpoint_path == checkpoint_path
+        assert context.checkpoint_uri == str(checkpoint_path)
         assert context.discard_checkpoints is True
 
     def it_runner_resolves_dataset_from_string_id(

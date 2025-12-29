@@ -1,7 +1,5 @@
 """Tests for experiments.core.experiment.protocols module."""
 
-from pathlib import Path
-
 import numpy as np
 import pytest
 from sklearn.linear_model import LogisticRegression
@@ -126,13 +124,13 @@ class DescribeExperimentContext:
             identity=identity,
             data=data_paths,
             config=training_config,
-            checkpoint_path=Path("/checkpoints/test.parquet"),
+            checkpoint_uri="/checkpoints/test.parquet",
         )
 
         assert context.identity == identity
         assert context.data == data_paths
         assert context.config == training_config
-        assert context.checkpoint_path == Path("/checkpoints/test.parquet")
+        assert context.checkpoint_uri == "/checkpoints/test.parquet"
 
         # Verify nested access works
         assert context.identity.dataset == Dataset.TAIWAN_CREDIT
@@ -165,7 +163,7 @@ class DescribeExperimentContext:
             identity=identity,
             data=data_paths,
             config=training_config,
-            checkpoint_path=Path("/checkpoints/test.parquet"),
+            checkpoint_uri="/checkpoints/test.parquet",
         )
 
         assert context.discard_checkpoints is False
@@ -191,7 +189,7 @@ class DescribeExperimentContext:
             identity=identity,
             data=data_paths,
             config=training_config,
-            checkpoint_path=Path("/checkpoints/test.parquet"),
+            checkpoint_uri="/checkpoints/test.parquet",
             discard_checkpoints=True,
         )
 
@@ -218,7 +216,7 @@ class DescribeExperimentContext:
             identity=identity,
             data=data_paths,
             config=training_config,
-            checkpoint_path=Path("/checkpoints/test.parquet"),
+            checkpoint_uri="/checkpoints/test.parquet",
         )
 
         with pytest.raises(AttributeError):
@@ -422,7 +420,7 @@ class DescribeExperimentPersisterProtocol:
             def save_checkpoint(
                 self,
                 metrics: dict,
-                checkpoint_path: Path,
+                checkpoint_uri: str,
             ) -> None:
                 pass
 
@@ -433,10 +431,10 @@ class DescribeExperimentPersisterProtocol:
             ) -> None:
                 pass
 
-            def checkpoint_exists(self, checkpoint_path: Path) -> bool:
+            def checkpoint_exists(self, checkpoint_uri: str) -> bool:
                 return False
 
-            def discard_checkpoint(self, checkpoint_path: Path) -> None:
+            def discard_checkpoint(self, checkpoint_uri: str) -> None:
                 pass
 
         persister = ValidPersister()

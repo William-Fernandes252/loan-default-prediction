@@ -12,6 +12,8 @@ from experiments.core.analysis.loaders import (
     ResultsPathProvider,
 )
 from experiments.core.data import Dataset
+from experiments.services.storage import StorageService
+from experiments.services.storage.local import LocalStorageService
 
 
 def identity_translate(s: str) -> str:
@@ -22,11 +24,11 @@ def identity_translate(s: str) -> str:
 class FakePathProvider:
     """Fake implementation of ResultsPathProvider for testing."""
 
-    def __init__(self, path: Path | None = None):
-        self._path = path
+    def __init__(self, uri: str | None = None):
+        self._uri = uri
 
-    def get_latest_consolidated_results_path(self, dataset_id: str) -> Path | None:
-        return self._path
+    def get_latest_consolidated_results_uri(self, dataset_id: str) -> str | None:
+        return self._uri
 
 
 class DescribeParquetResultsLoader:
@@ -50,14 +52,20 @@ class DescribeParquetResultsLoader:
         sample_dataframe.to_parquet(path)
         return path
 
+    @pytest.fixture
+    def storage(self) -> StorageService:
+        """Create a local storage service for testing."""
+        return LocalStorageService()
+
     def it_satisfies_results_path_provider_protocol(self):
         """Ensure FakePathProvider satisfies the protocol."""
         provider = FakePathProvider()
         assert isinstance(provider, ResultsPathProvider)
 
-    def it_loads_dataframe_from_parquet(self, results_path: Path):
+    def it_loads_dataframe_from_parquet(self, results_path: Path, storage: StorageService):
         loader = ParquetResultsLoader(
-            path_provider=FakePathProvider(results_path),
+            path_provider=FakePathProvider(str(results_path)),
+            storage=storage,
         )
 
         result = loader.load(Dataset.TAIWAN_CREDIT)
@@ -66,29 +74,34 @@ class DescribeParquetResultsLoader:
         assert len(result) == 3
         assert "accuracy_balanced" in result.columns
 
-    def it_returns_empty_dataframe_when_path_is_none(self):
+    def it_returns_empty_dataframe_when_path_is_none(self, storage: StorageService):
         loader = ParquetResultsLoader(
             path_provider=FakePathProvider(None),
+            storage=storage,
         )
 
         result = loader.load(Dataset.TAIWAN_CREDIT)
 
         assert result.empty
 
-    def it_returns_empty_dataframe_when_file_not_found(self, tmp_path: Path):
+    def it_returns_empty_dataframe_when_file_not_found(
+        self, tmp_path: Path, storage: StorageService
+    ):
         nonexistent_path = tmp_path / "nonexistent.parquet"
         loader = ParquetResultsLoader(
-            path_provider=FakePathProvider(nonexistent_path),
+            path_provider=FakePathProvider(str(nonexistent_path)),
+            storage=storage,
         )
 
         result = loader.load(Dataset.TAIWAN_CREDIT)
 
         assert result.empty
 
-    def it_does_not_add_display_columns(self, results_path: Path):
+    def it_does_not_add_display_columns(self, results_path: Path, storage: StorageService):
         """Verify that ParquetResultsLoader does not add display columns."""
         loader = ParquetResultsLoader(
-            path_provider=FakePathProvider(results_path),
+            path_provider=FakePathProvider(str(results_path)),
+            storage=storage,
         )
 
         result = loader.load(Dataset.TAIWAN_CREDIT)
@@ -96,9 +109,10 @@ class DescribeParquetResultsLoader:
         assert "model_display" not in result.columns
         assert "technique_display" not in result.columns
 
-    def it_preserves_original_columns(self, results_path: Path):
+    def it_preserves_original_columns(self, results_path: Path, storage: StorageService):
         loader = ParquetResultsLoader(
-            path_provider=FakePathProvider(results_path),
+            path_provider=FakePathProvider(str(results_path)),
+            storage=storage,
         )
 
         result = loader.load(Dataset.TAIWAN_CREDIT)
@@ -109,26 +123,28 @@ class DescribeParquetResultsLoader:
         assert "f1_score" in result.columns
         assert "seed" in result.columns
 
-    def it_handles_empty_parquet_file(self, tmp_path: Path):
+    def it_handles_empty_parquet_file(self, tmp_path: Path, storage: StorageService):
         empty_path = tmp_path / "empty.parquet"
         pd.DataFrame().to_parquet(empty_path)
 
         loader = ParquetResultsLoader(
-            path_provider=FakePathProvider(empty_path),
+            path_provider=FakePathProvider(str(empty_path)),
+            storage=storage,
         )
 
         result = loader.load(Dataset.TAIWAN_CREDIT)
 
         assert result.empty
 
-    def it_handles_corrupted_file_gracefully(self, tmp_path: Path):
+    def it_handles_corrupted_file_gracefully(self, tmp_path: Path, storage: StorageService):
         """Verify that corrupted files return empty DataFrame."""
         corrupted_path = tmp_path / "corrupted.parquet"
         # Create a corrupted file (not a valid parquet file)
         corrupted_path.write_text("This is not a valid parquet file")
 
         loader = ParquetResultsLoader(
-            path_provider=FakePathProvider(corrupted_path),
+            path_provider=FakePathProvider(str(corrupted_path)),
+            storage=storage,
         )
 
         result = loader.load(Dataset.TAIWAN_CREDIT)
@@ -245,9 +261,15 @@ class DescribeEnrichedResultsLoader:
         sample_dataframe.to_parquet(path)
         return path
 
-    def it_loads_and_enriches_dataframe(self, results_path: Path):
+    @pytest.fixture
+    def storage(self) -> StorageService:
+        """Create a local storage service for testing."""
+        return LocalStorageService()
+
+    def it_loads_and_enriches_dataframe(self, results_path: Path, storage: StorageService):
         loader = EnrichedResultsLoader(
-            path_provider=FakePathProvider(results_path),
+            path_provider=FakePathProvider(str(results_path)),
+            storage=storage,
             translate=identity_translate,
         )
 
@@ -259,9 +281,10 @@ class DescribeEnrichedResultsLoader:
         assert "model_display" in result.columns
         assert "technique_display" in result.columns
 
-    def it_returns_empty_dataframe_when_path_is_none(self):
+    def it_returns_empty_dataframe_when_path_is_none(self, storage: StorageService):
         loader = EnrichedResultsLoader(
             path_provider=FakePathProvider(None),
+            storage=storage,
             translate=identity_translate,
         )
 
@@ -269,12 +292,13 @@ class DescribeEnrichedResultsLoader:
 
         assert result.empty
 
-    def it_applies_translation_function(self, results_path: Path):
+    def it_applies_translation_function(self, results_path: Path, storage: StorageService):
         def bracket_translate(s: str) -> str:
             return f"[{s}]"
 
         loader = EnrichedResultsLoader(
-            path_provider=FakePathProvider(results_path),
+            path_provider=FakePathProvider(str(results_path)),
+            storage=storage,
             translate=bracket_translate,
         )
 
@@ -283,12 +307,13 @@ class DescribeEnrichedResultsLoader:
         # Model display should include brackets from translation
         assert result["model_display"].iloc[0].startswith("[")
 
-    def it_handles_empty_parquet_file(self, tmp_path: Path):
+    def it_handles_empty_parquet_file(self, tmp_path: Path, storage: StorageService):
         empty_path = tmp_path / "empty.parquet"
         pd.DataFrame().to_parquet(empty_path)
 
         loader = EnrichedResultsLoader(
-            path_provider=FakePathProvider(empty_path),
+            path_provider=FakePathProvider(str(empty_path)),
+            storage=storage,
             translate=identity_translate,
         )
 

@@ -1,37 +1,35 @@
 """Tests for the data protocols module."""
 
-from pathlib import Path
-
 import polars as pl
 
 from experiments.core.data import Dataset
 from experiments.core.data.protocols import (
     DataTransformer,
-    InterimDataPathProvider,
+    InterimDataUriProvider,
     ProcessedDataExporter,
     RawDataLoader,
-    RawDataPathProvider,
+    RawDataUriProvider,
 )
 
 
-class FakeRawDataPathProvider:
-    """Fake implementation of RawDataPathProvider for testing."""
+class FakeRawDataUriProvider:
+    """Fake implementation of RawDataUriProvider for testing."""
 
-    def __init__(self, base_path: Path) -> None:
-        self._base_path = base_path
+    def __init__(self, base_uri: str) -> None:
+        self._base_uri = base_uri.rstrip("/")
 
-    def get_raw_data_path(self, dataset_id: str) -> Path:
-        return self._base_path / f"{dataset_id}.csv"
+    def get_raw_data_uri(self, dataset_id: str) -> str:
+        return f"{self._base_uri}/{dataset_id}.csv"
 
 
-class FakeInterimDataPathProvider:
-    """Fake implementation of InterimDataPathProvider for testing."""
+class FakeInterimDataUriProvider:
+    """Fake implementation of InterimDataUriProvider for testing."""
 
-    def __init__(self, base_path: Path) -> None:
-        self._base_path = base_path
+    def __init__(self, base_uri: str) -> None:
+        self._base_uri = base_uri.rstrip("/")
 
-    def get_interim_data_path(self, dataset_id: str) -> Path:
-        return self._base_path / f"{dataset_id}.parquet"
+    def get_interim_data_uri(self, dataset_id: str) -> str:
+        return f"{self._base_uri}/{dataset_id}.parquet"
 
 
 class FakeRawDataLoader:
@@ -57,43 +55,43 @@ class FakeDataTransformer:
 class FakeProcessedDataExporter:
     """Fake implementation of ProcessedDataExporter for testing."""
 
-    def __init__(self, output_path: Path) -> None:
-        self._output_path = output_path
+    def __init__(self, output_uri: str) -> None:
+        self._output_uri = output_uri
         self.exported_data: pl.DataFrame | None = None
 
-    def export(self, df: pl.DataFrame, dataset: Dataset) -> Path:
+    def export(self, df: pl.DataFrame, dataset: Dataset) -> str:
         self.exported_data = df
-        return self._output_path
+        return self._output_uri
 
 
-class DescribeRawDataPathProvider:
-    """Tests for the RawDataPathProvider protocol."""
-
-    def it_satisfies_protocol_with_fake_implementation(self) -> None:
-        """Verify fake implementation satisfies the protocol."""
-        provider = FakeRawDataPathProvider(Path("/base"))
-        assert isinstance(provider, RawDataPathProvider)
-
-    def it_returns_correct_path_for_dataset(self) -> None:
-        """Verify path is constructed correctly."""
-        provider = FakeRawDataPathProvider(Path("/data/raw"))
-        path = provider.get_raw_data_path("taiwan_credit")
-        assert path == Path("/data/raw/taiwan_credit.csv")
-
-
-class DescribeInterimDataPathProvider:
-    """Tests for the InterimDataPathProvider protocol."""
+class DescribeRawDataUriProvider:
+    """Tests for the RawDataUriProvider protocol."""
 
     def it_satisfies_protocol_with_fake_implementation(self) -> None:
         """Verify fake implementation satisfies the protocol."""
-        provider = FakeInterimDataPathProvider(Path("/base"))
-        assert isinstance(provider, InterimDataPathProvider)
+        provider = FakeRawDataUriProvider("/base")
+        assert isinstance(provider, RawDataUriProvider)
 
-    def it_returns_correct_path_for_dataset(self) -> None:
-        """Verify path is constructed correctly."""
-        provider = FakeInterimDataPathProvider(Path("/data/interim"))
-        path = provider.get_interim_data_path("lending_club")
-        assert path == Path("/data/interim/lending_club.parquet")
+    def it_returns_correct_uri_for_dataset(self) -> None:
+        """Verify URI is constructed correctly."""
+        provider = FakeRawDataUriProvider("/data/raw")
+        uri = provider.get_raw_data_uri("taiwan_credit")
+        assert uri == "/data/raw/taiwan_credit.csv"
+
+
+class DescribeInterimDataUriProvider:
+    """Tests for the InterimDataUriProvider protocol."""
+
+    def it_satisfies_protocol_with_fake_implementation(self) -> None:
+        """Verify fake implementation satisfies the protocol."""
+        provider = FakeInterimDataUriProvider("/base")
+        assert isinstance(provider, InterimDataUriProvider)
+
+    def it_returns_correct_uri_for_dataset(self) -> None:
+        """Verify URI is constructed correctly."""
+        provider = FakeInterimDataUriProvider("/data/interim")
+        uri = provider.get_interim_data_uri("lending_club")
+        assert uri == "/data/interim/lending_club.parquet"
 
 
 class DescribeRawDataLoader:
@@ -141,17 +139,17 @@ class DescribeProcessedDataExporter:
 
     def it_satisfies_protocol_with_fake_implementation(self) -> None:
         """Verify fake implementation satisfies the protocol."""
-        exporter = FakeProcessedDataExporter(Path("/output/data.parquet"))
+        exporter = FakeProcessedDataExporter("/output/data.parquet")
         assert isinstance(exporter, ProcessedDataExporter)
 
-    def it_exports_dataframe_and_returns_path(self) -> None:
-        """Verify exporter stores data and returns output path."""
-        output_path = Path("/output/taiwan_credit.parquet")
-        exporter = FakeProcessedDataExporter(output_path)
+    def it_exports_dataframe_and_returns_uri(self) -> None:
+        """Verify exporter stores data and returns output URI."""
+        output_uri = "/output/taiwan_credit.parquet"
+        exporter = FakeProcessedDataExporter(output_uri)
         sample_df = pl.DataFrame({"col": [1, 2, 3]})
 
-        result_path = exporter.export(sample_df, Dataset.TAIWAN_CREDIT)
+        result_uri = exporter.export(sample_df, Dataset.TAIWAN_CREDIT)
 
-        assert result_path == output_path
+        assert result_uri == output_uri
         assert exporter.exported_data is not None
         assert exporter.exported_data.shape == (3, 1)

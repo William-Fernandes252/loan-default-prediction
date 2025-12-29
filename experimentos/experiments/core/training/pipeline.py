@@ -6,7 +6,6 @@ task generation, data loading, training execution, and results persistence.
 
 from dataclasses import dataclass, field
 import gc
-from pathlib import Path
 from typing import Any, Callable
 
 from loguru import logger
@@ -20,7 +19,7 @@ from experiments.core.training.generators import (
     TaskGeneratorConfig,
 )
 from experiments.core.training.persisters import (
-    ConsolidationPathProvider,
+    ConsolidationUriProvider,
     ParquetCheckpointPersister,
 )
 from experiments.core.training.protocols import (
@@ -29,6 +28,7 @@ from experiments.core.training.protocols import (
     ExperimentTask,
     ModelVersioningProvider,
 )
+from experiments.services.storage import StorageService
 
 
 @dataclass
@@ -63,7 +63,7 @@ class TrainingPipeline:
         data_provider: DataProvider,
         executor: BaseExecutor,
         persister: ParquetCheckpointPersister,
-        consolidation_provider: ConsolidationPathProvider,
+        consolidation_provider: ConsolidationUriProvider,
         versioning_provider: ModelVersioningProvider,
         experiment_runner: ExperimentRunner,
         config: TrainingPipelineConfig,
@@ -75,7 +75,7 @@ class TrainingPipeline:
             data_provider: Provider for training data.
             executor: Executor for running training tasks.
             persister: Persister for consolidating results.
-            consolidation_provider: Provider for checkpoint and consolidation paths.
+            consolidation_provider: Provider for checkpoint and consolidation URIs.
             versioning_provider: Provider for model versioning services.
             experiment_runner: Function to run individual experiments.
             config: Pipeline configuration.
@@ -214,14 +214,14 @@ class TrainingPipeline:
             logger.error(f"Data missing for {task.dataset.display_name}")
             return None
 
-    def consolidate(self, dataset: Dataset) -> Path | None:
+    def consolidate(self, dataset: Dataset) -> str | None:
         """Consolidate results for a dataset without running training.
 
         Args:
             dataset: The dataset to consolidate.
 
         Returns:
-            Path to consolidated results, or None if no results.
+            URI to consolidated results, or None if no results.
         """
         return self._persister.consolidate(dataset)
 
@@ -231,19 +231,22 @@ class TrainingPipelineFactory:
 
     def __init__(
         self,
+        storage: StorageService,
         data_provider: DataProvider,
-        consolidation_provider: ConsolidationPathProvider,
+        consolidation_provider: ConsolidationUriProvider,
         versioning_provider: ModelVersioningProvider,
         experiment_runner: ExperimentRunner,
     ) -> None:
         """Initialize the factory.
 
         Args:
+            storage: Storage service for file operations.
             data_provider: Provider for training data.
-            consolidation_provider: Provider for checkpoint and consolidation paths.
+            consolidation_provider: Provider for checkpoint and consolidation URIs.
             versioning_provider: Provider for model versioning services.
             experiment_runner: Function to run individual experiments.
         """
+        self._storage = storage
         self._data_provider = data_provider
         self._consolidation_provider = consolidation_provider
         self._versioning_provider = versioning_provider
@@ -270,8 +273,9 @@ class TrainingPipelineFactory:
             data_provider=self._data_provider,
             executor=ParallelExecutor(n_jobs=n_jobs),
             persister=ParquetCheckpointPersister(
-                checkpoint_path_provider=self._consolidation_provider,
-                results_path_provider=self._consolidation_provider,
+                storage=self._storage,
+                checkpoint_uri_provider=self._consolidation_provider,
+                results_uri_provider=self._consolidation_provider,
             ),
             consolidation_provider=self._consolidation_provider,
             versioning_provider=self._versioning_provider,
@@ -300,8 +304,9 @@ class TrainingPipelineFactory:
             data_provider=self._data_provider,
             executor=SequentialExecutor(),
             persister=ParquetCheckpointPersister(
-                checkpoint_path_provider=self._consolidation_provider,
-                results_path_provider=self._consolidation_provider,
+                storage=self._storage,
+                checkpoint_uri_provider=self._consolidation_provider,
+                results_uri_provider=self._consolidation_provider,
             ),
             consolidation_provider=self._consolidation_provider,
             versioning_provider=self._versioning_provider,

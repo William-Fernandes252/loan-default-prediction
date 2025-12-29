@@ -6,8 +6,7 @@ data loading, transformation, and export in a clean, composable way.
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
@@ -16,26 +15,12 @@ from experiments.core.data.corporate_credit import CorporateCreditTransformer
 from experiments.core.data.exporters import ParquetDataExporter
 from experiments.core.data.lending_club import LendingClubTransformer
 from experiments.core.data.loaders import CsvRawDataLoader
-from experiments.core.data.protocols import (
-    InterimDataPathProvider,
-    ProcessedDataExporter,
-    RawDataLoader,
-    RawDataPathProvider,
-)
+from experiments.core.data.protocols import ProcessedDataExporter, RawDataLoader
 from experiments.core.data.taiwan_credit import TaiwanCreditTransformer
 
 if TYPE_CHECKING:
     from experiments.core.data import Dataset
-
-
-class DataPathProvider(RawDataPathProvider, InterimDataPathProvider, Protocol):
-    """Combined protocol for providing both raw and interim data paths.
-
-    This protocol combines RawDataPathProvider and InterimDataPathProvider
-    for use by the DataProcessingPipelineFactory.
-    """
-
-    ...
+    from experiments.services.storage import StorageService
 
 
 class DataProcessingPipeline:
@@ -46,9 +31,9 @@ class DataProcessingPipeline:
 
     Example:
         ```python
-        loader = CsvRawDataLoader(context)
+        loader = CsvRawDataLoader(storage, raw_data_uri)
         transformer = LendingClubTransformer(use_gpu=True)
-        exporter = ParquetDataExporter(context)
+        exporter = ParquetDataExporter(storage, interim_uri)
 
         pipeline = DataProcessingPipeline(
             loader=loader,
@@ -56,7 +41,7 @@ class DataProcessingPipeline:
             exporter=exporter,
         )
 
-        output_path = pipeline.run(Dataset.LENDING_CLUB)
+        output_uri = pipeline.run(Dataset.LENDING_CLUB)
         ```
     """
 
@@ -77,14 +62,14 @@ class DataProcessingPipeline:
         self._transformer = transformer
         self._exporter = exporter
 
-    def run(self, dataset: Dataset) -> Path:
+    def run(self, dataset: Dataset) -> str:
         """Execute the pipeline for a single dataset.
 
         Args:
             dataset: The dataset to process.
 
         Returns:
-            Path to the exported processed data file.
+            URI to the exported processed data file.
         """
         logger.info(f"Processing dataset {dataset.display_name}...")
 
@@ -102,21 +87,27 @@ class DataProcessingPipeline:
 
         # Export
         logger.info("Exporting processed data...")
-        output_path = self._exporter.export(processed_df, dataset)
+        output_uri = self._exporter.export(processed_df, dataset)
 
-        logger.success(f"Processing complete: {output_path}")
-        return output_path
+        logger.success(f"Processing complete: {output_uri}")
+        return output_uri
 
 
 class DataProcessingPipelineFactory:
     """Factory for creating configured DataProcessingPipeline instances.
 
     This factory creates pipelines with the appropriate transformer
-    for each dataset, handling the wiring of loaders and exporters.
+    for each dataset, handling the wiring of loaders and exporters
+    using the storage layer.
 
     Example:
         ```python
-        factory = DataProcessingPipelineFactory(context, use_gpu=True)
+        factory = DataProcessingPipelineFactory(
+            storage=storage,
+            raw_data_uri="file:///data/raw",
+            interim_data_uri="file:///data/interim",
+            use_gpu=True,
+        )
         pipeline = factory.create(Dataset.TAIWAN_CREDIT)
         pipeline.run(Dataset.TAIWAN_CREDIT)
         ```
@@ -124,18 +115,23 @@ class DataProcessingPipelineFactory:
 
     def __init__(
         self,
-        path_provider: DataPathProvider,
+        storage: StorageService,
+        raw_data_uri: str,
+        interim_data_uri: str,
         *,
         use_gpu: bool = False,
     ) -> None:
         """Initialize the factory.
 
         Args:
-            path_provider: Provider for both raw and interim data paths.
-                Typically this is the application Context.
+            storage: Storage service for file operations.
+            raw_data_uri: Base URI for raw data files.
+            interim_data_uri: Base URI for interim data files.
             use_gpu: Whether to enable GPU acceleration for transformations.
         """
-        self._path_provider = path_provider
+        self._storage = storage
+        self._raw_data_uri = raw_data_uri
+        self._interim_data_uri = interim_data_uri
         self._use_gpu = use_gpu
 
         # Registry mapping datasets to their transformer classes
@@ -161,9 +157,9 @@ class DataProcessingPipelineFactory:
         if transformer_cls is None:
             raise ValueError(f"No transformer registered for dataset: {dataset.id}")
 
-        loader = CsvRawDataLoader(self._path_provider)
+        loader = CsvRawDataLoader(self._storage, self._raw_data_uri)
         transformer = transformer_cls(use_gpu=self._use_gpu)
-        exporter = ParquetDataExporter(self._path_provider)
+        exporter = ParquetDataExporter(self._storage, self._interim_data_uri)
 
         return DataProcessingPipeline(
             loader=loader,

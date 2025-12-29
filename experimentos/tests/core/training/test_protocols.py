@@ -9,7 +9,7 @@ import pytest
 from experiments.core.data import Dataset
 from experiments.core.modeling.types import ModelType, Technique
 from experiments.core.training.protocols import (
-    CheckpointPathProvider,
+    CheckpointUriProvider,
     DataProvider,
     ExperimentTask,
     ModelVersioningProvider,
@@ -119,40 +119,40 @@ class DescribeTaskGeneratorProtocol:
         assert not isinstance(generator, TaskGenerator)
 
 
-class DescribeCheckpointPathProviderProtocol:
-    """Tests for CheckpointPathProvider protocol."""
+class DescribeCheckpointUriProviderProtocol:
+    """Tests for CheckpointUriProvider protocol."""
 
     def it_is_runtime_checkable(self) -> None:
-        """Verify CheckpointPathProvider can be checked at runtime."""
+        """Verify CheckpointUriProvider can be checked at runtime."""
 
         class ValidProvider:
-            def get_checkpoint_path(
+            def get_checkpoint_uri(
                 self,
                 dataset_id: str,
                 model_id: str,
                 technique_id: str,
                 seed: int,
-            ) -> Path:
-                return Path("/checkpoints/test.parquet")
+            ) -> str:
+                return "/checkpoints/test.parquet"
 
         provider = ValidProvider()
-        assert isinstance(provider, CheckpointPathProvider)
+        assert isinstance(provider, CheckpointUriProvider)
 
 
-class DescribeConsolidatedResultsPathProviderProtocol:
-    """Tests for ConsolidatedResultsPathProvider protocol."""
+class DescribeConsolidatedResultsUriProviderProtocol:
+    """Tests for ConsolidatedResultsUriProvider protocol."""
 
     def it_is_runtime_checkable(self) -> None:
-        """Verify ConsolidatedResultsPathProvider can be checked at runtime."""
+        """Verify ConsolidatedResultsUriProvider can be checked at runtime."""
 
         class ValidProvider:
-            def get_consolidated_results_path(self, dataset_id: str) -> Path:
-                return Path("/results/test.parquet")
+            def get_consolidated_results_uri(self, dataset_id: str) -> str:
+                return "/results/test.parquet"
 
         provider = ValidProvider()
-        from experiments.core.training.protocols import ConsolidatedResultsPathProvider
+        from experiments.core.training.protocols import ConsolidatedResultsUriProvider
 
-        assert isinstance(provider, ConsolidatedResultsPathProvider)
+        assert isinstance(provider, ConsolidatedResultsUriProvider)
 
 
 class DescribeModelVersioningProviderProtocol:

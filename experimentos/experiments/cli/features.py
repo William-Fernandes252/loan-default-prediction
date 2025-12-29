@@ -4,14 +4,13 @@ import sys
 
 from joblib import Parallel, delayed
 from loguru import logger
-import polars as pl
 import typer
 from typing_extensions import Annotated
 
 from experiments.containers import container
 from experiments.core.data import Dataset
 from experiments.core.modeling.features import extract_features_and_target
-from experiments.services.path_manager import PathManager
+from experiments.services.storage_manager import StorageManager
 from experiments.utils.jobs import get_jobs_from_available_cpus
 from experiments.utils.overwrites import filter_items_for_processing
 
@@ -23,39 +22,39 @@ if __name__ == "__main__":
 app = typer.Typer()
 
 
-def _artifacts_exist(path_manager: PathManager, dataset: Dataset) -> bool:
-    paths = path_manager.get_feature_paths(dataset.id)
-    return any(path.exists() for path in paths.values())
+def _artifacts_exist(storage_manager: StorageManager, dataset: Dataset) -> bool:
+    uris = storage_manager.get_feature_uris(dataset.id)
+    storage = storage_manager.storage
+    return any(storage.exists(uri) for uri in uris.values())
 
 
 def _process_single_dataset(
-    path_manager: PathManager,
+    storage_manager: StorageManager,
     dataset: Dataset,
 ) -> tuple[Dataset, bool, str | None]:
     """Orchestrates the feature extraction for a single dataset."""
     try:
         logger.info(f"Preparing features (X/y) for: {dataset.display_name}")
 
-        input_path = path_manager.get_interim_data_path(dataset.id)
-        if not input_path.exists():
-            msg = f"File not found: {input_path}. Run 'experiments.cli.data' first."
+        storage = storage_manager.storage
+        input_uri = storage_manager.get_interim_data_uri(dataset.id)
+        if not storage.exists(input_uri):
+            msg = f"File not found: {input_uri}. Run 'experiments.cli.data' first."
             raise FileNotFoundError(msg)
 
         # 1. Load Intermediate Data
-        logger.info(f"Loading data from {input_path}")
-        df = pl.read_parquet(input_path, use_pyarrow=True)
+        logger.info(f"Loading data from {input_uri}")
+        df = storage.read_parquet(input_uri)
 
         # 2. Core Logic
         X_final, y_final = extract_features_and_target(df)
 
         # 3. Save Artifacts
-        artifacts = path_manager.get_feature_paths(dataset.id)
-        for path in artifacts.values():
-            path.parent.mkdir(parents=True, exist_ok=True)
+        artifacts = storage_manager.get_feature_uris(dataset.id)
 
         logger.info(f"Saving X (shape={X_final.shape}) and y (shape={y_final.shape})...")
-        X_final.write_parquet(artifacts["X"])
-        y_final.write_parquet(artifacts["y"])
+        storage.write_parquet(X_final, artifacts["X"])
+        storage.write_parquet(y_final, artifacts["y"])
 
         logger.success(f"Processed data saved for {dataset.display_name}")
         return dataset, True, None
@@ -90,14 +89,14 @@ def main(
 ):
     """Prepares full X matrices and y vectors for training."""
     # Resolve dependencies from container
-    path_manager = container.path_manager()
+    storage_manager = container.storage_manager()
 
     datasets = [dataset] if dataset is not None else list(Dataset)
 
-    # Filter using path_manager
+    # Filter using storage_manager
     datasets = filter_items_for_processing(
         datasets,
-        exists_fn=lambda ds: _artifacts_exist(path_manager, ds),
+        exists_fn=lambda ds: _artifacts_exist(storage_manager, ds),
         prompt_fn=lambda ds: f"Features for '{ds.display_name}' exist. Overwrite?",
         force=force,
         on_skip=lambda ds: logger.info(f"Skipping dataset {ds.display_name} per user choice."),
@@ -113,7 +112,7 @@ def main(
     n_jobs = get_jobs_from_available_cpus(jobs)
 
     results = Parallel(n_jobs=n_jobs, prefer="processes")(
-        delayed(_process_single_dataset)(path_manager, ds) for ds in datasets
+        delayed(_process_single_dataset)(storage_manager, ds) for ds in datasets
     )
 
     failed = [ds for ds, success, _ in results if not success]

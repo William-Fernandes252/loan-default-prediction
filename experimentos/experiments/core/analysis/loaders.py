@@ -4,7 +4,6 @@ This module provides concrete implementations of the DataLoader protocol
 for loading experimental results from various sources.
 """
 
-from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 import pandas as pd
@@ -12,14 +11,15 @@ import pandas as pd
 from experiments.core.analysis.protocols import DataLoader, TranslationFunc
 from experiments.core.data import Dataset
 from experiments.core.modeling.types import ModelType, Technique
+from experiments.services.storage import StorageService
 
 
 @runtime_checkable
 class ResultsPathProvider(Protocol):
-    """Protocol for providing paths to consolidated results."""
+    """Protocol for providing URIs to consolidated results."""
 
-    def get_latest_consolidated_results_path(self, dataset_id: str) -> Path | None:
-        """Get the path to the latest consolidated results for a dataset."""
+    def get_latest_consolidated_results_uri(self, dataset_id: str) -> str | None:
+        """Get the URI to the latest consolidated results for a dataset."""
         ...
 
 
@@ -42,22 +42,26 @@ def _get_technique_display(technique_id: str, translate: TranslationFunc) -> str
 class ParquetResultsLoader:
     """Loads experimental results from parquet files.
 
-    This loader reads consolidated results from parquet files.
+    This loader reads consolidated results from parquet files using the storage layer.
 
     Attributes:
-        path_provider: Provider for results file paths.
+        path_provider: Provider for results file URIs.
+        storage: Storage service for file operations.
     """
 
     def __init__(
         self,
         path_provider: ResultsPathProvider,
+        storage: StorageService,
     ) -> None:
         """Initialize the loader.
 
         Args:
-            path_provider: Object providing paths to results files.
+            path_provider: Object providing URIs to results files.
+            storage: Storage service for file operations.
         """
         self._path_provider = path_provider
+        self._storage = storage
 
     def load(self, dataset: Dataset) -> pd.DataFrame:
         """Load data for the given dataset.
@@ -69,17 +73,20 @@ class ParquetResultsLoader:
             A DataFrame containing the experimental results.
             Returns an empty DataFrame if no data is found.
         """
-        path = self._path_provider.get_latest_consolidated_results_path(dataset.id)
-        if path is None or not path.exists():
+        uri = self._path_provider.get_latest_consolidated_results_uri(dataset.id)
+        if uri is None or not self._storage.exists(uri):
             return pd.DataFrame()
 
         try:
-            df = pd.read_parquet(path)
-            return df
-        except (OSError, ValueError, KeyError):
-            # OSError: File read errors, corrupted files
-            # ValueError: Invalid parquet format
-            # KeyError: Missing required metadata
+            df = self._storage.read_parquet(uri)
+            # Convert Polars to Pandas for analysis compatibility
+            return df.to_pandas()
+        except Exception:
+            # Catch all exceptions from parquet reading:
+            # - OSError: File read errors, corrupted files
+            # - ValueError: Invalid parquet format
+            # - KeyError: Missing required metadata
+            # - polars.exceptions.ComputeError: Invalid parquet structure
             # Return empty DataFrame for consistency with other error cases
             return pd.DataFrame()
 
@@ -145,15 +152,17 @@ class EnrichedResultsLoader:
     def __init__(
         self,
         path_provider: ResultsPathProvider,
+        storage: StorageService,
         translate: TranslationFunc,
     ) -> None:
         """Initialize the composite loader.
 
         Args:
-            path_provider: Provider for results file paths.
+            path_provider: Provider for results file URIs.
+            storage: Storage service for file operations.
             translate: Translation function for display names.
         """
-        self._loader = ParquetResultsLoader(path_provider)
+        self._loader = ParquetResultsLoader(path_provider, storage)
         self._enricher = DisplayColumnEnricher(translate)
 
     def load(self, dataset: Dataset) -> pd.DataFrame:

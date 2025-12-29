@@ -5,7 +5,6 @@ from pathlib import Path
 import pytest
 
 from experiments.containers import Container
-from experiments.services.data_manager import ExperimentDataManager
 from experiments.services.model_versioning import ModelVersioningServiceFactory
 from experiments.services.path_manager import PathManager
 from experiments.services.resource_calculator import ResourceCalculator
@@ -106,22 +105,24 @@ class DescribeContainer:
 
             assert f1 is f2
 
-    class DescribeDataManagerProvider:
-        """Tests for data_manager provider."""
+    class DescribeStorageManagerProvider:
+        """Tests for storage_manager provider."""
 
-        def it_provides_data_manager(self, container: Container) -> None:
-            """Verify provides ExperimentDataManager instance."""
-            dm = container.data_manager()
+        def it_provides_storage_manager(self, container: Container) -> None:
+            """Verify provides StorageManager instance."""
+            sm = container.storage_manager()
 
-            assert isinstance(dm, ExperimentDataManager)
+            from experiments.services.storage_manager import StorageManager
 
-        def it_creates_new_instance_each_call(self, container: Container) -> None:
-            """Verify data_manager is a factory (new instance each call)."""
-            dm1 = container.data_manager()
-            dm2 = container.data_manager()
+            assert isinstance(sm, StorageManager)
 
-            # Factory provider creates new instances
-            assert dm1 is not dm2
+        def it_provides_singleton_storage_manager(self, container: Container) -> None:
+            """Verify storage_manager is a singleton."""
+            sm1 = container.storage_manager()
+            sm2 = container.storage_manager()
+
+            # Singleton provider returns same instance
+            assert sm1 is sm2
 
     class DescribeOverrides:
         """Tests for provider overrides."""
@@ -150,23 +151,27 @@ class DescribeContainer:
     class DescribeReset:
         """Tests for container reset functionality."""
 
-        def it_can_reset_factory_provider_overrides(self) -> None:
-            """Verify factory provider overrides can be reset."""
+        def it_can_reset_singleton_provider_overrides(self) -> None:
+            """Verify singleton provider overrides can be reset."""
             container = Container()
 
-            # Create a mock data manager
-            mock_dm = ExperimentDataManager(PathManager(PathSettings()))
+            from experiments.services.storage import LocalStorageService
+            from experiments.services.storage_manager import StorageManager
 
-            # Override data_manager (factory provider)
-            container.data_manager.override(mock_dm)
+            # Create a mock storage manager
+            storage = LocalStorageService()
+            mock_sm = StorageManager(storage, PathSettings())
+
+            # Override storage_manager (singleton provider)
+            container.storage_manager.override(mock_sm)
 
             # Verify override is in effect
-            assert container.data_manager() is mock_dm
+            assert container.storage_manager() is mock_sm
 
             # Reset the override using reset_override()
-            container.data_manager.reset_override()
+            container.storage_manager.reset_override()
 
             # After reset, should create new instance (not the mock)
-            new_dm = container.data_manager()
-            assert new_dm is not mock_dm
-            assert isinstance(new_dm, ExperimentDataManager)
+            new_sm = container.storage_manager()
+            assert new_sm is not mock_sm
+            assert isinstance(new_sm, StorageManager)

@@ -4,6 +4,7 @@ This module defines the ExperimentsSettings class which loads configuration
 from environment variables and .env files using pydantic-settings.
 """
 
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,80 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 def _get_project_root() -> Path:
     """Get the project root directory."""
     return Path(__file__).resolve().parents[1]
+
+
+class StorageProvider(str, Enum):
+    """Storage provider type."""
+
+    LOCAL = "local"
+    S3 = "s3"
+    GCS = "gcs"
+
+
+class StorageSettings(BaseSettings):
+    """Storage-related settings."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="EXPERIMENTS_STORAGE_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    provider: StorageProvider = Field(
+        default=StorageProvider.LOCAL,
+        description="Storage provider: 'local', 's3', or 'gcs'",
+    )
+
+    # S3-specific settings
+    s3_bucket: str | None = Field(
+        default=None,
+        description="S3 bucket name",
+    )
+    s3_prefix: str = Field(
+        default="",
+        description="S3 prefix for all paths",
+    )
+    s3_region: str | None = Field(
+        default=None,
+        description="AWS region for S3",
+    )
+    s3_endpoint_url: str | None = Field(
+        default=None,
+        description="Custom S3 endpoint URL (for S3-compatible services)",
+    )
+    s3_access_key_id: str | None = Field(
+        default=None,
+        description="AWS access key ID (optional, uses default credentials if not set)",
+    )
+    s3_secret_access_key: str | None = Field(
+        default=None,
+        description="AWS secret access key",
+    )
+
+    # GCS-specific settings
+    gcs_bucket: str | None = Field(
+        default=None,
+        description="GCS bucket name",
+    )
+    gcs_prefix: str = Field(
+        default="",
+        description="GCS prefix for all paths",
+    )
+    gcs_project: str | None = Field(
+        default=None,
+        description="GCP project ID",
+    )
+    gcs_credentials_file: str | None = Field(
+        default=None,
+        description="Path to GCS credentials JSON file",
+    )
+
+    # Local cache settings (for cloud storage)
+    cache_dir: Path | None = Field(
+        default=None,
+        description="Local cache directory for cloud storage operations",
+    )
 
 
 class PathSettings(BaseSettings):
@@ -118,3 +193,4 @@ class ExperimentsSettings(BaseSettings):
     paths: PathSettings = Field(default_factory=PathSettings)
     experiment: ExperimentSettings = Field(default_factory=ExperimentSettings)
     resources: ResourceSettings = Field(default_factory=ResourceSettings)
+    storage: StorageSettings = Field(default_factory=StorageSettings)
