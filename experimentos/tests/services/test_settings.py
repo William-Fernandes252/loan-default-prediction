@@ -109,13 +109,13 @@ class DescribeExperimentSettings:
 
         def it_loads_cv_folds_from_env(self) -> None:
             """Verify cv_folds can be set via environment variable."""
-            with patch.dict(os.environ, {"EXPERIMENTS_CV_FOLDS": "10"}):
+            with patch.dict(os.environ, {"LDP_CV_FOLDS": "10"}):
                 settings = ExperimentSettings()
                 assert settings.cv_folds == 10
 
         def it_loads_num_seeds_from_env(self) -> None:
             """Verify num_seeds can be set via environment variable."""
-            with patch.dict(os.environ, {"EXPERIMENTS_NUM_SEEDS": "50"}):
+            with patch.dict(os.environ, {"LDP_NUM_SEEDS": "50"}):
                 settings = ExperimentSettings()
                 assert settings.num_seeds == 50
 
@@ -141,13 +141,13 @@ class DescribeResourceSettings:
 
         def it_loads_safety_factor_from_env(self) -> None:
             """Verify safety_factor can be set via environment variable."""
-            with patch.dict(os.environ, {"EXPERIMENTS_SAFETY_FACTOR": "5.0"}):
+            with patch.dict(os.environ, {"LDP_SAFETY_FACTOR": "5.0"}):
                 settings = ResourceSettings()
                 assert settings.safety_factor == 5.0
 
         def it_loads_use_gpu_from_env(self) -> None:
             """Verify use_gpu can be set via environment variable."""
-            with patch.dict(os.environ, {"EXPERIMENTS_USE_GPU": "true"}):
+            with patch.dict(os.environ, {"LDP_USE_GPU": "true"}):
                 settings = ResourceSettings()
                 assert settings.use_gpu is True
 

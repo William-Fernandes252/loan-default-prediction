@@ -29,7 +29,7 @@ class StorageSettings(BaseSettings):
     """Storage-related settings."""
 
     model_config = SettingsConfigDict(
-        env_prefix="EXPERIMENTS_STORAGE_",
+        env_prefix="LDP_STORAGE_",
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
@@ -95,7 +95,7 @@ class PathSettings(BaseSettings):
     """Path-related settings."""
 
     model_config = SettingsConfigDict(
-        env_prefix="EXPERIMENTS_",
+        env_prefix="LDP_",
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
@@ -144,7 +144,7 @@ class ExperimentSettings(BaseSettings):
     """Experiment-related settings."""
 
     model_config = SettingsConfigDict(
-        env_prefix="EXPERIMENTS_",
+        env_prefix="LDP_",
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
@@ -167,7 +167,7 @@ class ResourceSettings(BaseSettings):
     """Resource-related settings."""
 
     model_config = SettingsConfigDict(
-        env_prefix="EXPERIMENTS_",
+        env_prefix="LDP_",
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
@@ -184,7 +184,7 @@ class ExperimentsSettings(BaseSettings):
     """Root settings class that composes all settings groups."""
 
     model_config = SettingsConfigDict(
-        env_prefix="EXPERIMENTS_",
+        env_prefix="LDP_",
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
