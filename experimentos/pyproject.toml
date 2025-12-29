@@ -26,6 +26,7 @@ dependencies = [
   "loguru",
   "matplotlib>=3.10.7",
   "mkdocs",
+  "mkdocs-material",
   "mypy>=1.18.2",
   "pandas>=2.3.2",
   "pip",

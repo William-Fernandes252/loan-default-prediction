@@ -15,7 +15,7 @@ Loan default prediction training and analysis.
 │   ├── interim        <- Intermediate data that has been transformed.
 │   ├── processed      <- The final, canonical data sets for modeling.
 │   └── raw            <- The original, immutable data dump.
-├── docs               <- Documentation files (MkDocs).
+├── docs               <- Documentation files (MkDocs). See [docs/README.md](docs/README.md) for details.
 ├── experiments        <- Source code for use in this project.
 │   ├── __init__.py
 │   ├── settings.py    <- Application settings using Pydantic Settings

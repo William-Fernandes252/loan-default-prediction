@@ -62,6 +62,17 @@ compile-i18n:
 	$(PYTHON_INTERPRETER) compile_i18n.py
 
 
+## Build documentation
+.PHONY: docs-build
+docs-build:
+	uv run mkdocs build -f docs/mkdocs.yml
+
+## Serve documentation
+.PHONY: docs-serve
+docs-serve:
+	uv run mkdocs serve -f docs/mkdocs.yml
+
+
 #################################################################################
 # PROJECT RULES                                                                 #
 #################################################################################
