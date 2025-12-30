@@ -418,17 +418,29 @@ class StorageManager:
         self,
         dataset: "Dataset",
     ) -> Generator[tuple[str, str], None, None]:
-        """Context manager that prepares data for parallel access.
+        """Context manager that prepares data for parallel access with lifecycle safety.
+
+        This context manager ensures proper cleanup of memory-mapped data:
 
         1. Loads Parquet files into memory via storage layer.
         2. Dumps them to a temporary memory-mapped file (joblib format).
         3. Yields the paths to these memory maps.
-        4. Cleans up temporary files and forces garbage collection on exit.
+        4. Automatically cleans up temporary files on context exit.
+
+        **IMPORTANT - Memory Management:**
+        - Consumers MUST NOT copy data; use array slicing to create views.
+        - Example: `X_train = X_mmap[indices]` creates a view, NOT a copy.
+        - Views remain valid only while this context is active.
+        - The context manager ensures mmap files are unlocked and deleted on exit.
+        - Do NOT store references to mmap arrays beyond this context's scope.
 
         For cloud storage, files are first downloaded to local cache.
 
         Yields:
             tuple[str, str]: Paths to (X_mmap, y_mmap).
+
+        Raises:
+            FileNotFoundError: If feature artifacts don't exist.
         """
         uris = self.get_feature_uris(dataset.id)
 
@@ -463,8 +475,8 @@ class StorageManager:
             try:
                 yield X_mmap_path, y_mmap_path
             finally:
-                # Context exit: temp_dir cleanup handles file deletion,
-                # but explicit GC helps ensure file handles are released.
+                # Context exit: temp_dir cleanup handles file deletion.
+                # GC helps ensure file handles are released for proper unlink.
                 gc.collect()
 
     def get_dataset_size_gb(self, dataset: "Dataset") -> float:

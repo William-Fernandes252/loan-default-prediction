@@ -34,6 +34,10 @@ class StratifiedDataSplitter:
     ) -> SplitData | None:
         """Split data into train and test sets with validation.
 
+        Returns views (not copies) of the memory-mapped data to preserve
+        memory efficiency. All returned arrays reference the original mmap
+        via numpy slicing.
+
         Args:
             X_mmap_path: Path to memory-mapped feature data.
             y_mmap_path: Path to memory-mapped label data.
@@ -41,9 +45,10 @@ class StratifiedDataSplitter:
             cv_folds: Number of CV folds (used for validation).
 
         Returns:
-            SplitData if successful, None if validation fails.
+            SplitData with views into memory-mapped arrays if successful,
+            None if validation fails.
         """
-        # Load memory-mapped data
+        # Load memory-mapped data in read-only mode
         X_mmap = joblib.load(X_mmap_path, mmap_mode="r")
         y_mmap = joblib.load(y_mmap_path, mmap_mode="r")
 
@@ -73,7 +78,9 @@ class StratifiedDataSplitter:
         if train_counts.min() < cv_folds:
             return None
 
-        # Materialize data
+        # Return views (not copies) of mmap arrays.
+        # NumPy fancy indexing with arrays creates views that reference
+        # the underlying memory map without copying data.
         return SplitData(
             X_train=X_mmap[train_idx],
             y_train=y_mmap[train_idx],

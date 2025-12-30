@@ -5,7 +5,6 @@ data splitting, model training, evaluation, and persistence for a single experim
 """
 
 from dataclasses import dataclass
-import gc
 import traceback
 from typing import Any
 
@@ -140,10 +139,10 @@ class ExperimentPipeline:
                 context.config.cost_grids,
             )
 
-            # Free training memory immediately
+            # Keep references to test data; training data goes out of scope
+            # after trainer.train() completes. All arrays are views into
+            # memory-mapped data, so we avoid copying.
             X_test, y_test = data.X_test, data.y_test
-            del data.X_train, data.y_train
-            gc.collect()
 
             # 4. Evaluate model
             evaluation = self._evaluator.evaluate(trained.estimator, X_test, y_test)
@@ -184,9 +183,6 @@ class ExperimentPipeline:
         except Exception:
             logger.error(f"Failed task: {traceback.format_exc()}")
             return ExperimentResult(task_id=None, metrics={})
-
-        finally:
-            gc.collect()
 
 
 def create_experiment_pipeline(
