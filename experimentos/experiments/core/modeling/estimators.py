@@ -10,6 +10,16 @@ from sklearn.svm import SVC
 from sklearn.utils.class_weight import compute_class_weight
 from xgboost import XGBClassifier
 
+try:
+    import cuml
+    from cuml.svm import SVC as CuSVC
+
+    cuml.set_global_output_type("numpy")
+
+    HAS_CUML = True
+except ImportError:
+    HAS_CUML = False
+
 
 class _ProbabilityMatrixClassesCorrectionMixin:
     @staticmethod
@@ -47,6 +57,22 @@ class RobustSVC(_ProbabilityMatrixClassesCorrectionMixin, SVC):
     def predict_proba(self, X):
         probas = super().predict_proba(X)
         return self._ensure_two_classes(probas, self.classes_)
+
+
+if HAS_CUML:
+
+    class RobustCuSVC(_ProbabilityMatrixClassesCorrectionMixin, CuSVC):
+        """GPU-accelerated Robust SVC using RAPIDS cuML."""
+
+        def predict_proba(self, X):
+            probas = super().predict_proba(X)
+
+            # Convert to numpy for the Mixin logic (which uses np.zeros/np.where)
+            # This ensures compatibility with the rest of your scikit-learn pipeline
+            if hasattr(probas, "get"):
+                probas = probas.get()
+
+            return self._ensure_two_classes(probas, self.classes_)
 
 
 class RobustXGBClassifier(_ProbabilityMatrixClassesCorrectionMixin, XGBClassifier):

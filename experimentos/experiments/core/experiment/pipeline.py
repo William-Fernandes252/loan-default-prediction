@@ -24,7 +24,9 @@ from experiments.core.experiment.protocols import (
 from experiments.core.experiment.splitters import StratifiedDataSplitter
 from experiments.core.experiment.trainers import GridSearchTrainer
 from experiments.core.modeling.factories import DefaultEstimatorFactory
-from experiments.services.model_versioning import ModelVersioningService
+from experiments.services.model_versioning import (
+    ModelVersioningServiceFactory,
+)
 from experiments.services.storage import StorageService
 
 
@@ -181,19 +183,19 @@ class ExperimentPipelineFactory:
     def __init__(
         self,
         storage: StorageService,
-        model_versioning_service: ModelVersioningService | None = None,
+        model_versioning_service_factory: ModelVersioningServiceFactory | None = None,
         estimator_factory: EstimatorFactory | None = None,
     ) -> None:
         """Initialize the factory.
 
         Args:
             storage: Storage service for file operations.
-            model_versioning_service: Optional service for model versioning.
+            model_versioning_service_factory: Optional factory for model versioning services.
             estimator_factory: Optional factory for creating estimators.
                 If not provided, uses DefaultEstimatorFactory.
         """
         self._storage = storage
-        self._model_versioning_service = model_versioning_service
+        self._model_versioning_service_factory = model_versioning_service_factory
         self._estimator_factory = estimator_factory or DefaultEstimatorFactory()
 
     def create_default_pipeline(
@@ -221,7 +223,7 @@ class ExperimentPipelineFactory:
             evaluator=ClassificationEvaluator(),
             persister=ParquetExperimentPersister(
                 storage=self._storage,
-                model_versioning_service=self._model_versioning_service,
+                model_versioning_service_factory=self._model_versioning_service_factory,
             ),
         )
 
@@ -249,7 +251,7 @@ class ExperimentPipelineFactory:
             evaluator=evaluator,
             persister=ParquetExperimentPersister(
                 storage=self._storage,
-                model_versioning_service=self._model_versioning_service,
+                model_versioning_service_factory=self._model_versioning_service_factory,
             ),
         )
 

@@ -76,16 +76,16 @@ class DescribeParquetExperimentPersister:
         """Verify persister can be initialized without versioning service."""
         persister = ParquetExperimentPersister(storage=storage)
 
-        assert persister._model_versioning_service is None
+        assert persister._model_versioning_service_factory is None
 
-    def it_initializes_with_versioning_service(self, storage: StorageService) -> None:
-        """Verify persister stores versioning service."""
-        mock_service = MagicMock()
+    def it_initializes_with_versioning_service_factory(self, storage: StorageService) -> None:
+        """Verify persister stores versioning service factory."""
+        mock_factory = MagicMock()
         persister = ParquetExperimentPersister(
-            storage=storage, model_versioning_service=mock_service
+            storage=storage, model_versioning_service_factory=mock_factory
         )
 
-        assert persister._model_versioning_service is mock_service
+        assert persister._model_versioning_service_factory is mock_factory
 
 
 class DescribeParquetExperimentPersisterSaveCheckpoint:
@@ -141,32 +141,43 @@ class DescribeParquetExperimentPersisterSaveModel:
         # Should not raise
         persister.save_model(model, sample_context)
 
-    def it_calls_versioning_service_save(
+    def it_calls_versioning_factory_to_create_service(
         self,
         sample_context: ExperimentContext,
         storage: StorageService,
     ) -> None:
-        """Verify versioning service save_model is called."""
+        """Verify factory is used to create versioning service and save model."""
         mock_service = MagicMock()
+        mock_factory = MagicMock()
+        mock_factory.get_model_versioning_service.return_value = mock_service
+
         persister = ParquetExperimentPersister(
-            storage=storage, model_versioning_service=mock_service
+            storage=storage, model_versioning_service_factory=mock_factory
         )
         model = LogisticRegression()
 
         persister.save_model(model, sample_context)
 
+        # Verify factory was called with correct parameters
+        mock_factory.get_model_versioning_service.assert_called_once_with(
+            dataset_id=sample_context.identity.dataset.id,
+            model_type=sample_context.identity.model_type,
+            technique=sample_context.identity.technique,
+        )
+        # Verify service save_model was called
         mock_service.save_model.assert_called_once_with(model, None)
 
-    def it_handles_versioning_service_errors_gracefully(
+    def it_handles_versioning_factory_errors_gracefully(
         self,
         sample_context: ExperimentContext,
         storage: StorageService,
     ) -> None:
-        """Verify errors from versioning service are caught."""
-        mock_service = MagicMock()
-        mock_service.save_model.side_effect = RuntimeError("Save failed")
+        """Verify errors from versioning factory/service are caught."""
+        mock_factory = MagicMock()
+        mock_factory.get_model_versioning_service.side_effect = RuntimeError("Factory failed")
+
         persister = ParquetExperimentPersister(
-            storage=storage, model_versioning_service=mock_service
+            storage=storage, model_versioning_service_factory=mock_factory
         )
         model = LogisticRegression()
 

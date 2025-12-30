@@ -16,6 +16,7 @@ from experiments.core.experiment import (
     ExperimentPipelineFactory,
     create_experiment_runner,
 )
+from experiments.core.modeling.factories import DefaultEstimatorFactory
 from experiments.core.training import TrainingPipelineConfig, TrainingPipelineFactory
 from experiments.services.model_versioning import ModelVersioningServiceFactory
 from experiments.services.path_manager import PathManager
@@ -200,6 +201,13 @@ class Container(containers.DeclarativeContainer):
         use_gpu=settings.provided.resources.use_gpu,
     )
 
+    # --- Estimator Factory ---
+
+    estimator_factory = providers.Singleton(
+        DefaultEstimatorFactory,
+        use_gpu=settings.provided.resources.use_gpu,
+    )
+
     # --- Experiment Pipeline ---
 
     experiment_pipeline_config = providers.Factory(ExperimentPipelineConfig)
@@ -207,6 +215,8 @@ class Container(containers.DeclarativeContainer):
     experiment_pipeline_factory = providers.Singleton(
         ExperimentPipelineFactory,
         storage=storage_service,
+        model_versioning_service_factory=model_versioning_factory,
+        estimator_factory=estimator_factory,
     )
 
     experiment_pipeline = providers.Factory(

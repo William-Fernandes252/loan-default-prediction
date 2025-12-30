@@ -405,18 +405,20 @@ class DescribeExperimentPipelineRun:
 class DescribeExperimentPipelineFactory:
     """Tests for ExperimentPipelineFactory class."""
 
-    def it_initializes_without_versioning_service(self, storage: StorageService) -> None:
-        """Verify factory works without versioning service."""
+    def it_initializes_without_versioning_service_factory(self, storage: StorageService) -> None:
+        """Verify factory works without versioning service factory."""
         factory = ExperimentPipelineFactory(storage=storage)
 
-        assert factory._model_versioning_service is None
+        assert factory._model_versioning_service_factory is None
 
-    def it_initializes_with_versioning_service(self, storage: StorageService) -> None:
-        """Verify factory stores versioning service."""
-        mock_service = MagicMock()
-        factory = ExperimentPipelineFactory(storage=storage, model_versioning_service=mock_service)
+    def it_initializes_with_versioning_service_factory(self, storage: StorageService) -> None:
+        """Verify factory stores versioning service factory."""
+        mock_factory = MagicMock()
+        factory = ExperimentPipelineFactory(
+            storage=storage, model_versioning_service_factory=mock_factory
+        )
 
-        assert factory._model_versioning_service is mock_service
+        assert factory._model_versioning_service_factory is mock_factory
 
 
 class DescribeExperimentPipelineFactoryCreateDefaultPipeline:

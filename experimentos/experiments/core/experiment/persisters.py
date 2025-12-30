@@ -7,7 +7,9 @@ import polars as pl
 from sklearn.base import BaseEstimator
 
 from experiments.core.experiment.protocols import ExperimentContext
-from experiments.services.model_versioning import ModelVersioningService
+from experiments.services.model_versioning import (
+    ModelVersioningServiceFactory,
+)
 from experiments.services.storage import StorageService
 
 
@@ -23,16 +25,16 @@ class ParquetExperimentPersister:
     def __init__(
         self,
         storage: StorageService,
-        model_versioning_service: ModelVersioningService | None = None,
+        model_versioning_service_factory: ModelVersioningServiceFactory | None = None,
     ) -> None:
         """Initialize the persister.
 
         Args:
             storage: Storage service for file operations.
-            model_versioning_service: Optional service for model versioning.
+            model_versioning_service_factory: Optional factory for model versioning services.
         """
         self._storage = storage
-        self._model_versioning_service = model_versioning_service
+        self._model_versioning_service_factory = model_versioning_service_factory
 
     def save_checkpoint(
         self,
@@ -57,13 +59,21 @@ class ParquetExperimentPersister:
 
         Args:
             model: The trained model to save.
-            context: Experiment context (unused but available for metadata).
+            context: Experiment context containing dataset, model type, and technique.
         """
-        if self._model_versioning_service is None:
+        if self._model_versioning_service_factory is None:
             return
 
         try:
-            self._model_versioning_service.save_model(model, None)
+            # Create specific versioning service for this experiment
+            versioning_service = (
+                self._model_versioning_service_factory.get_model_versioning_service(
+                    dataset_id=context.identity.dataset.id,
+                    model_type=context.identity.model_type,
+                    technique=context.identity.technique,
+                )
+            )
+            versioning_service.save_model(model, None)
         except Exception as e:
             logger.warning(f"Model save failed: {e}")
 
