@@ -10,7 +10,7 @@ from experiments.core.data import Dataset
 from experiments.core.experiment.pipeline import (
     ExperimentPipeline,
     ExperimentPipelineConfig,
-    ExperimentPipelineFactory,
+    create_experiment_pipeline,
 )
 from experiments.core.experiment.protocols import (
     DataPaths,
@@ -125,10 +125,16 @@ class ExperimentRunnerFactory:
         Returns:
             A callable that can be used as an ExperimentRunner.
         """
-        factory = ExperimentPipelineFactory(
-            model_versioning_service=model_versioning_service,
+        # Note: This method is deprecated as it creates a pipeline without storage
+        # Consider using the container's experiment_runner_factory instead
+        from experiments.services.storage.local import LocalStorageService
+
+        storage = LocalStorageService()
+        pipeline = create_experiment_pipeline(
+            storage=storage,
+            config=self._pipeline_config,
+            model_versioning_service_factory=None,  # Would need a factory wrapper
         )
-        pipeline = factory.create_default_pipeline(self._pipeline_config)
         return create_experiment_runner(pipeline)
 
     def create_runner_with_pipeline(

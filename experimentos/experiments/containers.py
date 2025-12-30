@@ -13,7 +13,7 @@ from loguru import logger
 from experiments.core.data import DataProcessingPipelineFactory
 from experiments.core.experiment import (
     ExperimentPipelineConfig,
-    ExperimentPipelineFactory,
+    create_experiment_pipeline,
     create_experiment_runner,
 )
 from experiments.core.modeling.factories import DefaultEstimatorFactory
@@ -212,23 +212,29 @@ class Container(containers.DeclarativeContainer):
 
     experiment_pipeline_config = providers.Factory(ExperimentPipelineConfig)
 
-    experiment_pipeline_factory = providers.Singleton(
-        ExperimentPipelineFactory,
+    experiment_pipeline = providers.Factory(
+        create_experiment_pipeline,
         storage=storage_service,
+        config=experiment_pipeline_config,
         model_versioning_service_factory=model_versioning_factory,
         estimator_factory=estimator_factory,
     )
 
-    experiment_pipeline = providers.Factory(
-        experiment_pipeline_factory.provided.create_default_pipeline,
-        config=experiment_pipeline_config,
-    )
-
     experiment_runner_factory = providers.Factory(
-        lambda pipeline_factory, config_factory: lambda n_jobs_inner: create_experiment_runner(
-            pipeline_factory.create_default_pipeline(config_factory(n_jobs_inner=n_jobs_inner))
+        lambda storage,
+        mvs_factory,
+        est_factory,
+        config_factory: lambda n_jobs_inner: create_experiment_runner(
+            create_experiment_pipeline(
+                storage=storage,
+                config=config_factory(n_jobs_inner=n_jobs_inner),
+                model_versioning_service_factory=mvs_factory,
+                estimator_factory=est_factory,
+            )
         ),
-        pipeline_factory=experiment_pipeline_factory,
+        storage=storage_service,
+        mvs_factory=model_versioning_factory,
+        est_factory=estimator_factory,
         config_factory=providers.Factory(ExperimentPipelineConfig),
     )
 

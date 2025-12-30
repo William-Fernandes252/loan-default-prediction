@@ -200,23 +200,3 @@ class DescribeContainer:
 
             # Factory should be configured with the use_gpu setting
             assert factory._use_gpu == settings.resources.use_gpu
-
-    class DescribeExperimentPipelineFactoryProvider:
-        """Tests for experiment_pipeline_factory provider."""
-
-        def it_provides_experiment_pipeline_factory(self, container: Container) -> None:
-            """Verify provides ExperimentPipelineFactory instance."""
-            from experiments.core.experiment.pipeline import ExperimentPipelineFactory
-
-            factory = container.experiment_pipeline_factory()
-            assert isinstance(factory, ExperimentPipelineFactory)
-
-        def it_injects_model_versioning_service_factory(self, container: Container) -> None:
-            """Verify model versioning service factory is injected."""
-            factory = container.experiment_pipeline_factory()
-
-            # Should have injected the model versioning service factory
-            assert factory._model_versioning_service_factory is not None
-            assert isinstance(
-                factory._model_versioning_service_factory, ModelVersioningServiceFactory
-            )

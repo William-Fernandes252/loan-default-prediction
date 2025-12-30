@@ -11,7 +11,8 @@ from experiments.core.data import Dataset
 from experiments.core.experiment.pipeline import (
     ExperimentPipeline,
     ExperimentPipelineConfig,
-    ExperimentPipelineFactory,
+    create_custom_experiment_pipeline,
+    create_experiment_pipeline,
 )
 from experiments.core.experiment.protocols import (
     DataPaths,
@@ -402,39 +403,21 @@ class DescribeExperimentPipelineRun:
         assert result.metrics == {}
 
 
-class DescribeExperimentPipelineFactory:
-    """Tests for ExperimentPipelineFactory class."""
+class DescribeCreateExperimentPipeline:
+    """Tests for create_experiment_pipeline() function."""
 
-    def it_initializes_without_versioning_service_factory(self, storage: StorageService) -> None:
-        """Verify factory works without versioning service factory."""
-        factory = ExperimentPipelineFactory(storage=storage)
-
-        assert factory._model_versioning_service_factory is None
-
-    def it_initializes_with_versioning_service_factory(self, storage: StorageService) -> None:
-        """Verify factory stores versioning service factory."""
-        mock_factory = MagicMock()
-        factory = ExperimentPipelineFactory(
-            storage=storage, model_versioning_service_factory=mock_factory
-        )
-
-        assert factory._model_versioning_service_factory is mock_factory
-
-
-class DescribeExperimentPipelineFactoryCreateDefaultPipeline:
-    """Tests for ExperimentPipelineFactory.create_default_pipeline() method."""
-
-    def it_creates_pipeline_with_default_config(self, storage: StorageService) -> None:
-        """Verify pipeline is created with default components."""
-        factory = ExperimentPipelineFactory(storage=storage)
-
-        pipeline = factory.create_default_pipeline()
+    def it_creates_pipeline_with_storage(self, storage: StorageService) -> None:
+        """Verify pipeline is created with required storage."""
+        pipeline = create_experiment_pipeline(storage=storage)
 
         assert isinstance(pipeline, ExperimentPipeline)
+        assert pipeline._splitter is not None
+        assert pipeline._trainer is not None
+        assert pipeline._evaluator is not None
+        assert pipeline._persister is not None
 
     def it_uses_custom_config_when_provided(self, storage: StorageService) -> None:
         """Verify custom config is applied."""
-        factory = ExperimentPipelineFactory(storage=storage)
         config = ExperimentPipelineConfig(test_size=0.20)
 
         with (
@@ -445,23 +428,47 @@ class DescribeExperimentPipelineFactoryCreateDefaultPipeline:
             patch("experiments.core.experiment.pipeline.ClassificationEvaluator"),
             patch("experiments.core.experiment.pipeline.ParquetExperimentPersister"),
         ):
-            factory.create_default_pipeline(config)
+            create_experiment_pipeline(storage=storage, config=config)
 
             mock_splitter_class.assert_called_once_with(test_size=0.20)
 
+    def it_accepts_optional_factories(self, storage: StorageService) -> None:
+        """Verify optional factories are used when provided."""
+        mock_mvs_factory = MagicMock()
+        mock_estimator_factory = MagicMock()
 
-class DescribeExperimentPipelineFactoryCreatePipeline:
-    """Tests for ExperimentPipelineFactory.create_pipeline() method."""
+        with (
+            patch(
+                "experiments.core.experiment.pipeline.ParquetExperimentPersister"
+            ) as mock_persister_class,
+            patch("experiments.core.experiment.pipeline.GridSearchTrainer") as mock_trainer_class,
+        ):
+            create_experiment_pipeline(
+                storage=storage,
+                model_versioning_service_factory=mock_mvs_factory,
+                estimator_factory=mock_estimator_factory,
+            )
+
+            mock_persister_class.assert_called_once_with(
+                storage=storage,
+                model_versioning_service_factory=mock_mvs_factory,
+            )
+            mock_trainer_class.assert_called_once()
+            args, kwargs = mock_trainer_class.call_args
+            assert kwargs["estimator_factory"] is mock_estimator_factory
+
+
+class DescribeCreateCustomExperimentPipeline:
+    """Tests for create_custom_experiment_pipeline() function."""
 
     def it_creates_pipeline_with_custom_components(self, storage: StorageService) -> None:
         """Verify custom components are used."""
-        factory = ExperimentPipelineFactory(storage=storage)
-
         mock_splitter = MagicMock()
         mock_trainer = MagicMock()
         mock_evaluator = MagicMock()
 
-        pipeline = factory.create_pipeline(
+        pipeline = create_custom_experiment_pipeline(
+            storage=storage,
             splitter=mock_splitter,
             trainer=mock_trainer,
             evaluator=mock_evaluator,
@@ -471,3 +478,26 @@ class DescribeExperimentPipelineFactoryCreatePipeline:
         assert pipeline._splitter is mock_splitter
         assert pipeline._trainer is mock_trainer
         assert pipeline._evaluator is mock_evaluator
+
+    def it_accepts_optional_model_versioning_factory(self, storage: StorageService) -> None:
+        """Verify optional model versioning factory is used."""
+        mock_mvs_factory = MagicMock()
+        mock_splitter = MagicMock()
+        mock_trainer = MagicMock()
+        mock_evaluator = MagicMock()
+
+        with patch(
+            "experiments.core.experiment.pipeline.ParquetExperimentPersister"
+        ) as mock_persister_class:
+            create_custom_experiment_pipeline(
+                storage=storage,
+                splitter=mock_splitter,
+                trainer=mock_trainer,
+                evaluator=mock_evaluator,
+                model_versioning_service_factory=mock_mvs_factory,
+            )
+
+            mock_persister_class.assert_called_once_with(
+                storage=storage,
+                model_versioning_service_factory=mock_mvs_factory,
+            )

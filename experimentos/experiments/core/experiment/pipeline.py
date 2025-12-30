@@ -189,87 +189,76 @@ class ExperimentPipeline:
             gc.collect()
 
 
-class ExperimentPipelineFactory:
-    """Factory for creating pre-configured experiment pipelines."""
+def create_experiment_pipeline(
+    storage: StorageService,
+    config: ExperimentPipelineConfig | None = None,
+    model_versioning_service_factory: ModelVersioningServiceFactory | None = None,
+    estimator_factory: EstimatorFactory | None = None,
+) -> ExperimentPipeline:
+    """Create an experiment pipeline with default components.
 
-    def __init__(
-        self,
-        storage: StorageService,
-        model_versioning_service_factory: ModelVersioningServiceFactory | None = None,
-        estimator_factory: EstimatorFactory | None = None,
-    ) -> None:
-        """Initialize the factory.
+    Args:
+        storage: Storage service for file operations.
+        config: Optional configuration, uses defaults if not provided.
+        model_versioning_service_factory: Optional factory for model versioning services.
+        estimator_factory: Optional factory for creating estimators.
+            If not provided, uses DefaultEstimatorFactory.
 
-        Args:
-            storage: Storage service for file operations.
-            model_versioning_service_factory: Optional factory for model versioning services.
-            estimator_factory: Optional factory for creating estimators.
-                If not provided, uses DefaultEstimatorFactory.
-        """
-        self._storage = storage
-        self._model_versioning_service_factory = model_versioning_service_factory
-        self._estimator_factory = estimator_factory or DefaultEstimatorFactory()
+    Returns:
+        A configured ExperimentPipeline.
+    """
+    config = config or ExperimentPipelineConfig()
+    estimator_factory = estimator_factory or DefaultEstimatorFactory()
 
-    def create_default_pipeline(
-        self,
-        config: ExperimentPipelineConfig | None = None,
-    ) -> ExperimentPipeline:
-        """Create a pipeline with default components.
+    return ExperimentPipeline(
+        splitter=StratifiedDataSplitter(test_size=config.test_size),
+        trainer=GridSearchTrainer(
+            estimator_factory=estimator_factory,
+            scoring=config.scoring,
+            n_jobs=config.effective_trainer_n_jobs,
+            verbose=config.trainer_verbose,
+        ),
+        evaluator=ClassificationEvaluator(),
+        persister=ParquetExperimentPersister(
+            storage=storage,
+            model_versioning_service_factory=model_versioning_service_factory,
+        ),
+    )
 
-        Args:
-            config: Optional configuration, uses defaults if not provided.
 
-        Returns:
-            A configured ExperimentPipeline.
-        """
-        config = config or ExperimentPipelineConfig()
+def create_custom_experiment_pipeline(
+    storage: StorageService,
+    splitter: DataSplitter,
+    trainer: ModelTrainer,
+    evaluator: ModelEvaluator,
+    model_versioning_service_factory: ModelVersioningServiceFactory | None = None,
+) -> ExperimentPipeline:
+    """Create an experiment pipeline with custom components.
 
-        return ExperimentPipeline(
-            splitter=StratifiedDataSplitter(test_size=config.test_size),
-            trainer=GridSearchTrainer(
-                estimator_factory=self._estimator_factory,
-                scoring=config.scoring,
-                n_jobs=config.effective_trainer_n_jobs,
-                verbose=config.trainer_verbose,
-            ),
-            evaluator=ClassificationEvaluator(),
-            persister=ParquetExperimentPersister(
-                storage=self._storage,
-                model_versioning_service_factory=self._model_versioning_service_factory,
-            ),
-        )
+    Args:
+        storage: Storage service for file operations.
+        splitter: Custom data splitter.
+        trainer: Custom model trainer.
+        evaluator: Custom model evaluator.
+        model_versioning_service_factory: Optional factory for model versioning services.
 
-    def create_pipeline(
-        self,
-        splitter: DataSplitter,
-        trainer: ModelTrainer,
-        evaluator: ModelEvaluator,
-        config: ExperimentPipelineConfig | None = None,
-    ) -> ExperimentPipeline:
-        """Create a pipeline with custom components.
-
-        Args:
-            splitter: Custom data splitter.
-            trainer: Custom model trainer.
-            evaluator: Custom model evaluator.
-            config: Optional configuration.
-
-        Returns:
-            A configured ExperimentPipeline with custom components.
-        """
-        return ExperimentPipeline(
-            splitter=splitter,
-            trainer=trainer,
-            evaluator=evaluator,
-            persister=ParquetExperimentPersister(
-                storage=self._storage,
-                model_versioning_service_factory=self._model_versioning_service_factory,
-            ),
-        )
+    Returns:
+        A configured ExperimentPipeline with custom components.
+    """
+    return ExperimentPipeline(
+        splitter=splitter,
+        trainer=trainer,
+        evaluator=evaluator,
+        persister=ParquetExperimentPersister(
+            storage=storage,
+            model_versioning_service_factory=model_versioning_service_factory,
+        ),
+    )
 
 
 __all__ = [
     "ExperimentPipelineConfig",
     "ExperimentPipeline",
-    "ExperimentPipelineFactory",
+    "create_experiment_pipeline",
+    "create_custom_experiment_pipeline",
 ]

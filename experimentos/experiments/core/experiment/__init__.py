@@ -9,12 +9,11 @@ for running individual ML experiments with support for:
 
 Example usage:
     from experiments.core.modeling.experiment import (
-        ExperimentPipelineFactory,
+        create_experiment_pipeline,
         ExperimentPipelineConfig,
     )
 
-    factory = ExperimentPipelineFactory()
-    pipeline = factory.create_default_pipeline(config)
+    pipeline = create_experiment_pipeline(storage, config)
     result = pipeline.run(task_context)
 """
 
@@ -30,7 +29,8 @@ from experiments.core.experiment.persisters import (
 from experiments.core.experiment.pipeline import (
     ExperimentPipeline,
     ExperimentPipelineConfig,
-    ExperimentPipelineFactory,
+    create_custom_experiment_pipeline,
+    create_experiment_pipeline,
 )
 from experiments.core.experiment.protocols import (
     DataPaths,
@@ -76,5 +76,6 @@ __all__ = [
     "ExperimentRunnerFactory",
     # Pipeline
     "ExperimentPipeline",
-    "ExperimentPipelineFactory",
+    "create_experiment_pipeline",
+    "create_custom_experiment_pipeline",
 ]

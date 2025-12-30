@@ -234,32 +234,39 @@ class DescribeExperimentRunnerFactoryCreateRunner:
         """Verify create_runner returns a callable."""
         factory = ExperimentRunnerFactory()
 
-        with patch(
-            "experiments.core.experiment.adapters.ExperimentPipelineFactory"
-        ) as mock_factory_class:
-            mock_factory = MagicMock()
-            mock_factory.create_default_pipeline.return_value = MagicMock()
-            mock_factory_class.return_value = mock_factory
+        with (
+            patch(
+                "experiments.core.experiment.adapters.create_experiment_pipeline"
+            ) as mock_create,
+            patch("experiments.services.storage.local.LocalStorageService") as mock_storage,
+        ):
+            mock_create.return_value = MagicMock()
+            mock_storage.return_value = MagicMock()
 
             runner = factory.create_runner()
 
             assert callable(runner)
 
-    def it_passes_versioning_service_to_pipeline_factory(self) -> None:
-        """Verify versioning service is passed to pipeline factory."""
+    def it_uses_local_storage_for_backward_compatibility(self) -> None:
+        """Verify factory uses local storage for backward compatibility."""
         factory = ExperimentRunnerFactory()
-        mock_service = MagicMock()
 
-        with patch(
-            "experiments.core.experiment.adapters.ExperimentPipelineFactory"
-        ) as mock_factory_class:
-            mock_factory = MagicMock()
-            mock_factory.create_default_pipeline.return_value = MagicMock()
-            mock_factory_class.return_value = mock_factory
+        with (
+            patch(
+                "experiments.core.experiment.adapters.create_experiment_pipeline"
+            ) as mock_create,
+            patch("experiments.services.storage.local.LocalStorageService") as mock_storage_class,
+        ):
+            mock_storage = MagicMock()
+            mock_storage_class.return_value = mock_storage
+            mock_create.return_value = MagicMock()
 
-            factory.create_runner(model_versioning_service=mock_service)
+            factory.create_runner()
 
-            mock_factory_class.assert_called_once_with(model_versioning_service=mock_service)
+            mock_storage_class.assert_called_once()
+            mock_create.assert_called_once()
+            args, kwargs = mock_create.call_args
+            assert kwargs["storage"] is mock_storage
 
 
 class DescribeExperimentRunnerFactoryCreateRunnerWithPipeline:

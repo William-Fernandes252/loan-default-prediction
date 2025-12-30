@@ -168,7 +168,7 @@ class DescribeTrainingPipeline:
             persister=mock_persister,
             consolidation_provider=mock_consolidation_provider,
             versioning_provider=mock_versioning_provider,
-            experiment_runner=mock_experiment_runner,
+            experiment_runner_factory=mock_experiment_runner,
             config=config,
         )
 
@@ -191,7 +191,7 @@ class DescribeTrainingPipeline:
         assert pipeline._persister is mock_persister
         assert pipeline._consolidation_provider is mock_consolidation_provider
         assert pipeline._versioning_provider is mock_versioning_provider
-        assert pipeline._experiment_runner is mock_experiment_runner
+        assert pipeline._experiment_runner_factory is mock_experiment_runner
         assert pipeline._config is config
 
 
@@ -275,7 +275,7 @@ class DescribeTrainingPipelineRun:
             persister=mock_persister,
             consolidation_provider=mock_consolidation_provider,
             versioning_provider=mock_versioning_provider,
-            experiment_runner=mock_experiment_runner,
+            experiment_runner_factory=mock_experiment_runner,
             config=config,
         )
 
@@ -427,7 +427,7 @@ class DescribeTrainingPipelineRunAll:
             persister=mock_persister,
             consolidation_provider=mock_consolidation_provider,
             versioning_provider=mock_versioning_provider,
-            experiment_runner=mock_experiment_runner,
+            experiment_runner_factory=mock_experiment_runner,
             config=config,
         )
 
@@ -545,7 +545,7 @@ class DescribeTrainingPipelineRunSingle:
             persister=mock_persister,
             consolidation_provider=mock_consolidation_provider,
             versioning_provider=mock_versioning_provider,
-            experiment_runner=mock_experiment_runner,
+            experiment_runner_factory=mock_experiment_runner,
             config=config,
         )
 
@@ -675,7 +675,7 @@ class DescribeTrainingPipelineConsolidate:
             persister=mock_persister,
             consolidation_provider=mock_consolidation_provider,
             versioning_provider=mock_versioning_provider,
-            experiment_runner=mock_experiment_runner,
+            experiment_runner_factory=mock_experiment_runner,
             config=config,
         )
 
@@ -741,7 +741,7 @@ class DescribeTrainingPipelineFactory:
             data_provider=mock_data_provider,
             consolidation_provider=mock_consolidation_provider,
             versioning_provider=mock_versioning_provider,
-            experiment_runner=mock_experiment_runner,
+            experiment_runner_factory=mock_experiment_runner,
         )
 
     @pytest.fixture
@@ -763,7 +763,7 @@ class DescribeTrainingPipelineFactory:
         assert factory._data_provider is mock_data_provider
         assert factory._consolidation_provider is mock_consolidation_provider
         assert factory._versioning_provider is mock_versioning_provider
-        assert factory._experiment_runner is mock_experiment_runner
+        assert factory._experiment_runner_factory is mock_experiment_runner
 
 
 class DescribeTrainingPipelineFactoryCreateParallel:
@@ -804,7 +804,7 @@ class DescribeTrainingPipelineFactoryCreateParallel:
             data_provider=mock_data_provider,
             consolidation_provider=mock_consolidation_provider,
             versioning_provider=mock_versioning_provider,
-            experiment_runner=mock_experiment_runner,
+            experiment_runner_factory=mock_experiment_runner,
         )
 
     @pytest.fixture
@@ -881,7 +881,7 @@ class DescribeTrainingPipelineFactoryCreateSequential:
             data_provider=mock_data_provider,
             consolidation_provider=mock_consolidation_provider,
             versioning_provider=mock_versioning_provider,
-            experiment_runner=mock_experiment_runner,
+            experiment_runner_factory=mock_experiment_runner,
         )
 
     @pytest.fixture
