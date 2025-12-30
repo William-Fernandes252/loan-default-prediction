@@ -33,6 +33,7 @@ from .protocols import (
     RawDataPathProvider,
     RawDataUriProvider,
 )
+from .registry import get_transformer, get_transformer_registry, register_transformer
 from .taiwan_credit import TaiwanCreditTransformer
 
 # Backward compatibility aliases
@@ -124,6 +125,10 @@ __all__ = [
     "TaiwanCreditTransformer",
     # Exporters
     "ParquetDataExporter",
+    # Registry
+    "register_transformer",
+    "get_transformer",
+    "get_transformer_registry",
     # Backward compatibility
     "DataProcessor",
     "LendingClubProcessor",

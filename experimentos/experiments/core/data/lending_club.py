@@ -9,11 +9,13 @@ import polars as pl
 from polars import datatypes
 
 from experiments.core.data.base import BaseDataTransformer
+from experiments.core.data.registry import register_transformer
 
 if TYPE_CHECKING:
     pass
 
 
+@register_transformer("lending_club")
 class LendingClubTransformer(BaseDataTransformer):
     """Transformer for the Lending Club dataset.
 

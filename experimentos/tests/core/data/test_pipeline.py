@@ -7,10 +7,12 @@ import polars as pl
 import pytest
 
 from experiments.core.data import Dataset
+from experiments.core.data.base import BaseDataTransformer
 from experiments.core.data.pipeline import (
     DataProcessingPipeline,
     DataProcessingPipelineFactory,
 )
+from experiments.core.data.registry import clear_registry, register_transformer
 from experiments.services.storage import StorageService
 from experiments.services.storage.local import LocalStorageService
 
@@ -207,6 +209,18 @@ class DescribeDataProcessingPipelineFactory:
 
     def it_raises_for_unknown_dataset(self, tmp_path: Path, storage: StorageService) -> None:
         """Verify factory raises ValueError for unregistered datasets."""
+        # Clear and set up a minimal test registry
+        clear_registry()
+
+        @register_transformer("test_only_dataset")
+        class TestOnlyTransformer(BaseDataTransformer):
+            @property
+            def dataset_name(self) -> str:
+                return "test_only_dataset"
+
+            def _apply_transformations(self, df):
+                return df
+
         factory = DataProcessingPipelineFactory(
             storage=storage,
             raw_data_uri=str(tmp_path / "raw"),
@@ -219,3 +233,34 @@ class DescribeDataProcessingPipelineFactory:
 
         with pytest.raises(ValueError, match="No transformer registered"):
             factory.create(mock_dataset)
+
+    def it_accepts_custom_transformer_registry(
+        self, tmp_path: Path, storage: StorageService
+    ) -> None:
+        """Verify factory accepts a custom transformer registry."""
+
+        class CustomTransformer(BaseDataTransformer):
+            @property
+            def dataset_name(self) -> str:
+                return "custom_dataset"
+
+            def _apply_transformations(self, df):
+                return df
+
+        custom_registry = {"custom_dataset": CustomTransformer}
+
+        factory = DataProcessingPipelineFactory(
+            storage=storage,
+            raw_data_uri=str(tmp_path / "raw"),
+            interim_data_uri=str(tmp_path / "interim"),
+            transformer_registry=custom_registry,
+        )
+
+        # Create a mock dataset
+        mock_dataset = MagicMock()
+        mock_dataset.id = "custom_dataset"
+
+        # Should be able to create pipeline with custom transformer
+        pipeline = factory.create(mock_dataset)
+        assert isinstance(pipeline, DataProcessingPipeline)
+        assert isinstance(pipeline._transformer, CustomTransformer)

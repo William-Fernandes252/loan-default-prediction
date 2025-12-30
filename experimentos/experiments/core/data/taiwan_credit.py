@@ -8,11 +8,13 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from experiments.core.data.base import BaseDataTransformer
+from experiments.core.data.registry import register_transformer
 
 if TYPE_CHECKING:
     pass
 
 
+@register_transformer("taiwan_credit")
 class TaiwanCreditTransformer(BaseDataTransformer):
     """Transformer for the Taiwan Credit Card dataset.
 

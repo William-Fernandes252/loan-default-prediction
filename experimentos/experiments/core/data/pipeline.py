@@ -10,13 +10,17 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
+# Import transformers to ensure they are registered
+# These imports trigger the @register_transformer decorators
+from experiments.core.data import corporate_credit, lending_club, taiwan_credit
 from experiments.core.data.base import BaseDataTransformer
-from experiments.core.data.corporate_credit import CorporateCreditTransformer
 from experiments.core.data.exporters import ParquetDataExporter
-from experiments.core.data.lending_club import LendingClubTransformer
 from experiments.core.data.loaders import CsvRawDataLoader
 from experiments.core.data.protocols import ProcessedDataExporter, RawDataLoader
-from experiments.core.data.taiwan_credit import TaiwanCreditTransformer
+from experiments.core.data.registry import get_transformer_registry
+
+# Silence unused import warnings
+_ = (corporate_credit, lending_club, taiwan_credit)
 
 if TYPE_CHECKING:
     from experiments.core.data import Dataset
@@ -120,6 +124,7 @@ class DataProcessingPipelineFactory:
         interim_data_uri: str,
         *,
         use_gpu: bool = False,
+        transformer_registry: dict[str, type[BaseDataTransformer]] | None = None,
     ) -> None:
         """Initialize the factory.
 
@@ -128,18 +133,20 @@ class DataProcessingPipelineFactory:
             raw_data_uri: Base URI for raw data files.
             interim_data_uri: Base URI for interim data files.
             use_gpu: Whether to enable GPU acceleration for transformations.
+            transformer_registry: Optional custom transformer registry.
+                If None, uses the global registry from the registration system.
         """
         self._storage = storage
         self._raw_data_uri = raw_data_uri
         self._interim_data_uri = interim_data_uri
         self._use_gpu = use_gpu
 
-        # Registry mapping datasets to their transformer classes
-        self._transformer_registry: dict[str, type[BaseDataTransformer]] = {
-            "lending_club": LendingClubTransformer,
-            "corporate_credit_rating": CorporateCreditTransformer,
-            "taiwan_credit": TaiwanCreditTransformer,
-        }
+        # Use provided registry or get from global registration system
+        self._transformer_registry = (
+            transformer_registry
+            if transformer_registry is not None
+            else get_transformer_registry()
+        )
 
     def create(self, dataset: Dataset) -> DataProcessingPipeline:
         """Create a pipeline configured for the specified dataset.
