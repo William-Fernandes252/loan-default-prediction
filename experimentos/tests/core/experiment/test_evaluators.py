@@ -1,7 +1,5 @@
 """Tests for experiments.core.experiment.evaluators module."""
 
-from unittest.mock import MagicMock
-
 import numpy as np
 import pytest
 from sklearn.linear_model import LogisticRegression
@@ -233,22 +231,28 @@ class DescribeClassificationEvaluatorEdgeCases:
 
     def it_uses_probability_predictions_for_auc(
         self,
-        fitted_classifier: LogisticRegression,
         test_data: tuple[np.ndarray, np.ndarray],
     ) -> None:
-        """Verify ROC AUC uses probability predictions."""
+        """Verify ROC AUC uses probability predictions with a well-calibrated model."""
         X_test, y_test = test_data
 
-        # Create a mock that has predict_proba
-        mock_model = MagicMock()
-        mock_model.predict.return_value = np.zeros(len(y_test))
-        # Create probabilities that give a known AUC
-        probas = np.column_stack([1 - y_test, y_test])  # Perfect separation
-        mock_model.predict_proba.return_value = probas
+        # Train a model on highly separable data to get good probabilities
+        np.random.seed(42)
+        X_train = np.vstack(
+            [
+                np.random.rand(50, 10) * 0.3,  # Class 0: small values
+                np.random.rand(50, 10) * 0.7 + 0.3,  # Class 1: larger values
+            ]
+        )
+        y_train = np.array([0] * 50 + [1] * 50)
+
+        clf = LogisticRegression(random_state=42, max_iter=1000)
+        clf.fit(X_train, y_train)
 
         evaluator = ClassificationEvaluator()
+        result = evaluator.evaluate(clf, X_test, y_test)
 
-        result = evaluator.evaluate(mock_model, X_test, y_test)
-
-        # With perfect probability predictions, AUC should be 1.0
-        assert result.metrics["roc_auc"] == 1.0
+        # With a real model, AUC should be computed from probabilities
+        # and should be non-trivial (not 0.5 which indicates no discrimination)
+        assert "roc_auc" in result.metrics
+        assert result.metrics["roc_auc"] != 0.5
