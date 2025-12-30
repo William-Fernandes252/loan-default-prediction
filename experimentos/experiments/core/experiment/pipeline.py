@@ -39,12 +39,24 @@ class ExperimentPipelineConfig:
         scoring: Scoring metric for optimization.
         trainer_n_jobs: Parallel jobs for training.
         trainer_verbose: Verbosity for training.
+        n_jobs_inner: Override for trainer_n_jobs to enforce mutual exclusion.
+                     If provided, this takes precedence over trainer_n_jobs.
     """
 
     test_size: float = 0.30
     scoring: str = "roc_auc"
     trainer_n_jobs: int = 1
     trainer_verbose: int = 0
+    n_jobs_inner: int | None = None
+
+    @property
+    def effective_trainer_n_jobs(self) -> int:
+        """Get the effective n_jobs for the trainer.
+
+        Returns n_jobs_inner if set, otherwise trainer_n_jobs.
+        This enforces mutual exclusion in nested parallel scenarios.
+        """
+        return self.n_jobs_inner if self.n_jobs_inner is not None else self.trainer_n_jobs
 
 
 class ExperimentPipeline:
@@ -217,7 +229,7 @@ class ExperimentPipelineFactory:
             trainer=GridSearchTrainer(
                 estimator_factory=self._estimator_factory,
                 scoring=config.scoring,
-                n_jobs=config.trainer_n_jobs,
+                n_jobs=config.effective_trainer_n_jobs,
                 verbose=config.trainer_verbose,
             ),
             evaluator=ClassificationEvaluator(),

@@ -41,6 +41,7 @@ class TrainingPipelineConfig:
         num_seeds: Number of random seeds.
         discard_checkpoints: Whether to discard existing checkpoints.
         n_jobs: Number of parallel jobs (None for auto-detection).
+        n_jobs_inner: Override for experiment pipeline n_jobs to prevent oversubscription.
     """
 
     cv_folds: int
@@ -48,6 +49,7 @@ class TrainingPipelineConfig:
     num_seeds: int = 30
     discard_checkpoints: bool = False
     n_jobs: int | None = None
+    n_jobs_inner: int | None = None
 
 
 class TrainingPipeline:
@@ -65,7 +67,7 @@ class TrainingPipeline:
         persister: ParquetCheckpointPersister,
         consolidation_provider: ConsolidationUriProvider,
         versioning_provider: ModelVersioningProvider,
-        experiment_runner: ExperimentRunner,
+        experiment_runner_factory: Callable[[int | None], ExperimentRunner],
         config: TrainingPipelineConfig,
     ) -> None:
         """Initialize the pipeline.
@@ -77,7 +79,7 @@ class TrainingPipeline:
             persister: Persister for consolidating results.
             consolidation_provider: Provider for checkpoint and consolidation URIs.
             versioning_provider: Provider for model versioning services.
-            experiment_runner: Function to run individual experiments.
+            experiment_runner_factory: Factory function to create experiment runners with specific n_jobs.
             config: Pipeline configuration.
         """
         self._task_generator = task_generator
@@ -86,8 +88,30 @@ class TrainingPipeline:
         self._persister = persister
         self._consolidation_provider = consolidation_provider
         self._versioning_provider = versioning_provider
-        self._experiment_runner = experiment_runner
+        self._experiment_runner_factory = experiment_runner_factory
         self._config = config
+
+        # Determine n_jobs_inner based on executor type to prevent oversubscription
+        self._n_jobs_inner = self._determine_n_jobs_inner()
+        self._experiment_runner = self._experiment_runner_factory(self._n_jobs_inner)
+
+    def _determine_n_jobs_inner(self) -> int | None:
+        """Determine the n_jobs_inner value to prevent oversubscription.
+
+        Returns:
+            1 if using parallel execution to prevent nested parallelism,
+            config value if using sequential execution,
+            or None to use default.
+        """
+        if self._config.n_jobs_inner is not None:
+            return self._config.n_jobs_inner
+
+        # If using parallel executor, force inner jobs to 1
+        if isinstance(self._executor, ParallelExecutor):
+            return 1
+
+        # For sequential execution, allow default inner parallelism
+        return None
 
     def _create_experiment_config(self) -> ExperimentConfig:
         """Create experiment configuration from pipeline config."""
@@ -235,7 +259,7 @@ class TrainingPipelineFactory:
         data_provider: DataProvider,
         consolidation_provider: ConsolidationUriProvider,
         versioning_provider: ModelVersioningProvider,
-        experiment_runner: ExperimentRunner,
+        experiment_runner_factory: Callable[[int | None], ExperimentRunner],
     ) -> None:
         """Initialize the factory.
 
@@ -244,13 +268,13 @@ class TrainingPipelineFactory:
             data_provider: Provider for training data.
             consolidation_provider: Provider for checkpoint and consolidation URIs.
             versioning_provider: Provider for model versioning services.
-            experiment_runner: Function to run individual experiments.
+            experiment_runner_factory: Factory function to create experiment runners with specific n_jobs.
         """
         self._storage = storage
         self._data_provider = data_provider
         self._consolidation_provider = consolidation_provider
         self._versioning_provider = versioning_provider
-        self._experiment_runner = experiment_runner
+        self._experiment_runner_factory = experiment_runner_factory
 
     def create_parallel_pipeline(
         self,
@@ -279,7 +303,7 @@ class TrainingPipelineFactory:
             ),
             consolidation_provider=self._consolidation_provider,
             versioning_provider=self._versioning_provider,
-            experiment_runner=self._experiment_runner,
+            experiment_runner_factory=self._experiment_runner_factory,
             config=config,
         )
 
@@ -310,7 +334,7 @@ class TrainingPipelineFactory:
             ),
             consolidation_provider=self._consolidation_provider,
             versioning_provider=self._versioning_provider,
-            experiment_runner=self._experiment_runner,
+            experiment_runner_factory=self._experiment_runner_factory,
             config=config,
         )
 

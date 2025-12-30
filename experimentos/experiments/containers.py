@@ -224,9 +224,12 @@ class Container(containers.DeclarativeContainer):
         config=experiment_pipeline_config,
     )
 
-    experiment_runner = providers.Factory(
-        create_experiment_runner,
-        pipeline=experiment_pipeline,
+    experiment_runner_factory = providers.Factory(
+        lambda pipeline_factory, config_factory: lambda n_jobs_inner: create_experiment_runner(
+            pipeline_factory.create_default_pipeline(config_factory(n_jobs_inner=n_jobs_inner))
+        ),
+        pipeline_factory=experiment_pipeline_factory,
+        config_factory=providers.Factory(ExperimentPipelineConfig),
     )
 
     # --- Training Pipeline ---
@@ -245,7 +248,7 @@ class Container(containers.DeclarativeContainer):
         data_provider=storage_manager,
         consolidation_provider=storage_manager,
         versioning_provider=model_versioning_factory,
-        experiment_runner=experiment_runner,
+        experiment_runner_factory=experiment_runner_factory,
     )
 
 
