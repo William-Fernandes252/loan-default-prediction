@@ -402,6 +402,71 @@ class DescribeExperimentPipelineRun:
         assert result.task_id is None
         assert result.metrics == {}
 
+    @pytest.mark.parametrize(
+        "error_type,error_msg",
+        [
+            (ValueError, "Invalid parameter value"),
+            (RuntimeError, "Training failed"),
+            (OSError, "File operation failed"),
+            (IOError, "I/O operation failed"),
+        ],
+    )
+    def it_catches_specific_recoverable_exceptions(
+        self,
+        sample_context: ExperimentContext,
+        mock_splitter: MagicMock,
+        mock_evaluator: MagicMock,
+        mock_persister: MagicMock,
+        error_type: type[Exception],
+        error_msg: str,
+    ) -> None:
+        """Verify specific recoverable exceptions are caught and handled gracefully."""
+        mock_trainer = MagicMock()
+        mock_trainer.train.side_effect = error_type(error_msg)
+
+        pipeline = ExperimentPipeline(
+            splitter=mock_splitter,
+            trainer=mock_trainer,
+            evaluator=mock_evaluator,
+            persister=mock_persister,
+        )
+
+        result = pipeline.run(sample_context)
+
+        assert result.task_id is None
+        assert result.metrics == {}
+
+    @pytest.mark.parametrize(
+        "error_type",
+        [
+            KeyboardInterrupt,
+            SystemExit,
+            MemoryError,
+        ],
+    )
+    def it_propagates_system_level_exceptions(
+        self,
+        sample_context: ExperimentContext,
+        mock_splitter: MagicMock,
+        mock_evaluator: MagicMock,
+        mock_persister: MagicMock,
+        error_type: type[BaseException],
+    ) -> None:
+        """Verify system-level exceptions are not caught and propagate to orchestrator."""
+        mock_trainer = MagicMock()
+        mock_trainer.train.side_effect = error_type()
+
+        pipeline = ExperimentPipeline(
+            splitter=mock_splitter,
+            trainer=mock_trainer,
+            evaluator=mock_evaluator,
+            persister=mock_persister,
+        )
+
+        # These should not be caught and should propagate
+        with pytest.raises(error_type):
+            pipeline.run(sample_context)
+
 
 class DescribeCreateExperimentPipeline:
     """Tests for create_experiment_pipeline() function."""

@@ -180,8 +180,12 @@ class ExperimentPipeline:
                 model=trained.estimator,
             )
 
-        except Exception:
-            logger.error(f"Failed task: {traceback.format_exc()}")
+        except (ValueError, RuntimeError, OSError, IOError):
+            logger.error(
+                f"Failed task: {context.identity.dataset.display_name} | "
+                f"{context.identity.model_type.name} | seed={context.identity.seed}\n"
+                f"{traceback.format_exc()}"
+            )
             return ExperimentResult(task_id=None, metrics={})
 
 
