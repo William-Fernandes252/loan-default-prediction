@@ -414,5 +414,168 @@ class DescribeExperimentPipeline:
         assert result.metrics["technique"] == "smote"
         assert result.metrics["accuracy_balanced"] > 0.5
 
+    def it_properly_handles_memory_mapped_file_lifecycle(
+        self,
+        experiment_context: ExperimentContext,
+        storage: LocalStorageService,
+        tmp_path: Path,
+        sample_data: tuple[np.ndarray, np.ndarray],
+    ) -> None:
+        """Verify memory-mapped files are properly handled and can be cleaned up.
+
+        This test validates that:
+        1. Memory-mapped files are created and accessible
+        2. The pipeline can read from them
+        3. No file handles are left open after pipeline execution
+        4. Files can be deleted after the pipeline completes
+        """
+        X, y = sample_data
+
+        # Create memory-mapped files in a temporary directory
+        mmap_dir = tmp_path / "mmap_data"
+        mmap_dir.mkdir()
+
+        X_mmap_path = mmap_dir / "X_test.joblib"
+        y_mmap_path = mmap_dir / "y_test.joblib"
+
+        # Save data as memory-mapped files
+        joblib.dump(X, X_mmap_path)
+        joblib.dump(y, y_mmap_path)
+
+        # Verify files were created
+        assert X_mmap_path.exists(), "X memory-mapped file should exist"
+        assert y_mmap_path.exists(), "y memory-mapped file should exist"
+
+        # Get file sizes for verification
+        x_size_before = X_mmap_path.stat().st_size
+        y_size_before = y_mmap_path.stat().st_size
+        assert x_size_before > 0, "X file should have content"
+        assert y_size_before > 0, "y file should have content"
+
+        # Create context with memory-mapped file paths
+        mmap_context = ExperimentContext(
+            identity=experiment_context.identity,
+            data=DataPaths(X_path=str(X_mmap_path), y_path=str(y_mmap_path)),
+            config=experiment_context.config,
+            checkpoint_uri=str(tmp_path / "checkpoint_mmap.parquet"),
+            discard_checkpoints=False,
+        )
+
+        estimator_factory = DefaultEstimatorFactory(use_gpu=False)
+
+        pipeline = ExperimentPipeline(
+            splitter=StratifiedDataSplitter(test_size=0.30),
+            trainer=GridSearchTrainer(
+                estimator_factory=estimator_factory,
+                scoring="roc_auc",
+                n_jobs=1,
+                verbose=0,
+            ),
+            evaluator=ClassificationEvaluator(),
+            persister=ParquetExperimentPersister(storage=storage),
+        )
+
+        # Run the pipeline
+        result = pipeline.run(mmap_context)
+
+        # Verify pipeline completed successfully
+        assert result.task_id is not None, "Pipeline should complete successfully"
+        assert result.metrics["accuracy_balanced"] > 0.5
+
+        # Verify files still exist after pipeline execution
+        assert X_mmap_path.exists(), "X file should still exist after pipeline"
+        assert y_mmap_path.exists(), "y file should still exist after pipeline"
+
+        # Verify files can be read after pipeline execution
+        # (ensures no corruption or locked file handles)
+        X_after = joblib.load(X_mmap_path)
+        y_after = joblib.load(y_mmap_path)
+        assert X_after.shape == X.shape, "X data should be intact"
+        assert y_after.shape == y.shape, "y data should be intact"
+        np.testing.assert_array_equal(X_after, X, err_msg="X data should be unchanged")
+        np.testing.assert_array_equal(y_after, y, err_msg="y data should be unchanged")
+
+        # Critical test: Verify files can be deleted
+        # This ensures no file handles are left open by the pipeline
+        try:
+            X_mmap_path.unlink()
+            y_mmap_path.unlink()
+        except PermissionError as e:
+            pytest.fail(f"Cannot delete memory-mapped files after pipeline: {e}")
+
+        # Verify deletion succeeded
+        assert not X_mmap_path.exists(), "X file should be deleted"
+        assert not y_mmap_path.exists(), "y file should be deleted"
+
+    def it_handles_memory_mapped_files_with_multiple_pipeline_runs(
+        self,
+        experiment_context: ExperimentContext,
+        storage: LocalStorageService,
+        tmp_path: Path,
+        sample_data: tuple[np.ndarray, np.ndarray],
+    ) -> None:
+        """Verify memory-mapped files can be reused across multiple pipeline runs.
+
+        This validates that the pipeline doesn't lock files or leave handles open
+        that would prevent subsequent reads.
+        """
+        X, y = sample_data
+
+        # Create memory-mapped files
+        mmap_dir = tmp_path / "mmap_multirun"
+        mmap_dir.mkdir()
+
+        X_mmap_path = mmap_dir / "X_multirun.joblib"
+        y_mmap_path = mmap_dir / "y_multirun.joblib"
+
+        joblib.dump(X, X_mmap_path)
+        joblib.dump(y, y_mmap_path)
+
+        estimator_factory = DefaultEstimatorFactory(use_gpu=False)
+
+        pipeline = ExperimentPipeline(
+            splitter=StratifiedDataSplitter(test_size=0.30),
+            trainer=GridSearchTrainer(
+                estimator_factory=estimator_factory,
+                scoring="roc_auc",
+                n_jobs=1,
+                verbose=0,
+            ),
+            evaluator=ClassificationEvaluator(),
+            persister=ParquetExperimentPersister(storage=storage),
+        )
+
+        # Run pipeline multiple times with different seeds
+        for seed in [42, 43, 44]:
+            context = ExperimentContext(
+                identity=ExperimentIdentity(
+                    dataset=Dataset.TAIWAN_CREDIT,
+                    model_type=ModelType.RANDOM_FOREST,
+                    technique=Technique.BASELINE,
+                    seed=seed,
+                ),
+                data=DataPaths(X_path=str(X_mmap_path), y_path=str(y_mmap_path)),
+                config=TrainingConfig(cv_folds=3, cost_grids=[]),
+                checkpoint_uri=str(tmp_path / f"checkpoint_seed{seed}.parquet"),
+                discard_checkpoints=False,
+            )
+
+            result = pipeline.run(context)
+            assert result.task_id is not None, f"Run with seed={seed} should succeed"
+
+        # Verify files can still be accessed and deleted after all runs
+        assert X_mmap_path.exists()
+        assert y_mmap_path.exists()
+
+        # Should be able to load data
+        X_final = joblib.load(X_mmap_path)
+        assert X_final.shape == X.shape
+
+        # Should be able to delete files
+        X_mmap_path.unlink()
+        y_mmap_path.unlink()
+        assert not X_mmap_path.exists()
+        assert not y_mmap_path.exists()
+
 
 __all__ = ["DescribeExperimentPipeline"]
