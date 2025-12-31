@@ -43,14 +43,14 @@ class CsvRawDataLoader:
         """Get the URI for a dataset's raw CSV file."""
         return f"{self._base_uri}/{dataset_id}.csv"
 
-    def load(self, dataset: Dataset) -> pl.DataFrame:
+    def load(self, dataset: Dataset) -> pl.LazyFrame:
         """Load raw data for the given dataset from CSV.
 
         Args:
             dataset: The dataset to load data for.
 
         Returns:
-            A Polars DataFrame containing the raw data.
+            A Polars LazyFrame containing the raw data.
 
         Raises:
             FileDoesNotExistError: If the raw data file does not exist.
@@ -60,10 +60,13 @@ class CsvRawDataLoader:
         # Base read options for all datasets
         read_options: dict[str, Any] = {
             "low_memory": False,
-            "use_pyarrow": True,
+            # "use_pyarrow": True, # scan_csv doesn't support use_pyarrow
         }
 
         # Add dataset-specific parameters (e.g., schema overrides)
         read_options.update(dataset.get_extra_params())
 
-        return self._storage.read_csv(uri, **read_options)
+        # Remove incompatible options for scan_csv if present
+        read_options.pop("use_pyarrow", None)
+
+        return self._storage.scan_csv(uri, **read_options)

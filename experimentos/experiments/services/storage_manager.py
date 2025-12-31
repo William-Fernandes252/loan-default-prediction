@@ -246,6 +246,19 @@ class StorageManager:
         uri = self.get_raw_data_uri(dataset_id)
         return self._storage.read_csv(uri, **kwargs)
 
+    def scan_raw_data(self, dataset_id: str, **kwargs: Any) -> pl.LazyFrame:
+        """Scan raw CSV data for a dataset lazily.
+
+        Args:
+            dataset_id: The dataset identifier.
+            **kwargs: Additional arguments passed to scan_csv.
+
+        Returns:
+            LazyFrame containing the raw data.
+        """
+        uri = self.get_raw_data_uri(dataset_id)
+        return self._storage.scan_csv(uri, **kwargs)
+
     def write_interim_data(self, df: pl.DataFrame, dataset_id: str) -> str:
         """Write interim data to parquet.
 
@@ -272,6 +285,20 @@ class StorageManager:
         uris = self.get_feature_uris(dataset_id)
         X = self._storage.read_parquet(uris["X"])
         y = self._storage.read_parquet(uris["y"])
+        return X, y
+
+    def scan_features(self, dataset_id: str) -> tuple[pl.LazyFrame, pl.LazyFrame]:
+        """Scan feature X and target y LazyFrames.
+
+        Args:
+            dataset_id: The dataset identifier.
+
+        Returns:
+            Tuple of (X, y) LazyFrames.
+        """
+        uris = self.get_feature_uris(dataset_id)
+        X = self._storage.scan_parquet(uris["X"])
+        y = self._storage.scan_parquet(uris["y"])
         return X, y
 
     def write_features(
@@ -343,6 +370,17 @@ class StorageManager:
         """
         return self._storage.read_parquet(uri)
 
+    def scan_checkpoint(self, uri: str) -> pl.LazyFrame:
+        """Scan a checkpoint LazyFrame.
+
+        Args:
+            uri: The URI of the checkpoint file.
+
+        Returns:
+            The checkpoint LazyFrame.
+        """
+        return self._storage.scan_parquet(uri)
+
     def checkpoint_exists(self, uri: str) -> bool:
         """Check if a checkpoint exists.
 
@@ -391,25 +429,27 @@ class StorageManager:
             logger.warning(f"No checkpoints found for {dataset_id}")
             return None
 
-        logger.info(f"Consolidating {len(checkpoint_uris)} checkpoints for {dataset_id}...")
-
         frames = []
         for uri in checkpoint_uris:
             try:
-                frames.append(self._storage.read_parquet(uri))
+                frames.append(self._storage.scan_parquet(uri))
             except Exception as e:
-                logger.warning(f"Failed to read checkpoint {uri}: {e}")
+                logger.warning(f"Failed to scan checkpoint {uri}: {e}")
 
         if not frames:
             logger.warning("No valid checkpoint frames could be loaded.")
             return None
 
-        df_final = pl.concat(frames)
-        output_uri = self.get_consolidated_results_uri(dataset_id)
-        self._storage.write_parquet(df_final, output_uri)
+        try:
+            lf_final = pl.concat(frames)
+            output_uri = self.get_consolidated_results_uri(dataset_id)
+            self._storage.sink_parquet(lf_final, output_uri)
 
-        logger.success(f"Saved consolidated results to {output_uri}")
-        return output_uri
+            logger.success(f"Saved consolidated results to {output_uri}")
+            return output_uri
+        except Exception as e:
+            logger.error(f"Failed to consolidate checkpoints: {e}")
+            return None
 
     # --- Memory-Mapped Feature Context ---
 

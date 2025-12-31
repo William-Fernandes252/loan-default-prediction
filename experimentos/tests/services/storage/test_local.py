@@ -319,6 +319,84 @@ class DescribeLocalStorageService:
 
             assert df.shape == (1, 3)
 
+    class DescribeScanParquet:
+        """Tests for the scan_parquet method."""
+
+        def it_returns_lazy_frame(
+            self,
+            storage: LocalStorageService,
+            tmp_path: Path,
+            sample_dataframe: pl.DataFrame,
+        ) -> None:
+            """Verify returns a lazy DataFrame."""
+            parquet_file = tmp_path / "data.parquet"
+            sample_dataframe.write_parquet(parquet_file)
+
+            lf = storage.scan_parquet(f"file://{parquet_file}")
+
+            assert isinstance(lf, pl.LazyFrame)
+            df = lf.collect()
+            assert df.shape == sample_dataframe.shape
+            assert df.columns == sample_dataframe.columns
+
+        def it_raises_for_nonexistent_file(
+            self, storage: LocalStorageService, tmp_path: Path
+        ) -> None:
+            """Verify raises FileDoesNotExistError for missing file."""
+            nonexistent = tmp_path / "nonexistent.parquet"
+
+            with pytest.raises(FileDoesNotExistError):
+                storage.scan_parquet(f"file://{nonexistent}")
+
+        def it_passes_kwargs_to_polars(
+            self,
+            storage: LocalStorageService,
+            tmp_path: Path,
+            sample_dataframe: pl.DataFrame,
+        ) -> None:
+            """Verify passes additional kwargs to pl.scan_parquet."""
+            parquet_file = tmp_path / "data.parquet"
+            sample_dataframe.write_parquet(parquet_file)
+
+            lf = storage.scan_parquet(f"file://{parquet_file}", n_rows=2)
+            df = lf.collect()
+
+            assert df.shape == (2, 3)
+
+    class DescribeScanCsv:
+        """Tests for the scan_csv method."""
+
+        def it_returns_lazy_frame(self, storage: LocalStorageService, tmp_path: Path) -> None:
+            """Verify returns a lazy DataFrame."""
+            csv_file = tmp_path / "data.csv"
+            csv_file.write_text("a,b,c\n1,2,3\n4,5,6")
+
+            lf = storage.scan_csv(f"file://{csv_file}")
+
+            assert isinstance(lf, pl.LazyFrame)
+            df = lf.collect()
+            assert df.shape == (2, 3)
+            assert df.columns == ["a", "b", "c"]
+
+        def it_raises_for_nonexistent_file(
+            self, storage: LocalStorageService, tmp_path: Path
+        ) -> None:
+            """Verify raises FileDoesNotExistError for missing file."""
+            nonexistent = tmp_path / "nonexistent.csv"
+
+            with pytest.raises(FileDoesNotExistError):
+                storage.scan_csv(f"file://{nonexistent}")
+
+        def it_passes_kwargs_to_polars(self, storage: LocalStorageService, tmp_path: Path) -> None:
+            """Verify passes additional kwargs to pl.scan_csv."""
+            csv_file = tmp_path / "data.csv"
+            csv_file.write_text("a;b;c\n1;2;3\n4;5;6")
+
+            lf = storage.scan_csv(f"file://{csv_file}", separator=";")
+            df = lf.collect()
+
+            assert df.shape == (2, 3)
+
     class DescribeReadJson:
         """Tests for the read_json method."""
 

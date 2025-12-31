@@ -43,17 +43,21 @@ class ParquetDataExporter:
         """Get the URI for a dataset's interim parquet file."""
         return f"{self._base_uri}/{dataset_id}.parquet"
 
-    def export(self, df: pl.DataFrame, dataset: Dataset) -> str:
+    def export(self, df: pl.DataFrame | pl.LazyFrame, dataset: Dataset) -> str:
         """Export processed data to a Parquet file.
 
         Args:
-            df: The processed DataFrame to export.
+            df: The processed DataFrame or LazyFrame to export.
             dataset: The dataset being processed.
 
         Returns:
             The URI to the exported Parquet file.
         """
         output_uri = self._get_uri(dataset.id)
+
+        # Collect if LazyFrame
+        if isinstance(df, pl.LazyFrame):
+            df = df.collect()
 
         # Write the DataFrame to Parquet via storage layer
         self._storage.write_parquet(df, output_uri)

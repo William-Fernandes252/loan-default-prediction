@@ -216,6 +216,7 @@ class DescribeStorageManager:
 
             uri = storage_manager.get_latest_consolidated_results_uri("taiwan_credit")
 
+            assert uri is not None
             assert "20251225_120000.parquet" in uri  # Latest by alphabetical order
 
     class DescribeDatasetResultsDirUri:
@@ -289,6 +290,22 @@ class DescribeStorageManagerDataOperations:
             call_kwargs = mock_storage.read_csv.call_args[1]
             assert call_kwargs["separator"] == ";"
             assert call_kwargs["skip_rows"] == 1
+
+    class DescribeScanRawData:
+        """Tests for scan_raw_data method."""
+
+        def it_scans_csv_from_raw_data_path(
+            self, storage_manager: StorageManager, path_settings: PathSettings
+        ) -> None:
+            """Verify scans CSV from raw data path."""
+            path_settings.raw_data_dir.mkdir(parents=True, exist_ok=True)
+            csv_path = path_settings.raw_data_dir / "taiwan_credit.csv"
+            csv_path.write_text("col1,col2\n1,2")
+
+            lf = storage_manager.scan_raw_data("taiwan_credit")
+
+            assert isinstance(lf, pl.LazyFrame)
+            assert lf.collect().shape == (1, 2)
 
     class DescribeWriteInterimData:
         """Tests for write_interim_data method."""
@@ -466,6 +483,19 @@ class DescribeStorageManagerCheckpointOperations:
 
             mock_storage.read_parquet.assert_called_once_with(uri)
 
+    class DescribeScanCheckpoint:
+        """Tests for scan_checkpoint method."""
+
+        def it_scans_checkpoint_from_uri(
+            self, storage_manager_with_mock: StorageManager, mock_storage: MagicMock
+        ) -> None:
+            """Verify scans checkpoint from URI."""
+            uri = "file:///tmp/checkpoint.parquet"
+
+            storage_manager_with_mock.scan_checkpoint(uri)
+
+            mock_storage.scan_parquet.assert_called_once_with(uri)
+
     class DescribeCheckpointExists:
         """Tests for checkpoint_exists method."""
 
@@ -551,6 +581,19 @@ class DescribeStorageManagerCheckpointOperations:
             _, path = storage_manager.storage.parse_uri(result_uri)
             consolidated = pl.read_parquet(path)
             assert len(consolidated) == 6  # 3 rows * 2 checkpoints
+
+        def it_uses_sink_parquet_for_consolidation(
+            self, storage_manager_with_mock: StorageManager, mock_storage: MagicMock
+        ) -> None:
+            """Verify uses sink_parquet to avoid materialization."""
+            mock_storage.list_files.return_value = ["file:///ckpt1.parquet"]
+            mock_storage.scan_parquet.return_value = pl.LazyFrame({"a": [1]})
+
+            storage_manager_with_mock.consolidate_checkpoints("taiwan_credit")
+
+            mock_storage.sink_parquet.assert_called_once()
+            # Ensure write_parquet was NOT called
+            mock_storage.write_parquet.assert_not_called()
 
 
 class DescribeStorageManagerFeatureContext:

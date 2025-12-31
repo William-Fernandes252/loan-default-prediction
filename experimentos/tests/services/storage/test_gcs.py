@@ -413,6 +413,115 @@ class DescribeGCSStorageService:
 
             mock_blob.upload_from_file.assert_called_once()
 
+    class DescribeScanParquet:
+        """Tests for the scan_parquet method."""
+
+        def it_returns_lazy_frame(
+            self,
+            storage: GCSStorageService,
+            mock_gcs_client: MagicMock,
+            sample_dataframe: pl.DataFrame,
+            tmp_path: Path,
+        ) -> None:
+            """Verify returns a lazy DataFrame."""
+            # Create parquet bytes
+            buffer = io.BytesIO()
+            sample_dataframe.write_parquet(buffer)
+            buffer.seek(0)
+
+            # Mock download_to_filename to write the parquet data to the cache file
+            def mock_download_to_filename(filename):
+                with open(filename, "wb") as f:
+                    f.write(buffer.getvalue())
+
+            # Use tmp_path as cache_dir
+            storage_with_cache = GCSStorageService(
+                client=mock_gcs_client, bucket="bucket", cache_dir=tmp_path
+            )
+
+            mock_bucket = MagicMock()
+            mock_blob = MagicMock()
+            mock_blob.exists.return_value = True
+            mock_blob.download_to_filename.side_effect = mock_download_to_filename
+            mock_bucket.blob.return_value = mock_blob
+            mock_gcs_client.bucket.return_value = mock_bucket
+
+            lf = storage_with_cache.scan_parquet("gs://bucket/data.parquet")
+
+            assert isinstance(lf, pl.LazyFrame)
+            df = lf.collect()
+            assert df.shape == sample_dataframe.shape
+            assert df.columns == sample_dataframe.columns
+
+        def it_caches_downloaded_file(
+            self,
+            storage: GCSStorageService,
+            mock_gcs_client: MagicMock,
+            sample_dataframe: pl.DataFrame,
+            tmp_path: Path,
+        ) -> None:
+            """Verify caches the downloaded file for reuse."""
+            buffer = io.BytesIO()
+            sample_dataframe.write_parquet(buffer)
+            buffer.seek(0)
+
+            def mock_download_to_filename(filename):
+                with open(filename, "wb") as f:
+                    f.write(buffer.getvalue())
+
+            storage_with_cache = GCSStorageService(
+                client=mock_gcs_client, bucket="bucket", cache_dir=tmp_path
+            )
+
+            mock_bucket = MagicMock()
+            mock_blob = MagicMock()
+            mock_blob.exists.return_value = True
+            mock_blob.download_to_filename.side_effect = mock_download_to_filename
+            mock_bucket.blob.return_value = mock_blob
+            mock_gcs_client.bucket.return_value = mock_bucket
+
+            # First call - should download
+            lf1 = storage_with_cache.scan_parquet("gs://bucket/data.parquet")
+            assert mock_blob.download_to_filename.call_count == 1
+
+            # Second call - should use cache
+            lf2 = storage_with_cache.scan_parquet("gs://bucket/data.parquet")
+            assert mock_blob.download_to_filename.call_count == 1  # Still 1, not 2
+
+    class DescribeScanCsv:
+        """Tests for the scan_csv method."""
+
+        def it_returns_lazy_frame(
+            self,
+            storage: GCSStorageService,
+            mock_gcs_client: MagicMock,
+            tmp_path: Path,
+        ) -> None:
+            """Verify returns a lazy DataFrame."""
+            csv_data = b"a,b,c\n1,2,3\n4,5,6"
+
+            def mock_download_to_filename(filename):
+                with open(filename, "wb") as f:
+                    f.write(csv_data)
+
+            storage_with_cache = GCSStorageService(
+                client=mock_gcs_client, bucket="bucket", cache_dir=tmp_path
+            )
+
+            mock_bucket = MagicMock()
+            mock_blob = MagicMock()
+            mock_blob.exists.return_value = True
+            mock_blob.download_to_filename.side_effect = mock_download_to_filename
+            mock_bucket.blob.return_value = mock_blob
+            mock_gcs_client.bucket.return_value = mock_bucket
+
+            lf = storage_with_cache.scan_csv("gs://bucket/data.csv")
+
+            assert isinstance(lf, pl.LazyFrame)
+            df = lf.collect()
+            assert df.shape == (2, 3)
+            assert df.columns == ["a", "b", "c"]
+
     class DescribeReadJson:
         """Tests for the read_json method."""
 

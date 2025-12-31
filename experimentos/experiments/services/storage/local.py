@@ -100,11 +100,31 @@ class LocalStorageService(StorageService):
         except Exception as exc:
             raise StorageError(uri, str(exc)) from exc
 
+    def sink_parquet(self, lf: pl.LazyFrame, uri: str, **kwargs: Any) -> None:
+        path = self._to_path(uri)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            lf.sink_parquet(path, **kwargs)
+        except Exception as exc:
+            raise StorageError(uri, str(exc)) from exc
+
     def read_csv(self, uri: str, **kwargs: Any) -> pl.DataFrame:
         path = self._to_path(uri)
         if not path.exists():
             raise FileDoesNotExistError(uri)
         return pl.read_csv(path, **kwargs)
+
+    def scan_parquet(self, uri: str, **kwargs: Any) -> pl.LazyFrame:
+        path = self._to_path(uri)
+        if not path.exists():
+            raise FileDoesNotExistError(uri)
+        return pl.scan_parquet(path, **kwargs)
+
+    def scan_csv(self, uri: str, **kwargs: Any) -> pl.LazyFrame:
+        path = self._to_path(uri)
+        if not path.exists():
+            raise FileDoesNotExistError(uri)
+        return pl.scan_csv(path, **kwargs)
 
     # --- JSON I/O ---
 

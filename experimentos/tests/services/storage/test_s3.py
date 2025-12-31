@@ -350,6 +350,100 @@ class DescribeS3StorageService:
             assert call_args[1]["Bucket"] == "bucket"
             assert call_args[1]["Key"] == "data.parquet"
 
+    class DescribeScanParquet:
+        """Tests for the scan_parquet method."""
+
+        def it_returns_lazy_frame(
+            self,
+            storage: S3StorageService,
+            mock_s3_client: MagicMock,
+            sample_dataframe: pl.DataFrame,
+            tmp_path: Path,
+        ) -> None:
+            """Verify returns a lazy DataFrame."""
+            # Create parquet bytes
+            buffer = io.BytesIO()
+            sample_dataframe.write_parquet(buffer)
+            buffer.seek(0)
+
+            # Mock download_file to write the parquet data to the cache file
+            def mock_download_file(bucket, key, filename):
+                with open(filename, "wb") as f:
+                    f.write(buffer.getvalue())
+
+            # Use tmp_path as cache_dir
+            storage_with_cache = S3StorageService(
+                client=mock_s3_client, bucket="bucket", cache_dir=tmp_path
+            )
+            mock_s3_client.head_object.return_value = {}
+            mock_s3_client.download_file.side_effect = mock_download_file
+
+            lf = storage_with_cache.scan_parquet("s3://bucket/data.parquet")
+
+            assert isinstance(lf, pl.LazyFrame)
+            df = lf.collect()
+            assert df.shape == sample_dataframe.shape
+            assert df.columns == sample_dataframe.columns
+
+        def it_caches_downloaded_file(
+            self,
+            storage: S3StorageService,
+            mock_s3_client: MagicMock,
+            sample_dataframe: pl.DataFrame,
+            tmp_path: Path,
+        ) -> None:
+            """Verify caches the downloaded file for reuse."""
+            buffer = io.BytesIO()
+            sample_dataframe.write_parquet(buffer)
+            buffer.seek(0)
+
+            def mock_download_file(bucket, key, filename):
+                with open(filename, "wb") as f:
+                    f.write(buffer.getvalue())
+
+            storage_with_cache = S3StorageService(
+                client=mock_s3_client, bucket="bucket", cache_dir=tmp_path
+            )
+            mock_s3_client.head_object.return_value = {}
+            mock_s3_client.download_file.side_effect = mock_download_file
+
+            # First call - should download
+            lf1 = storage_with_cache.scan_parquet("s3://bucket/data.parquet")
+            assert mock_s3_client.download_file.call_count == 1
+
+            # Second call - should use cache
+            lf2 = storage_with_cache.scan_parquet("s3://bucket/data.parquet")
+            assert mock_s3_client.download_file.call_count == 1  # Still 1, not 2
+
+    class DescribeScanCsv:
+        """Tests for the scan_csv method."""
+
+        def it_returns_lazy_frame(
+            self,
+            storage: S3StorageService,
+            mock_s3_client: MagicMock,
+            tmp_path: Path,
+        ) -> None:
+            """Verify returns a lazy DataFrame."""
+            csv_data = b"a,b,c\n1,2,3\n4,5,6"
+
+            def mock_download_file(bucket, key, filename):
+                with open(filename, "wb") as f:
+                    f.write(csv_data)
+
+            storage_with_cache = S3StorageService(
+                client=mock_s3_client, bucket="bucket", cache_dir=tmp_path
+            )
+            mock_s3_client.head_object.return_value = {}
+            mock_s3_client.download_file.side_effect = mock_download_file
+
+            lf = storage_with_cache.scan_csv("s3://bucket/data.csv")
+
+            assert isinstance(lf, pl.LazyFrame)
+            df = lf.collect()
+            assert df.shape == (2, 3)
+            assert df.columns == ["a", "b", "c"]
+
     class DescribeReadJson:
         """Tests for the read_json method."""
 

@@ -248,6 +248,17 @@ class GCSStorageService(StorageService):
         except Exception as exc:
             raise StorageError(uri, str(exc)) from exc
 
+    def sink_parquet(self, lf: pl.LazyFrame, uri: str, **kwargs: Any) -> None:
+        bucket_name, blob_name = self._parse_gcs_path(uri)
+        try:
+            # Sink to a temp file first to keep memory usage low
+            with tempfile.NamedTemporaryFile(suffix=".parquet", delete=True) as tmp:
+                lf.sink_parquet(tmp.name, **kwargs)
+                blob = self._get_blob(bucket_name, blob_name)
+                blob.upload_from_filename(tmp.name)
+        except Exception as exc:
+            raise StorageError(uri, str(exc)) from exc
+
     def read_csv(self, uri: str, **kwargs: Any) -> pl.DataFrame:
         bucket_name, blob_name = self._parse_gcs_path(uri)
         if not self._blob_exists(bucket_name, blob_name):
@@ -258,6 +269,52 @@ class GCSStorageService(StorageService):
             with tempfile.NamedTemporaryFile(suffix=".csv", delete=True) as tmp:
                 blob.download_to_filename(tmp.name)
                 return pl.read_csv(tmp.name, **kwargs)
+        except Exception as exc:
+            raise StorageError(uri, str(exc)) from exc
+
+    def scan_parquet(self, uri: str, **kwargs: Any) -> pl.LazyFrame:
+        bucket_name, blob_name = self._parse_gcs_path(uri)
+        if not self._blob_exists(bucket_name, blob_name):
+            raise FileDoesNotExistError(uri)
+        try:
+            # Download to persistent cache for lazy evaluation
+            # The cache must persist during the lazy frame's lifecycle
+            cache_base = self._cache_dir or Path(tempfile.gettempdir()) / "experiments_cache"
+            cache_base.mkdir(parents=True, exist_ok=True)
+
+            # Create a unique local path based on the GCS path
+            safe_name = f"{bucket_name}_{blob_name}".replace("/", "_")
+            local_path = cache_base / safe_name
+
+            # Download if not already cached
+            if not local_path.exists():
+                blob = self._get_blob(bucket_name, blob_name)
+                blob.download_to_filename(str(local_path))
+
+            return pl.scan_parquet(local_path, **kwargs)
+        except Exception as exc:
+            raise StorageError(uri, str(exc)) from exc
+
+    def scan_csv(self, uri: str, **kwargs: Any) -> pl.LazyFrame:
+        bucket_name, blob_name = self._parse_gcs_path(uri)
+        if not self._blob_exists(bucket_name, blob_name):
+            raise FileDoesNotExistError(uri)
+        try:
+            # Download to persistent cache for lazy evaluation
+            # The cache must persist during the lazy frame's lifecycle
+            cache_base = self._cache_dir or Path(tempfile.gettempdir()) / "experiments_cache"
+            cache_base.mkdir(parents=True, exist_ok=True)
+
+            # Create a unique local path based on the GCS path
+            safe_name = f"{bucket_name}_{blob_name}".replace("/", "_")
+            local_path = cache_base / safe_name
+
+            # Download if not already cached
+            if not local_path.exists():
+                blob = self._get_blob(bucket_name, blob_name)
+                blob.download_to_filename(str(local_path))
+
+            return pl.scan_csv(local_path, **kwargs)
         except Exception as exc:
             raise StorageError(uri, str(exc)) from exc
 

@@ -64,17 +64,17 @@ class RawDataLoader(Protocol):
     """Protocol for loading raw data.
 
     Implementations are responsible for loading data from a source
-    (e.g., CSV files) and returning a Polars DataFrame.
+    (e.g., CSV files) and returning a Polars DataFrame or LazyFrame.
     """
 
-    def load(self, dataset: Dataset) -> pl.DataFrame:
+    def load(self, dataset: Dataset) -> pl.DataFrame | pl.LazyFrame:
         """Load raw data for the given dataset.
 
         Args:
             dataset: The dataset to load data for.
 
         Returns:
-            A Polars DataFrame containing the raw data.
+            A Polars DataFrame or LazyFrame containing the raw data.
         """
         ...
 
@@ -87,15 +87,17 @@ class DataTransformer(Protocol):
     data for modeling (e.g., feature engineering, encoding, cleaning).
     """
 
-    def transform(self, df: pl.DataFrame, dataset: Dataset) -> pl.DataFrame:
+    def transform(
+        self, df: pl.DataFrame | pl.LazyFrame, dataset: Dataset
+    ) -> pl.DataFrame | pl.LazyFrame:
         """Transform the input DataFrame.
 
         Args:
-            df: The input Polars DataFrame to transform.
+            df: The input Polars DataFrame or LazyFrame to transform.
             dataset: The dataset being processed (for context).
 
         Returns:
-            The transformed Polars DataFrame.
+            The transformed Polars DataFrame or LazyFrame.
         """
         ...
 

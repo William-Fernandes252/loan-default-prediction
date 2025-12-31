@@ -59,7 +59,9 @@ class BaseDataTransformer(ABC):
         """The name of the dataset this transformer handles."""
         ...
 
-    def transform(self, df: pl.DataFrame, dataset: Dataset) -> pl.DataFrame:
+    def transform(
+        self, df: pl.DataFrame | pl.LazyFrame, dataset: Dataset
+    ) -> pl.DataFrame | pl.LazyFrame:
         """Transform raw data into processed format.
 
         This method orchestrates the transformation pipeline:
@@ -67,31 +69,33 @@ class BaseDataTransformer(ABC):
         2. Apply shared sanitization
 
         Args:
-            df: The raw input DataFrame.
+            df: The raw input DataFrame or LazyFrame.
             dataset: The dataset being processed (for context/validation).
 
         Returns:
-            The transformed DataFrame ready for modeling.
+            The transformed DataFrame or LazyFrame ready for modeling.
         """
         transformed = self._apply_transformations(df)
         return self.sanitize(transformed)
 
     @abstractmethod
-    def _apply_transformations(self, df: pl.DataFrame) -> pl.DataFrame:
+    def _apply_transformations(
+        self, df: pl.DataFrame | pl.LazyFrame
+    ) -> pl.DataFrame | pl.LazyFrame:
         """Apply dataset-specific transformation logic.
 
         This method should contain all the feature engineering,
         encoding, and cleaning logic specific to the dataset.
 
         Args:
-            df: The raw input DataFrame.
+            df: The raw input DataFrame or LazyFrame.
 
         Returns:
-            The transformed DataFrame.
+            The transformed DataFrame or LazyFrame.
         """
         ...
 
-    def sanitize(self, df: pl.DataFrame) -> pl.DataFrame:
+    def sanitize(self, df: pl.DataFrame | pl.LazyFrame) -> pl.DataFrame | pl.LazyFrame:
         """Apply shared sanitization logic to handle edge cases.
 
         Override this method to add custom sanitization logic

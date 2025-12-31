@@ -154,6 +154,22 @@ class StorageService(ABC):
         """
 
     @abstractmethod
+    def sink_parquet(self, lf: pl.LazyFrame, uri: str, **kwargs: Any) -> None:
+        """Sink a LazyFrame to a parquet file at the given URI.
+
+        This method streams the result to disk without materializing the
+        entire DataFrame in memory.
+
+        Args:
+            lf: The Polars LazyFrame to sink.
+            uri: The URI where the parquet file will be written.
+            **kwargs: Additional arguments passed to sink_parquet.
+
+        Raises:
+            StorageError: If there is an error during the write operation.
+        """
+
+    @abstractmethod
     def read_csv(self, uri: str, **kwargs: Any) -> pl.DataFrame:
         """Read a CSV file from the given URI.
 
@@ -166,6 +182,52 @@ class StorageService(ABC):
 
         Raises:
             FileDoesNotExistError: If the file does not exist.
+        """
+
+    @abstractmethod
+    def scan_parquet(self, uri: str, **kwargs: Any) -> pl.LazyFrame:
+        """Scan a parquet file and return a lazy DataFrame.
+
+        This allows for lazy evaluation and memory-efficient processing
+        of large datasets without loading the entire file into memory.
+
+        Args:
+            uri: The URI of the parquet file.
+            **kwargs: Additional arguments passed to pl.scan_parquet.
+
+        Returns:
+            pl.LazyFrame: A lazy DataFrame that can be evaluated later.
+
+        Raises:
+            FileDoesNotExistError: If the file does not exist.
+
+        Note:
+            For cloud storage (S3/GCS), the file is downloaded to a
+            persistent cache directory. The cache must remain available
+            during the lazy frame's lifecycle.
+        """
+
+    @abstractmethod
+    def scan_csv(self, uri: str, **kwargs: Any) -> pl.LazyFrame:
+        """Scan a CSV file and return a lazy DataFrame.
+
+        This allows for lazy evaluation and memory-efficient processing
+        of large CSV datasets without loading the entire file into memory.
+
+        Args:
+            uri: The URI of the CSV file.
+            **kwargs: Additional arguments passed to pl.scan_csv.
+
+        Returns:
+            pl.LazyFrame: A lazy DataFrame that can be evaluated later.
+
+        Raises:
+            FileDoesNotExistError: If the file does not exist.
+
+        Note:
+            For cloud storage (S3/GCS), the file is downloaded to a
+            persistent cache directory. The cache must remain available
+            during the lazy frame's lifecycle.
         """
 
     # --- JSON I/O ---

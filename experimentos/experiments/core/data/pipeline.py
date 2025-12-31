@@ -12,6 +12,8 @@ from loguru import logger
 
 # Import transformers to ensure they are registered
 # These imports trigger the @register_transformer decorators
+import polars as pl
+
 from experiments.core.data import corporate_credit, lending_club, taiwan_credit
 from experiments.core.data.base import BaseDataTransformer
 from experiments.core.data.exporters import ParquetDataExporter
@@ -80,14 +82,21 @@ class DataProcessingPipeline:
         # Load raw data
         logger.info("Loading raw data...")
         raw_df = self._loader.load(dataset)
-        logger.info(f"Loaded {len(raw_df):,} rows")
+        if isinstance(raw_df, pl.DataFrame):
+            logger.info(f"Loaded {len(raw_df):,} rows")
+        else:
+            logger.info("Loaded raw data (lazy)")
 
         # Transform
         logger.info("Applying transformations...")
         processed_df = self._transformer.transform(raw_df, dataset)
-        logger.info(
-            f"Transformation complete: {len(processed_df):,} rows, {len(processed_df.columns)} columns"
-        )
+
+        if isinstance(processed_df, pl.DataFrame):
+            logger.info(
+                f"Transformation complete: {len(processed_df):,} rows, {len(processed_df.columns)} columns"
+            )
+        else:
+            logger.info("Transformation complete (lazy)")
 
         # Export
         logger.info("Exporting processed data...")
