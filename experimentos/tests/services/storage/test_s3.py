@@ -320,10 +320,13 @@ class DescribeS3StorageService:
             sample_dataframe.write_parquet(buffer)
             buffer.seek(0)
 
-            mock_body = MagicMock()
-            mock_body.read.return_value = buffer.getvalue()
+            # Mock download_file to write the parquet data to a temp file
+            def mock_download_file(bucket, key, filename):
+                with open(filename, "wb") as f:
+                    f.write(buffer.getvalue())
+
             mock_s3_client.head_object.return_value = {}
-            mock_s3_client.get_object.return_value = {"Body": mock_body}
+            mock_s3_client.download_file.side_effect = mock_download_file
 
             df = storage.read_parquet("s3://bucket/data.parquet")
 

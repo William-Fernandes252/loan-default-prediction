@@ -220,10 +220,11 @@ class S3StorageService(StorageService):
         if not self._object_exists(bucket, key):
             raise FileDoesNotExistError(uri)
         try:
-            # Download to buffer and read with Polars
-            response = self._client.get_object(Bucket=bucket, Key=key)
-            buffer = io.BytesIO(response["Body"].read())
-            return pl.read_parquet(buffer)
+            # Download to a temporary file to avoid loading entire file into RAM
+            # This allows Polars to use memory-mapped I/O for efficient reading
+            with tempfile.NamedTemporaryFile(suffix=".parquet", delete=True) as tmp:
+                self._client.download_file(bucket, key, tmp.name)
+                return pl.read_parquet(tmp.name)
         except Exception as exc:
             raise StorageError(uri, str(exc)) from exc
 
@@ -242,9 +243,10 @@ class S3StorageService(StorageService):
         if not self._object_exists(bucket, key):
             raise FileDoesNotExistError(uri)
         try:
-            response = self._client.get_object(Bucket=bucket, Key=key)
-            buffer = io.BytesIO(response["Body"].read())
-            return pl.read_csv(buffer, **kwargs)
+            # Download to a temporary file to avoid loading entire file into RAM
+            with tempfile.NamedTemporaryFile(suffix=".csv", delete=True) as tmp:
+                self._client.download_file(bucket, key, tmp.name)
+                return pl.read_csv(tmp.name, **kwargs)
         except Exception as exc:
             raise StorageError(uri, str(exc)) from exc
 

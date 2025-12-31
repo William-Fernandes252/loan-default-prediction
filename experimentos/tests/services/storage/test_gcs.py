@@ -377,10 +377,15 @@ class DescribeGCSStorageService:
             sample_dataframe.write_parquet(buffer)
             buffer.seek(0)
 
+            # Mock download_to_filename to write the parquet data to the temp file
+            def mock_download_to_filename(filename):
+                with open(filename, "wb") as f:
+                    f.write(buffer.getvalue())
+
             mock_bucket = MagicMock()
             mock_blob = MagicMock()
             mock_blob.exists.return_value = True
-            mock_blob.download_as_bytes.return_value = buffer.getvalue()
+            mock_blob.download_to_filename.side_effect = mock_download_to_filename
             mock_bucket.blob.return_value = mock_blob
             mock_gcs_client.bucket.return_value = mock_bucket
 

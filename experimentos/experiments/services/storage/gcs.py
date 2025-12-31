@@ -228,9 +228,12 @@ class GCSStorageService(StorageService):
         if not self._blob_exists(bucket_name, blob_name):
             raise FileDoesNotExistError(uri)
         try:
+            # Download to a temporary file to avoid loading entire file into RAM
+            # This allows Polars to use memory-mapped I/O for efficient reading
             blob = self._get_blob(bucket_name, blob_name)
-            data = blob.download_as_bytes()
-            return pl.read_parquet(io.BytesIO(data))
+            with tempfile.NamedTemporaryFile(suffix=".parquet", delete=True) as tmp:
+                blob.download_to_filename(tmp.name)
+                return pl.read_parquet(tmp.name)
         except Exception as exc:
             raise StorageError(uri, str(exc)) from exc
 
@@ -250,9 +253,11 @@ class GCSStorageService(StorageService):
         if not self._blob_exists(bucket_name, blob_name):
             raise FileDoesNotExistError(uri)
         try:
+            # Download to a temporary file to avoid loading entire file into RAM
             blob = self._get_blob(bucket_name, blob_name)
-            data = blob.download_as_bytes()
-            return pl.read_csv(io.BytesIO(data), **kwargs)
+            with tempfile.NamedTemporaryFile(suffix=".csv", delete=True) as tmp:
+                blob.download_to_filename(tmp.name)
+                return pl.read_csv(tmp.name, **kwargs)
         except Exception as exc:
             raise StorageError(uri, str(exc)) from exc
 
