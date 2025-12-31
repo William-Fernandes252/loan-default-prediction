@@ -177,7 +177,7 @@ def training_pipeline_factory(
     )
 
 
-class DescribeTrainingPipelineSmoke:
+class DescribeTrainingPipeline:
     """Smoke tests for the training pipeline end-to-end execution."""
 
     def it_runs_complete_pipeline_with_real_components(
@@ -485,4 +485,4 @@ class DescribeTrainingPipelineSmoke:
         )
 
 
-__all__ = ["DescribeTrainingPipelineSmoke"]
+__all__ = ["DescribeTrainingPipeline"]
