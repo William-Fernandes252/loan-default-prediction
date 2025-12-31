@@ -12,6 +12,7 @@ from pathlib import Path
 import tempfile
 from typing import TYPE_CHECKING, Any, BinaryIO, Generator
 
+from google.cloud.storage import Blob, Bucket
 import joblib
 import polars as pl
 
@@ -97,11 +98,11 @@ class GCSStorageService(StorageService):
         """Convert bucket and blob name to a full gs:// URI."""
         return f"gs://{bucket}/{blob_name}"
 
-    def _get_bucket(self, bucket_name: str) -> Any:
+    def _get_bucket(self, bucket_name: str) -> Bucket:
         """Get a bucket object."""
         return self._client.bucket(bucket_name)
 
-    def _get_blob(self, bucket_name: str, blob_name: str) -> Any:
+    def _get_blob(self, bucket_name: str, blob_name: str) -> Blob:
         """Get a blob object."""
         bucket = self._get_bucket(bucket_name)
         return bucket.blob(blob_name)

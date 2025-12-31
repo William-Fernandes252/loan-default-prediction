@@ -10,7 +10,7 @@ import fnmatch
 import io
 from pathlib import Path
 import tempfile
-from typing import TYPE_CHECKING, Any, BinaryIO, Generator
+from typing import TYPE_CHECKING, Any, BinaryIO, Generator, cast
 
 import joblib
 import polars as pl
@@ -22,7 +22,7 @@ from experiments.services.storage.errors import (
 )
 
 if TYPE_CHECKING:
-    from boto3 import S3Client
+    from types_boto3_s3 import S3Client
 
 
 class S3StorageService(StorageService):
@@ -128,7 +128,7 @@ class S3StorageService(StorageService):
                 for page in paginator.paginate(Bucket=bucket, Prefix=key):
                     if "Contents" in page:
                         objects = [{"Key": obj["Key"]} for obj in page["Contents"]]
-                        self._client.delete_objects(Bucket=bucket, Delete={"Objects": objects})
+                        self._client.delete_objects(Bucket=bucket, Delete={"Objects": objects})  # type: ignore[typeddict-item]
             else:
                 # Single object
                 self._client.delete_object(Bucket=bucket, Key=key)
@@ -198,7 +198,7 @@ class S3StorageService(StorageService):
                 raise FileDoesNotExistError(uri)
             try:
                 response = self._client.get_object(Bucket=bucket, Key=key)
-                yield response["Body"]
+                yield cast(BinaryIO, response["Body"])
             except Exception as exc:
                 raise StorageError(uri, str(exc)) from exc
         elif "w" in mode:
