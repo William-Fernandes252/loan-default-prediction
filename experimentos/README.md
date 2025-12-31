@@ -164,10 +164,20 @@ This project uses `make` to automate common development tasks.
 Run the test suite using `pytest`:
 
 ```bash
+# Run all tests
 make test
+
+# Run specific scopes
+make test-unit
+make test-integration
+make test-e2e
 ```
 
-The test suite follows a `Describe<ClassName>` / `it_<behavior>` naming convention for clear, behavior-driven test organization.
+The test suite follows a `Describe<ClassName>` / `it_<behavior>` naming convention for clear, behavior-driven test organization. Tests are organized by scope:
+
+- **Unit Tests**: Located in `tests/unit`, testing individual components in isolation.
+- **Integration Tests**: Located in `tests/integration`, testing the interaction between components and pipelines.
+- **End-to-End Tests**: Located in `tests/e2e`, testing the complete system flow.
 
 ### Linting & Formatting
 

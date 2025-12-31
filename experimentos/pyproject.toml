@@ -59,7 +59,7 @@ force-sort-within-sections = true
 disable_error_code = ["import-untyped"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "integration"]
+testpaths = ["tests"]
 python_classes = ["Test*", "Describe*", "For*"]
 python_functions = ["test_*", "it_*", "should_*"]
 

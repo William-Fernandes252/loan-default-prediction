@@ -43,7 +43,22 @@ format:
 ## Run tests
 .PHONY: test
 test:
-	python -m pytest tests
+	uv run pytest tests
+
+## Run unit tests
+.PHONY: test-unit
+test-unit:
+	uv run pytest tests/unit
+
+## Run integration tests
+.PHONY: test-integration
+test-integration:
+	uv run pytest tests/integration
+
+## Run end-to-end tests
+.PHONY: test-e2e
+test-e2e:
+	uv run pytest tests/e2e
 
 
 ## Set up Python interpreter environment

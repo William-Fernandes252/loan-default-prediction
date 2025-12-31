@@ -87,8 +87,17 @@ uv run ldp analyze all
 ## Development
 
 ### Running Tests
+
+You can run the entire test suite or specific scopes:
+
 ```bash
+# All tests
 make test
+
+# Specific scopes
+make test-unit
+make test-integration
+make test-e2e
 ```
 
 ### Linting and Formatting

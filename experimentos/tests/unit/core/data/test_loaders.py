@@ -52,7 +52,7 @@ class DescribeCsvRawDataLoader:
     def it_loads_dataframe_from_csv(
         self, tmp_path: Path, sample_csv_content: str, storage: LocalStorageService
     ) -> None:
-        """Verify loader reads CSV and returns a Polars DataFrame."""
+        """Verify loader reads CSV and returns a Polars LazyFrame."""
         # Create file with correct name for the dataset
         csv_path = tmp_path / "taiwan_credit.csv"
         csv_path.write_text(sample_csv_content)
@@ -62,10 +62,11 @@ class DescribeCsvRawDataLoader:
 
         result = loader.load(Dataset.TAIWAN_CREDIT)
 
-        assert isinstance(result, pl.DataFrame)
-        assert len(result) == 3
-        assert "loan_amnt" in result.columns
-        assert "target" in result.columns
+        assert isinstance(result, pl.LazyFrame)
+        df = result.collect()
+        assert len(df) == 3
+        assert "loan_amnt" in df.columns
+        assert "target" in df.columns
 
     def it_returns_correct_column_types(
         self, tmp_path: Path, sample_csv_content: str, storage: LocalStorageService
@@ -78,7 +79,7 @@ class DescribeCsvRawDataLoader:
         base_uri = StorageService.to_uri(tmp_path)
         loader = CsvRawDataLoader(storage, base_uri)
 
-        result = loader.load(Dataset.TAIWAN_CREDIT)
+        result = loader.load(Dataset.TAIWAN_CREDIT).collect()
 
         assert result["loan_amnt"].dtype == pl.Int64
         assert result["target"].dtype == pl.Int64
@@ -112,8 +113,8 @@ xyz789,10000
         base_uri = StorageService.to_uri(tmp_path)
         loader = CsvRawDataLoader(storage, base_uri)
 
-        result = loader.load(Dataset.LENDING_CLUB)
+        result = loader.load(Dataset.LENDING_CLUB).collect()
 
         # The id column should be string due to schema_overrides
-        assert result["id"].dtype == pl.Utf8
+        assert result["id"].dtype == pl.String
         assert result["id"].to_list() == ["abc123", "xyz789"]
