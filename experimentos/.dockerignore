@@ -1,0 +1,26 @@
+# --- Build Artifacts & Cache ---
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.ruff_cache
+.vscode
+.env
+mise.toml
+.mypy_cache
+.pytest_cache
+
+# --- Data & Outputs ---
+results
+reports
+models
+data
+dist
+
+# --- Documentation ---
+!README.md
+
+# --- Version Control ---
+.git
+.gitignore
