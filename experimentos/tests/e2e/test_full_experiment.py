@@ -23,21 +23,54 @@ def s3_client():
 
 
 @pytest.fixture(scope="module", autouse=True)
-def docker_compose():
+def docker_compose(s3_client):
     """Starts the E2E stack and tears it down after tests."""
     # Start containers
     subprocess.run(
-        ["docker-compose", "-f", "docker-compose.e2e.yml", "up", "-d", "--build"], check=True
+        ["docker", "compose", "-f", "docker-compose.e2e.yaml", "up", "-d", "--build"], check=True
     )
 
-    # Wait for LocalStack to be ready (healthcheck in compose helps, but explicit wait is safer)
-    print("Waiting for stack to stabilize...")
-    time.sleep(10)
+    # Wait for LocalStack to be ready
+    print("Waiting for LocalStack S3...")
+    retries = 30
+    for i in range(retries):
+        try:
+            s3_client.list_buckets()
+            print("LocalStack S3 is ready.")
+            break
+        except Exception:
+            if i == retries - 1:
+                raise Exception("LocalStack S3 failed to become ready.")
+            time.sleep(1)
 
     yield
 
     # Cleanup
-    subprocess.run(["docker-compose", "-f", "docker-compose.e2e.yml", "down", "-v"], check=True)
+    subprocess.run(
+        ["docker", "compose", "-f", "docker-compose.e2e.yaml", "down", "-v"], check=True
+    )
+
+
+def run_cli(args):
+    """Helper to run CLI commands inside the container."""
+    cmd = [
+        "docker",
+        "compose",
+        "-f",
+        "docker-compose.e2e.yaml",
+        "exec",
+        "-T",
+        "app",
+        "python",
+        "-m",
+        "experiments.cli",
+    ] + args
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"Command failed. Stderr:\n{result.stderr}")
+        raise RuntimeError(f"Command {' '.join(args)} failed: {result.stderr}")
+    return result
 
 
 def test_full_pipeline_execution(s3_client: S3Client):
@@ -47,8 +80,9 @@ def test_full_pipeline_execution(s3_client: S3Client):
     2. Generate raw data inside the App container.
     3. Upload raw data to S3 (simulating ETL ingestion).
     4. Run 'process' CLI command.
-    5. Run 'train' CLI command.
-    6. Verify artifacts in S3.
+    5. Run 'features' CLI command.
+    6. Run 'train' CLI command.
+    7. Verify artifacts in S3.
     """
 
     # Prepare S3
@@ -60,43 +94,56 @@ def test_full_pipeline_execution(s3_client: S3Client):
     # Here we simulate an external ETL process putting data into the raw bucket.
 
     raw_csv_path = "taiwan_credit.csv"
+    container_path = f"/tmp/{raw_csv_path}"
 
-    # Generate locally for the test runner
-    from tests.e2e.scripts.generate_dataset import generate_taiwan_credit
+    try:
+        # Generate inside container to avoid host dependency issues
+        subprocess.run(
+            [
+                "docker",
+                "compose",
+                "-f",
+                "docker-compose.e2e.yaml",
+                "exec",
+                "-T",
+                "app",
+                "python",
+                "/app/scripts/generate_dataset.py",
+                container_path,
+            ],
+            check=True,
+        )
 
-    generate_taiwan_credit(raw_csv_path, n_rows=50)
+        # Copy from container to host
+        subprocess.run(
+            [
+                "docker",
+                "compose",
+                "-f",
+                "docker-compose.e2e.yaml",
+                "cp",
+                f"app:{container_path}",
+                raw_csv_path,
+            ],
+            check=True,
+        )
 
-    # Upload to "Raw" zone in S3
-    s3_key = "data/raw/taiwan_credit.csv"
-    with open(raw_csv_path, "rb") as f:
-        s3_client.put_object(Bucket=BUCKET_NAME, Key=s3_key, Body=f)
+        # Upload to "Raw" zone in S3
+        s3_key = "data/raw/taiwan_credit.csv"
+        with open(raw_csv_path, "rb") as f:
+            s3_client.put_object(Bucket=BUCKET_NAME, Key=s3_key, Body=f)
 
-    print(f"Uploaded raw data to s3://{BUCKET_NAME}/{s3_key}")
-    os.remove(raw_csv_path)  # Cleanup local
+        print(f"Uploaded raw data to s3://{BUCKET_NAME}/{s3_key}")
+
+    finally:
+        # Cleanup local file
+        if os.path.exists(raw_csv_path):
+            os.remove(raw_csv_path)
 
     # Run Data Processing CLI
     # This reads from S3 raw -> transforms -> writes to S3 interim
     print("Running data processing...")
-    result = subprocess.run(
-        [
-            "docker",
-            "compose",
-            "-f",
-            "docker-compose.e2e.yml",
-            "exec",
-            "-T",
-            "app",
-            "python",
-            "-m",
-            "experiments.cli",
-            "data",
-            "process",
-            "taiwan_credit",
-        ],
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0, f"Data processing failed: {result.stderr}"
+    run_cli(["data", "process", "taiwan_credit", "--jobs", "1"])
 
     # Validation: Check if interim parquet exists
     interim_objects = s3_client.list_objects_v2(
@@ -105,32 +152,15 @@ def test_full_pipeline_execution(s3_client: S3Client):
     assert "Contents" in interim_objects, "Interim parquet file not found in S3"
     print("Interim data verified in S3.")
 
+    # Run Feature Engineering CLI
+    print("Running feature engineering...")
+    run_cli(["features", "prepare", "taiwan_credit"])
+
     # Run Training Experiment CLI
     # This reads from S3 interim -> trains -> writes results to S3 results
     print("Running training experiment...")
     # Using --jobs 1 for deterministic, low-memory test run
-    result = subprocess.run(
-        [
-            "docker",
-            "compose",
-            "-f",
-            "docker-compose.e2e.yml",
-            "exec",
-            "-T",
-            "app",
-            "python",
-            "-m",
-            "experiments.cli",
-            "train",
-            "experiment",
-            "taiwan_credit",
-            "--jobs",
-            "1",
-        ],
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0, f"Training failed: {result.stderr}"
+    run_cli(["train", "experiment", "taiwan_credit", "--jobs", "1"])
 
     # Validation: Check for results directory and a consolidation file (if consolidated)
     results_objects = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix="results/taiwan_credit")
