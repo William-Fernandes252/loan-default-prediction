@@ -235,7 +235,7 @@ class Container(containers.DeclarativeContainer):
         storage=storage_service,
         mvs_factory=model_versioning_factory,
         est_factory=estimator_factory,
-        config_factory=providers.Factory(ExperimentPipelineConfig),
+        config_factory=providers.Object(ExperimentPipelineConfig),
     )
 
     # --- Training Pipeline ---

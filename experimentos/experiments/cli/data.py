@@ -12,8 +12,6 @@ from experiments.core.data import (
     DataProcessingPipelineFactory,
     Dataset,
 )
-from experiments.services.storage import StorageService
-from experiments.services.storage_manager import StorageManager
 from experiments.utils.jobs import get_jobs_from_available_cpus
 from experiments.utils.overwrites import filter_items_for_processing
 
@@ -26,21 +24,20 @@ app = typer.Typer()
 
 
 def _process_single_dataset(
-    storage_manager: StorageManager,
     use_gpu: bool,
     dataset: Dataset,
 ) -> tuple[Dataset, bool, str | None]:
     """Runs the preprocessing pipeline for a single dataset."""
     try:
         # Get settings for URI construction
-        settings = container.settings()
+        storage_manager = container.storage_manager()
         storage = storage_manager.storage
 
         # Create pipeline factory with storage layer
         factory = DataProcessingPipelineFactory(
             storage=storage,
-            raw_data_uri=StorageService.to_uri(settings.paths.raw_data_dir),
-            interim_data_uri=StorageService.to_uri(settings.paths.interim_data_dir),
+            raw_data_uri=storage_manager.raw_data_dir_uri,
+            interim_data_uri=storage_manager.interim_data_dir_uri,
             use_gpu=use_gpu,
         )
 
@@ -126,8 +123,7 @@ def main(
 
     # Pass storage_manager to workers
     results = Parallel(n_jobs=n_jobs, prefer="processes")(
-        delayed(_process_single_dataset)(storage_manager, effective_use_gpu, ds)
-        for ds in datasets_to_process
+        delayed(_process_single_dataset)(effective_use_gpu, ds) for ds in datasets_to_process
     )
 
     failed = [ds for ds, success, _ in results if not success]

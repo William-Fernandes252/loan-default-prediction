@@ -151,7 +151,7 @@ class ParallelExecutor(BaseExecutor):
         X_mmap_path, y_mmap_path = data_paths
 
         def _create_task_args(task: ExperimentTask) -> tuple:
-            checkpoint_path = checkpoint_provider.get_checkpoint_path(
+            checkpoint_path = checkpoint_provider.get_checkpoint_uri(
                 task.dataset.id,
                 task.model_type.id,
                 task.technique.id,

@@ -34,7 +34,7 @@ def storage_manager(
     path_settings: PathSettings, storage_service: LocalStorageService
 ) -> StorageManager:
     """Create a StorageManager with temporary directories."""
-    return StorageManager(path_settings, storage_service)
+    return StorageManager(settings=path_settings, storage=storage_service)
 
 
 @pytest.fixture

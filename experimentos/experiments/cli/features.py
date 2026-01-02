@@ -29,13 +29,13 @@ def _artifacts_exist(storage_manager: StorageManager, dataset: Dataset) -> bool:
 
 
 def _process_single_dataset(
-    storage_manager: StorageManager,
     dataset: Dataset,
 ) -> tuple[Dataset, bool, str | None]:
     """Orchestrates the feature extraction for a single dataset."""
     try:
         logger.info(f"Preparing features (X/y) for: {dataset.display_name}")
 
+        storage_manager = container.storage_manager()
         storage = storage_manager.storage
         input_uri = storage_manager.get_interim_data_uri(dataset.id)
         if not storage.exists(input_uri):
@@ -112,7 +112,7 @@ def main(
     n_jobs = get_jobs_from_available_cpus(jobs)
 
     results = Parallel(n_jobs=n_jobs, prefer="processes")(
-        delayed(_process_single_dataset)(storage_manager, ds) for ds in datasets
+        delayed(_process_single_dataset)(ds) for ds in datasets
     )
 
     failed = [ds for ds, success, _ in results if not success]
