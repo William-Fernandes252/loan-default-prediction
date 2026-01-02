@@ -60,11 +60,23 @@ class StorageManager:
     # --- URI Construction Helpers ---
 
     def _to_uri(self, *parts: str) -> str:
-        """Construct a URI from path parts."""
-        path = os.path.join(*parts)
-        return StorageService.to_uri(path)
+        """Construct a URI from path parts using the storage service.
+
+        The storage service handles all provider-specific logic.
+        """
+        return self._storage.construct_uri(*parts)
 
     # --- Raw/Interim Data URIs ---
+
+    @property
+    def raw_data_dir_uri(self) -> str:
+        """Get the URI to the raw data directory."""
+        return self._to_uri(str(self._settings.raw_data_dir))
+
+    @property
+    def interim_data_dir_uri(self) -> str:
+        """Get the URI to the interim data directory."""
+        return self._to_uri(str(self._settings.interim_data_dir))
 
     def get_raw_data_uri(self, dataset_id: str) -> str:
         """Get the URI to the raw CSV data file for a dataset.

@@ -113,6 +113,23 @@ class GCSStorageService(StorageService):
         return blob.exists()
 
     # --- Core Operations ---
+    def construct_uri(self, *parts: str) -> str:
+        """Construct a gs:// URI from path parts."""
+        import os
+
+        path = os.path.join(*parts)
+
+        # Use configured bucket
+        bucket = self._bucket_name
+        if not bucket:
+            raise ValueError("GCS bucket must be configured")
+
+        # Apply prefix if configured
+        if self._prefix:
+            path = f"{self._prefix}/{path.lstrip('/')}"
+
+        clean_path = path.lstrip("/")
+        return f"gs://{bucket}/{clean_path}"
 
     def exists(self, uri: str) -> bool:
         bucket_name, blob_name = self._parse_gcs_path(uri)

@@ -29,6 +29,20 @@ class StorageService(ABC):
     # --- Core Operations ---
 
     @abstractmethod
+    def construct_uri(self, *parts: str) -> str:
+        """Construct a URI from path parts.
+
+        Each storage service implementation should handle its own
+        URI construction logic based on its scheme and configuration.
+
+        Args:
+            *parts: Path components to join.
+
+        Returns:
+            Fully-qualified URI for this storage service.
+        """
+
+    @abstractmethod
     def exists(self, uri: str) -> bool:
         """Check if a file exists at the given URI.
 

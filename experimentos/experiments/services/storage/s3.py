@@ -111,6 +111,24 @@ class S3StorageService(StorageService):
 
     # --- Core Operations ---
 
+    def construct_uri(self, *parts: str) -> str:
+        """Construct an s3:// URI from path parts."""
+        import os
+
+        path = os.path.join(*parts)
+
+        # Use configured bucket
+        bucket = self._bucket
+        if not bucket:
+            raise ValueError("S3 bucket must be configured")
+
+        # Apply prefix if configured
+        if self._prefix:
+            path = f"{self._prefix}/{path.lstrip('/')}"
+
+        clean_path = path.lstrip("/")
+        return f"s3://{bucket}/{clean_path}"
+
     def exists(self, uri: str) -> bool:
         bucket, key = self._parse_s3_path(uri)
         return self._object_exists(bucket, key)

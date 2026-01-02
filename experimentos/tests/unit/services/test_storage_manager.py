@@ -35,7 +35,10 @@ def storage_manager(
 @pytest.fixture
 def mock_storage() -> MagicMock:
     """Create a mock storage service."""
-    return MagicMock()
+    mock = MagicMock()
+    # Mock construct_uri to return a simple file:// URI
+    mock.construct_uri.side_effect = lambda *parts: f"file://{'/'.join(parts)}"
+    return mock
 
 
 @pytest.fixture
@@ -77,6 +80,7 @@ class DescribeStorageManager:
             manager = StorageManager(settings=path_settings, storage=local_storage)
 
             assert manager._settings is path_settings
+            assert manager._storage is local_storage
             assert manager._storage is local_storage
 
         def it_exposes_storage_property(

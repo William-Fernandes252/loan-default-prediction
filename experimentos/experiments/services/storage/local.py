@@ -26,6 +26,13 @@ class LocalStorageService(StorageService):
             raise StorageError(uri, f"LocalStorageService does not support scheme '{scheme}'")
         return Path(path)
 
+    def construct_uri(self, *parts: str) -> str:
+        """Construct a file:// URI from path parts."""
+        import os
+
+        path = os.path.join(*parts)
+        return self.to_uri(Path(path).absolute())
+
     def exists(self, uri: str) -> bool:
         return self._to_path(uri).exists()
 

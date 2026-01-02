@@ -82,6 +82,29 @@ class DescribeGCSStorageService:
 
             assert storage._cache_dir == cache_dir
 
+    class DescribeConstructUri:
+        """Tests for the construct_uri method."""
+
+        def it_constructs_gs_uri_with_bucket_and_prefix(self, storage: GCSStorageService) -> None:
+            """Verify constructs gs:// URI with bucket and prefix."""
+            uri = storage.construct_uri("data", "raw", "file.csv")
+
+            assert uri == "gs://test-bucket/experiments/data/raw/file.csv"
+
+        def it_constructs_gs_uri_without_prefix(self, mock_gcs_client: MagicMock) -> None:
+            """Verify constructs gs:// URI without prefix."""
+            storage = GCSStorageService(client=mock_gcs_client, bucket="test-bucket")
+            uri = storage.construct_uri("data", "file.csv")
+
+            assert uri == "gs://test-bucket/data/file.csv"
+
+        def it_raises_when_bucket_not_configured(
+            self, storage_no_bucket: GCSStorageService
+        ) -> None:
+            """Verify raises ValueError when bucket is not configured."""
+            with pytest.raises(ValueError, match="GCS bucket must be configured"):
+                storage_no_bucket.construct_uri("data", "file.csv")
+
     class DescribeParseGcsPath:
         """Tests for the _parse_gcs_path method."""
 

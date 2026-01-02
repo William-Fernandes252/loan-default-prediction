@@ -161,7 +161,7 @@ class DescribeContainer:
 
             # Create a mock storage manager
             storage = LocalStorageService()
-            mock_sm = StorageManager(storage, PathSettings())
+            mock_sm = StorageManager(settings=PathSettings(), storage=storage)
 
             # Override storage_manager (singleton provider)
             container.storage_manager.override(mock_sm)

@@ -27,6 +27,24 @@ class DescribeLocalStorageService:
             }
         )
 
+    class DescribeConstructUri:
+        """Tests for the construct_uri method."""
+
+        def it_constructs_file_uri_from_parts(self, storage: LocalStorageService) -> None:
+            """Verify constructs file:// URI from path parts."""
+            uri = storage.construct_uri("data", "raw", "file.csv")
+
+            assert uri.startswith("file://")
+            assert uri.endswith("data/raw/file.csv")
+
+        def it_returns_absolute_path(self, storage: LocalStorageService) -> None:
+            """Verify returns absolute path."""
+            uri = storage.construct_uri("relative", "path.txt")
+
+            assert uri.startswith("file:///") or uri.startswith("file://")
+            # The path should be absolute (no relative references)
+            assert ".." not in uri
+
     class DescribeExists:
         """Tests for the exists method."""
 

@@ -80,6 +80,29 @@ class DescribeS3StorageService:
 
             assert storage._cache_dir == cache_dir
 
+    class DescribeConstructUri:
+        """Tests for the construct_uri method."""
+
+        def it_constructs_s3_uri_with_bucket_and_prefix(self, storage: S3StorageService) -> None:
+            """Verify constructs s3:// URI with bucket and prefix."""
+            uri = storage.construct_uri("data", "raw", "file.csv")
+
+            assert uri == "s3://test-bucket/experiments/data/raw/file.csv"
+
+        def it_constructs_s3_uri_without_prefix(self, mock_s3_client: MagicMock) -> None:
+            """Verify constructs s3:// URI without prefix."""
+            storage = S3StorageService(client=mock_s3_client, bucket="test-bucket")
+            uri = storage.construct_uri("data", "file.csv")
+
+            assert uri == "s3://test-bucket/data/file.csv"
+
+        def it_raises_when_bucket_not_configured(
+            self, storage_no_bucket: S3StorageService
+        ) -> None:
+            """Verify raises ValueError when bucket is not configured."""
+            with pytest.raises(ValueError, match="S3 bucket must be configured"):
+                storage_no_bucket.construct_uri("data", "file.csv")
+
     class DescribeParseS3Path:
         """Tests for the _parse_s3_path method."""
 
