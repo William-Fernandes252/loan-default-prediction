@@ -9,6 +9,7 @@ from imblearn.under_sampling import RandomUnderSampler
 from sklearn.base import BaseEstimator
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
+from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import StandardScaler
 
 from experiments.core.modeling.estimators import HAS_CUML, MetaCostClassifier
@@ -57,6 +58,11 @@ class DefaultEstimatorFactory:
                 objective="binary:logistic",
                 tree_method="hist",
             )
+
+        elif model_type == ModelType.MLP:
+            return MLPClassifier(random_state=random_state)
+
+        raise ValueError(f"Unknown model type: {model_type}")
 
     def create_pipeline(
         self,
