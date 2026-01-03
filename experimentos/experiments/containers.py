@@ -13,8 +13,8 @@ from loguru import logger
 from experiments.core.data import DataProcessingPipelineFactory
 from experiments.core.experiment import (
     ExperimentPipelineConfig,
+    ExperimentRunnerFactory,
     create_experiment_pipeline,
-    create_experiment_runner,
 )
 from experiments.core.modeling.factories import DefaultEstimatorFactory
 from experiments.core.training import TrainingPipelineConfig, TrainingPipelineFactory
@@ -221,21 +221,11 @@ class Container(containers.DeclarativeContainer):
     )
 
     experiment_runner_factory = providers.Factory(
-        lambda storage,
-        mvs_factory,
-        est_factory,
-        config_factory: lambda n_jobs_inner: create_experiment_runner(
-            create_experiment_pipeline(
-                storage=storage,
-                config=config_factory(n_jobs_inner=n_jobs_inner),
-                model_versioning_service_factory=mvs_factory,
-                estimator_factory=est_factory,
-            )
-        ),
+        ExperimentRunnerFactory,
         storage=storage_service,
-        mvs_factory=model_versioning_factory,
-        est_factory=estimator_factory,
-        config_factory=providers.Object(ExperimentPipelineConfig),
+        pipeline_config=experiment_pipeline_config,
+        model_versioning_service_factory=model_versioning_factory,
+        estimator_factory=estimator_factory,
     )
 
     # --- Training Pipeline ---
@@ -253,7 +243,6 @@ class Container(containers.DeclarativeContainer):
         storage=storage_service,
         data_provider=storage_manager,
         consolidation_provider=storage_manager,
-        versioning_provider=model_versioning_factory,
         experiment_runner_factory=experiment_runner_factory,
     )
 

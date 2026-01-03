@@ -26,7 +26,6 @@ from experiments.core.training.protocols import (
     DataProvider,
     ExperimentRunner,
     ExperimentTask,
-    ModelVersioningProvider,
 )
 from experiments.services.storage import StorageService
 
@@ -66,7 +65,6 @@ class TrainingPipeline:
         executor: BaseExecutor,
         persister: ParquetCheckpointPersister,
         consolidation_provider: ConsolidationUriProvider,
-        versioning_provider: ModelVersioningProvider,
         experiment_runner_factory: Callable[[int | None], ExperimentRunner],
         config: TrainingPipelineConfig,
     ) -> None:
@@ -78,7 +76,6 @@ class TrainingPipeline:
             executor: Executor for running training tasks.
             persister: Persister for consolidating results.
             consolidation_provider: Provider for checkpoint and consolidation URIs.
-            versioning_provider: Provider for model versioning services.
             experiment_runner_factory: Factory function to create experiment runners with specific n_jobs.
             config: Pipeline configuration.
         """
@@ -87,7 +84,6 @@ class TrainingPipeline:
         self._executor = executor
         self._persister = persister
         self._consolidation_provider = consolidation_provider
-        self._versioning_provider = versioning_provider
         self._experiment_runner_factory = experiment_runner_factory
         self._config = config
 
@@ -168,7 +164,6 @@ class TrainingPipeline:
                     data_paths=data_paths,
                     config=exp_config,
                     checkpoint_provider=self._consolidation_provider,
-                    versioning_provider=self._versioning_provider,
                 )
         except FileNotFoundError:
             logger.error(f"Data missing for {dataset.display_name}")
@@ -231,7 +226,6 @@ class TrainingPipeline:
                     data_paths=data_paths,
                     config=exp_config,
                     checkpoint_provider=self._consolidation_provider,
-                    versioning_provider=self._versioning_provider,
                 )
                 return results[0] if results else None
         except FileNotFoundError:
@@ -258,7 +252,6 @@ class TrainingPipelineFactory:
         storage: StorageService,
         data_provider: DataProvider,
         consolidation_provider: ConsolidationUriProvider,
-        versioning_provider: ModelVersioningProvider,
         experiment_runner_factory: Callable[[int | None], ExperimentRunner],
     ) -> None:
         """Initialize the factory.
@@ -267,13 +260,11 @@ class TrainingPipelineFactory:
             storage: Storage service for file operations.
             data_provider: Provider for training data.
             consolidation_provider: Provider for checkpoint and consolidation URIs.
-            versioning_provider: Provider for model versioning services.
             experiment_runner_factory: Factory function to create experiment runners with specific n_jobs.
         """
         self._storage = storage
         self._data_provider = data_provider
         self._consolidation_provider = consolidation_provider
-        self._versioning_provider = versioning_provider
         self._experiment_runner_factory = experiment_runner_factory
 
     def create_parallel_pipeline(
@@ -302,7 +293,6 @@ class TrainingPipelineFactory:
                 results_uri_provider=self._consolidation_provider,
             ),
             consolidation_provider=self._consolidation_provider,
-            versioning_provider=self._versioning_provider,
             experiment_runner_factory=self._experiment_runner_factory,
             config=config,
         )
@@ -333,7 +323,6 @@ class TrainingPipelineFactory:
                 results_uri_provider=self._consolidation_provider,
             ),
             consolidation_provider=self._consolidation_provider,
-            versioning_provider=self._versioning_provider,
             experiment_runner_factory=self._experiment_runner_factory,
             config=config,
         )

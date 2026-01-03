@@ -16,7 +16,6 @@ Example usage:
     factory = TrainingPipelineFactory(
         data_provider=data_manager,
         checkpoint_provider=context,
-        versioning_provider=model_service,
         experiment_runner=run_experiment,
     )
 

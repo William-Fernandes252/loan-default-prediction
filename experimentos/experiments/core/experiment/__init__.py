@@ -19,7 +19,6 @@ Example usage:
 
 from experiments.core.experiment.adapters import (
     ExperimentRunnerFactory,
-    create_experiment_runner,
 )
 from experiments.core.experiment.evaluators import ClassificationEvaluator
 from experiments.core.experiment.persisters import (
@@ -72,7 +71,6 @@ __all__ = [
     "ParquetExperimentPersister",
     "CompositeExperimentPersister",
     # Adapters
-    "create_experiment_runner",
     "ExperimentRunnerFactory",
     # Pipeline
     "ExperimentPipeline",

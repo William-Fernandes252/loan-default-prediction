@@ -14,7 +14,6 @@ from experiments.core.data import Dataset
 from experiments.core.experiment import (
     ExperimentPipelineConfig,
     create_experiment_pipeline,
-    create_experiment_runner,
 )
 from experiments.core.modeling.factories import DefaultEstimatorFactory
 from experiments.core.training import TrainingPipelineConfig, TrainingPipelineFactory
@@ -22,31 +21,6 @@ from experiments.services.model_versioning import ModelVersioningServiceFactory
 from experiments.services.storage.local import LocalStorageService
 from experiments.services.storage_manager import StorageManager
 from experiments.settings import PathSettings
-
-
-class StorageManagerAdapter:
-    """Adapter to bridge get_checkpoint_path/get_checkpoint_uri naming inconsistency.
-
-    The executors call get_checkpoint_path but StorageManager implements get_checkpoint_uri.
-    This adapter provides backward compatibility.
-    """
-
-    def __init__(self, storage_manager: StorageManager):
-        self._storage_manager = storage_manager
-
-    def get_checkpoint_path(
-        self,
-        dataset_id: str,
-        model_id: str,
-        technique_id: str,
-        seed: int,
-    ) -> str:
-        """Delegate to get_checkpoint_uri."""
-        return self._storage_manager.get_checkpoint_uri(dataset_id, model_id, technique_id, seed)
-
-    def __getattr__(self, name: str):
-        """Forward all other attribute access to the wrapped storage_manager."""
-        return getattr(self._storage_manager, name)
 
 
 @pytest.fixture
@@ -121,10 +95,9 @@ def path_settings(temp_workspace: Path) -> PathSettings:
 @pytest.fixture
 def storage_manager(
     path_settings: PathSettings, storage_service: LocalStorageService
-) -> StorageManagerAdapter:
-    """Create a storage manager for testing with backward compatibility adapter."""
-    base_manager = StorageManager(settings=path_settings, storage=storage_service)
-    return StorageManagerAdapter(base_manager)
+) -> StorageManager:
+    """Create a storage manager for testing."""
+    return StorageManager(settings=path_settings, storage=storage_service)
 
 
 @pytest.fixture
@@ -155,7 +128,7 @@ def experiment_runner_factory(
             model_versioning_service_factory=model_versioning_factory,
             estimator_factory=estimator_factory,
         )
-        return create_experiment_runner(pipeline)
+        return pipeline.run
 
     return create_runner
 
@@ -172,7 +145,6 @@ def training_pipeline_factory(
         storage=storage_service,
         data_provider=storage_manager,
         consolidation_provider=storage_manager,
-        versioning_provider=model_versioning_factory,
         experiment_runner_factory=experiment_runner_factory,
     )
 

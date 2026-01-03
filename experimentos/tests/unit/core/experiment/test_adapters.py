@@ -1,22 +1,15 @@
 """Tests for experiments.core.experiment.adapters module."""
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from experiments.core.data import Dataset
-from experiments.core.experiment.adapters import (
-    ExperimentRunnerFactory,
-    create_experiment_runner,
-)
+from experiments.core.experiment.adapters import ExperimentRunnerFactory
 from experiments.core.experiment.pipeline import (
     ExperimentPipeline,
     ExperimentPipelineConfig,
 )
 from experiments.core.experiment.protocols import ExperimentResult
-from experiments.core.modeling.schema import ExperimentConfig
-from experiments.core.modeling.types import ModelType, Technique
 
 
 @pytest.fixture
@@ -30,275 +23,85 @@ def mock_pipeline() -> MagicMock:
     return pipeline
 
 
-@pytest.fixture
-def sample_experiment_config() -> ExperimentConfig:
-    """Create a sample experiment configuration."""
-    return ExperimentConfig(
-        cv_folds=5,
-        cost_grids=[],
-        discard_checkpoints=False,
-    )
-
-
-class DescribeCreateExperimentRunner:
-    """Tests for create_experiment_runner function."""
-
-    def it_returns_callable(self, mock_pipeline: MagicMock) -> None:
-        """Verify function returns a callable runner."""
-        runner = create_experiment_runner(mock_pipeline)
-
-        assert callable(runner)
-
-    def it_runner_calls_pipeline_run(
-        self,
-        mock_pipeline: MagicMock,
-        sample_experiment_config: ExperimentConfig,
-        tmp_path: Path,
-    ) -> None:
-        """Verify runner calls pipeline.run with correct context."""
-        runner = create_experiment_runner(mock_pipeline)
-
-        result = runner(
-            cfg=sample_experiment_config,
-            dataset_val="taiwan_credit",
-            X_mmap_path="/path/X.joblib",
-            y_mmap_path="/path/y.joblib",
-            model_type=ModelType.RANDOM_FOREST,
-            technique=Technique.BASELINE,
-            seed=42,
-            checkpoint_path=tmp_path / "checkpoint.parquet",
-        )
-
-        mock_pipeline.run.assert_called_once()
-        assert result == "taiwan_credit-random_forest-42"
-
-    def it_runner_returns_task_id(
-        self,
-        mock_pipeline: MagicMock,
-        sample_experiment_config: ExperimentConfig,
-        tmp_path: Path,
-    ) -> None:
-        """Verify runner returns task_id from ExperimentResult."""
-        runner = create_experiment_runner(mock_pipeline)
-
-        result = runner(
-            cfg=sample_experiment_config,
-            dataset_val="taiwan_credit",
-            X_mmap_path="/path/X.joblib",
-            y_mmap_path="/path/y.joblib",
-            model_type=ModelType.RANDOM_FOREST,
-            technique=Technique.BASELINE,
-            seed=42,
-            checkpoint_path=tmp_path / "checkpoint.parquet",
-        )
-
-        assert result == "taiwan_credit-random_forest-42"
-
-    def it_runner_returns_none_when_experiment_skipped(
-        self,
-        sample_experiment_config: ExperimentConfig,
-        tmp_path: Path,
-    ) -> None:
-        """Verify runner returns None when experiment is skipped."""
-        mock_pipeline = MagicMock(spec=ExperimentPipeline)
-        mock_pipeline.run.return_value = ExperimentResult(
-            task_id=None,
-            metrics={},
-        )
-
-        runner = create_experiment_runner(mock_pipeline)
-
-        result = runner(
-            cfg=sample_experiment_config,
-            dataset_val="taiwan_credit",
-            X_mmap_path="/path/X.joblib",
-            y_mmap_path="/path/y.joblib",
-            model_type=ModelType.RANDOM_FOREST,
-            technique=Technique.BASELINE,
-            seed=42,
-            checkpoint_path=tmp_path / "checkpoint.parquet",
-        )
-
-        assert result is None
-
-    def it_runner_creates_correct_experiment_context(
-        self,
-        mock_pipeline: MagicMock,
-        tmp_path: Path,
-    ) -> None:
-        """Verify runner creates ExperimentContext with correct values."""
-        config = ExperimentConfig(
-            cv_folds=10,
-            cost_grids=[{"cost": [1, 10]}],
-            discard_checkpoints=True,
-        )
-
-        runner = create_experiment_runner(mock_pipeline)
-        checkpoint_path = tmp_path / "checkpoint.parquet"
-
-        runner(
-            cfg=config,
-            dataset_val="taiwan_credit",
-            X_mmap_path="/path/X.joblib",
-            y_mmap_path="/path/y.joblib",
-            model_type=ModelType.SVM,
-            technique=Technique.SMOTE,
-            seed=123,
-            checkpoint_path=checkpoint_path,
-        )
-
-        # Inspect the context passed to pipeline.run
-        call_args = mock_pipeline.run.call_args
-        context = call_args[0][0]
-
-        assert context.identity.dataset == Dataset.TAIWAN_CREDIT
-        assert context.identity.model_type == ModelType.SVM
-        assert context.identity.technique == Technique.SMOTE
-        assert context.identity.seed == 123
-        assert context.config.cv_folds == 10
-        assert context.config.cost_grids == [{"cost": [1, 10]}]
-        assert context.checkpoint_uri == str(checkpoint_path)
-        assert context.discard_checkpoints is True
-
-    def it_runner_resolves_dataset_from_string_id(
-        self,
-        mock_pipeline: MagicMock,
-        sample_experiment_config: ExperimentConfig,
-        tmp_path: Path,
-    ) -> None:
-        """Verify runner resolves dataset from string ID."""
-        runner = create_experiment_runner(mock_pipeline)
-
-        runner(
-            cfg=sample_experiment_config,
-            dataset_val="lending_club",
-            X_mmap_path="/path/X.joblib",
-            y_mmap_path="/path/y.joblib",
-            model_type=ModelType.RANDOM_FOREST,
-            technique=Technique.BASELINE,
-            seed=42,
-            checkpoint_path=tmp_path / "checkpoint.parquet",
-        )
-
-        call_args = mock_pipeline.run.call_args
-        context = call_args[0][0]
-        assert context.identity.dataset == Dataset.LENDING_CLUB
-
-    def it_runner_passes_mmap_paths_to_pipeline(
-        self,
-        mock_pipeline: MagicMock,
-        sample_experiment_config: ExperimentConfig,
-        tmp_path: Path,
-    ) -> None:
-        """Verify runner passes mmap paths to pipeline.run."""
-        runner = create_experiment_runner(mock_pipeline)
-
-        runner(
-            cfg=sample_experiment_config,
-            dataset_val="taiwan_credit",
-            X_mmap_path="/custom/X.joblib",
-            y_mmap_path="/custom/y.joblib",
-            model_type=ModelType.RANDOM_FOREST,
-            technique=Technique.BASELINE,
-            seed=42,
-            checkpoint_path=tmp_path / "checkpoint.parquet",
-        )
-
-        call_args = mock_pipeline.run.call_args
-        context = call_args[0][0]
-        assert context.data.X_path == "/custom/X.joblib"
-        assert context.data.y_path == "/custom/y.joblib"
-
-
 class DescribeExperimentRunnerFactory:
     """Tests for ExperimentRunnerFactory class."""
 
     def it_initializes_with_default_config(self) -> None:
         """Verify factory uses default config when none provided."""
-        factory = ExperimentRunnerFactory()
+        mock_storage = MagicMock()
+        factory = ExperimentRunnerFactory(storage=mock_storage)
 
         assert factory._pipeline_config == ExperimentPipelineConfig()
+        assert factory._storage == mock_storage
 
     def it_initializes_with_custom_config(self) -> None:
         """Verify factory stores custom config."""
+        mock_storage = MagicMock()
         config = ExperimentPipelineConfig(test_size=0.20)
-        factory = ExperimentRunnerFactory(pipeline_config=config)
+        factory = ExperimentRunnerFactory(storage=mock_storage, pipeline_config=config)
 
         assert factory._pipeline_config == config
 
 
-class DescribeExperimentRunnerFactoryCreateRunner:
-    """Tests for ExperimentRunnerFactory.create_runner() method."""
+class DescribeExperimentRunnerFactoryCall:
+    """Tests for ExperimentRunnerFactory.__call__() method."""
 
     def it_creates_callable_runner(self) -> None:
-        """Verify create_runner returns a callable."""
-        factory = ExperimentRunnerFactory()
+        """Verify __call__ returns a callable."""
+        mock_storage = MagicMock()
+        factory = ExperimentRunnerFactory(storage=mock_storage)
 
-        with (
-            patch(
-                "experiments.core.experiment.adapters.create_experiment_pipeline"
-            ) as mock_create,
-            patch("experiments.services.storage.local.LocalStorageService") as mock_storage,
-        ):
+        with patch(
+            "experiments.core.experiment.adapters.create_experiment_pipeline"
+        ) as mock_create:
             mock_create.return_value = MagicMock()
-            mock_storage.return_value = MagicMock()
 
-            runner = factory.create_runner()
+            runner = factory()
 
             assert callable(runner)
 
-    def it_uses_local_storage_for_backward_compatibility(self) -> None:
-        """Verify factory uses local storage for backward compatibility."""
-        factory = ExperimentRunnerFactory()
+    def it_uses_injected_storage(self) -> None:
+        """Verify factory uses injected storage."""
+        mock_storage = MagicMock()
+        factory = ExperimentRunnerFactory(storage=mock_storage)
 
-        with (
-            patch(
-                "experiments.core.experiment.adapters.create_experiment_pipeline"
-            ) as mock_create,
-            patch("experiments.services.storage.local.LocalStorageService") as mock_storage_class,
-        ):
-            mock_storage = MagicMock()
-            mock_storage_class.return_value = mock_storage
+        with patch(
+            "experiments.core.experiment.adapters.create_experiment_pipeline"
+        ) as mock_create:
             mock_create.return_value = MagicMock()
 
-            factory.create_runner()
+            factory()
 
-            mock_storage_class.assert_called_once()
             mock_create.assert_called_once()
             args, kwargs = mock_create.call_args
             assert kwargs["storage"] is mock_storage
 
+    def it_returns_pipeline_run_method(self, mock_pipeline: MagicMock) -> None:
+        """Verify __call__ returns pipeline.run method."""
+        mock_storage = MagicMock()
+        factory = ExperimentRunnerFactory(storage=mock_storage)
 
-class DescribeExperimentRunnerFactoryCreateRunnerWithPipeline:
-    """Tests for ExperimentRunnerFactory.create_runner_with_pipeline() method."""
+        with patch(
+            "experiments.core.experiment.adapters.create_experiment_pipeline"
+        ) as mock_create:
+            mock_create.return_value = mock_pipeline
 
-    def it_creates_runner_from_existing_pipeline(self, mock_pipeline: MagicMock) -> None:
-        """Verify runner is created from existing pipeline."""
-        factory = ExperimentRunnerFactory()
+            runner = factory()
 
-        runner = factory.create_runner_with_pipeline(mock_pipeline)
+            assert runner == mock_pipeline.run
 
-        assert callable(runner)
+    def it_updates_n_jobs_inner(self) -> None:
+        """Verify n_jobs_inner is updated in config."""
+        mock_storage = MagicMock()
+        factory = ExperimentRunnerFactory(storage=mock_storage)
 
-    def it_runner_uses_provided_pipeline(
-        self,
-        mock_pipeline: MagicMock,
-        sample_experiment_config: ExperimentConfig,
-        tmp_path: Path,
-    ) -> None:
-        """Verify runner uses the provided pipeline."""
-        factory = ExperimentRunnerFactory()
-        runner = factory.create_runner_with_pipeline(mock_pipeline)
+        with patch(
+            "experiments.core.experiment.adapters.create_experiment_pipeline"
+        ) as mock_create:
+            mock_create.return_value = MagicMock()
 
-        runner(
-            cfg=sample_experiment_config,
-            dataset_val="taiwan_credit",
-            X_mmap_path="/path/X.joblib",
-            y_mmap_path="/path/y.joblib",
-            model_type=ModelType.RANDOM_FOREST,
-            technique=Technique.BASELINE,
-            seed=42,
-            checkpoint_path=tmp_path / "checkpoint.parquet",
-        )
+            factory(n_jobs_inner=4)
 
-        mock_pipeline.run.assert_called_once()
+            mock_create.assert_called_once()
+            args, kwargs = mock_create.call_args
+            assert kwargs["config"].n_jobs_inner == 4

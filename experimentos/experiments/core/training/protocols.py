@@ -111,8 +111,10 @@ class DataProvider(Protocol):
         ...
 
 
+from experiments.core.experiment.protocols import ExperimentContext, ExperimentResult
+
 # Type alias for experiment runner function
-ExperimentRunner = Callable[..., str | None]
+ExperimentRunner = Callable[[ExperimentContext], ExperimentResult]
 
 
 @runtime_checkable
@@ -126,7 +128,6 @@ class TrainingExecutor(Protocol):
         data_paths: tuple[str, str],
         config: Any,
         checkpoint_provider: CheckpointUriProvider,
-        versioning_provider: ModelVersioningProvider,
     ) -> list[str | None]:
         """Execute the training tasks.
 
@@ -136,7 +137,6 @@ class TrainingExecutor(Protocol):
             data_paths: Tuple of (X_mmap_path, y_mmap_path).
             config: Experiment configuration.
             checkpoint_provider: Provider for checkpoint URIs.
-            versioning_provider: Provider for model versioning services.
 
         Returns:
             List of task identifiers for completed tasks.

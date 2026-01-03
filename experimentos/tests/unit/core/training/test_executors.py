@@ -1,6 +1,5 @@
 """Tests for experiments.core.training.executors module."""
 
-from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -13,7 +12,11 @@ from experiments.core.training.executors import (
     ParallelExecutor,
     SequentialExecutor,
 )
-from experiments.core.training.protocols import ExperimentTask
+from experiments.core.training.protocols import (
+    ExperimentContext,
+    ExperimentResult,
+    ExperimentTask,
+)
 
 
 @pytest.fixture
@@ -39,7 +42,18 @@ def sample_tasks() -> list[ExperimentTask]:
 def mock_runner() -> MagicMock:
     """Create a mock experiment runner."""
     runner = MagicMock()
-    runner.side_effect = lambda *args: f"task-{args[6]}"  # Return task-{seed}
+    # Return an object with a task_id attribute
+    result = MagicMock()
+    result.task_id = "task-0"  # Default
+    runner.return_value = result
+
+    # Update side effect to return dynamic task_id
+    def side_effect(context):
+        res = MagicMock()
+        res.task_id = f"task-{context.identity.seed}"
+        return res
+
+    runner.side_effect = side_effect
     return runner
 
 
@@ -47,7 +61,7 @@ def mock_runner() -> MagicMock:
 def mock_checkpoint_provider() -> MagicMock:
     """Create a mock checkpoint provider."""
     provider = MagicMock()
-    provider.get_checkpoint_path.return_value = Path("/checkpoints/test.parquet")
+    provider.get_checkpoint_uri.return_value = "/checkpoints/test.parquet"
     return provider
 
 
@@ -116,7 +130,6 @@ class DescribeSequentialExecutorExecute:
         sample_data_paths: tuple[str, str],
         sample_config: MagicMock,
         mock_checkpoint_provider: MagicMock,
-        mock_versioning_provider: MagicMock,
     ) -> None:
         """Verify all tasks are executed."""
         executor = SequentialExecutor()
@@ -127,7 +140,6 @@ class DescribeSequentialExecutorExecute:
             data_paths=sample_data_paths,
             config=sample_config,
             checkpoint_provider=mock_checkpoint_provider,
-            versioning_provider=mock_versioning_provider,
         )
 
         assert len(results) == 2
@@ -140,7 +152,6 @@ class DescribeSequentialExecutorExecute:
         sample_data_paths: tuple[str, str],
         sample_config: MagicMock,
         mock_checkpoint_provider: MagicMock,
-        mock_versioning_provider: MagicMock,
     ) -> None:
         """Verify runner results are returned."""
         executor = SequentialExecutor()
@@ -151,7 +162,6 @@ class DescribeSequentialExecutorExecute:
             data_paths=sample_data_paths,
             config=sample_config,
             checkpoint_provider=mock_checkpoint_provider,
-            versioning_provider=mock_versioning_provider,
         )
 
         assert results == ["task-0", "task-1"]
@@ -163,7 +173,6 @@ class DescribeSequentialExecutorExecute:
         sample_data_paths: tuple[str, str],
         sample_config: MagicMock,
         mock_checkpoint_provider: MagicMock,
-        mock_versioning_provider: MagicMock,
     ) -> None:
         """Verify correct arguments are passed to runner."""
         executor = SequentialExecutor()
@@ -174,20 +183,19 @@ class DescribeSequentialExecutorExecute:
             data_paths=sample_data_paths,
             config=sample_config,
             checkpoint_provider=mock_checkpoint_provider,
-            versioning_provider=mock_versioning_provider,
         )
 
         # Check first call arguments
         first_call = mock_runner.call_args_list[0]
-        args = first_call[0]
+        context = first_call[0][0]
 
-        assert args[0] is sample_config  # config
-        assert args[1] == sample_tasks[0].dataset.id  # dataset_id
-        assert args[2] == "/path/X.joblib"  # X_mmap_path
-        assert args[3] == "/path/y.joblib"  # y_mmap_path
-        assert args[4] == sample_tasks[0].model_type  # model_type
-        assert args[5] == sample_tasks[0].technique  # technique
-        assert args[6] == sample_tasks[0].seed  # seed
+        assert context.config.cv_folds == sample_config.cv_folds
+        assert context.identity.dataset == sample_tasks[0].dataset
+        assert context.data.X_path == "/path/X.joblib"
+        assert context.data.y_path == "/path/y.joblib"
+        assert context.identity.model_type == sample_tasks[0].model_type
+        assert context.identity.technique == sample_tasks[0].technique
+        assert context.identity.seed == sample_tasks[0].seed
 
     def it_calls_checkpoint_provider_for_each_task(
         self,
@@ -196,7 +204,6 @@ class DescribeSequentialExecutorExecute:
         sample_data_paths: tuple[str, str],
         sample_config: MagicMock,
         mock_checkpoint_provider: MagicMock,
-        mock_versioning_provider: MagicMock,
     ) -> None:
         """Verify checkpoint provider is called for each task."""
         executor = SequentialExecutor()
@@ -207,33 +214,9 @@ class DescribeSequentialExecutorExecute:
             data_paths=sample_data_paths,
             config=sample_config,
             checkpoint_provider=mock_checkpoint_provider,
-            versioning_provider=mock_versioning_provider,
         )
 
-        assert mock_checkpoint_provider.get_checkpoint_path.call_count == 2
-
-    def it_calls_versioning_provider_for_each_task(
-        self,
-        sample_tasks: list[ExperimentTask],
-        mock_runner: MagicMock,
-        sample_data_paths: tuple[str, str],
-        sample_config: MagicMock,
-        mock_checkpoint_provider: MagicMock,
-        mock_versioning_provider: MagicMock,
-    ) -> None:
-        """Verify versioning provider is called for each task."""
-        executor = SequentialExecutor()
-
-        executor.execute(
-            tasks=sample_tasks,
-            runner=mock_runner,
-            data_paths=sample_data_paths,
-            config=sample_config,
-            checkpoint_provider=mock_checkpoint_provider,
-            versioning_provider=mock_versioning_provider,
-        )
-
-        assert mock_versioning_provider.get_model_versioning_service.call_count == 2
+        assert mock_checkpoint_provider.get_checkpoint_uri.call_count == 2
 
 
 class DescribeParallelExecutor:
@@ -282,14 +265,15 @@ class DescribeParallelExecutorExecute:
         sample_data_paths: tuple[str, str],
         sample_config: MagicMock,
         mock_checkpoint_provider: MagicMock,
-        mock_versioning_provider: MagicMock,
     ) -> None:
         """Verify all tasks are executed."""
         executor = ParallelExecutor(n_jobs=1)
 
         # Create a simple runner that returns task IDs
-        def simple_runner(*args: Any) -> str:
-            return f"task-{args[6]}"
+        def simple_runner(context: ExperimentContext) -> ExperimentResult:
+            result = MagicMock(spec=ExperimentResult)
+            result.task_id = f"task-{context.identity.seed}"
+            return result
 
         results = executor.execute(
             tasks=sample_tasks,
@@ -297,7 +281,6 @@ class DescribeParallelExecutorExecute:
             data_paths=sample_data_paths,
             config=sample_config,
             checkpoint_provider=mock_checkpoint_provider,
-            versioning_provider=mock_versioning_provider,
         )
 
         assert len(results) == 2
@@ -311,7 +294,6 @@ class DescribeParallelExecutorExecute:
         sample_data_paths: tuple[str, str],
         sample_config: MagicMock,
         mock_checkpoint_provider: MagicMock,
-        mock_versioning_provider: MagicMock,
     ) -> None:
         """Verify joblib.Parallel is used."""
         executor = ParallelExecutor(n_jobs=2)
@@ -327,7 +309,6 @@ class DescribeParallelExecutorExecute:
                 data_paths=sample_data_paths,
                 config=sample_config,
                 checkpoint_provider=mock_checkpoint_provider,
-                versioning_provider=mock_versioning_provider,
             )
 
             mock_parallel_class.assert_called_once_with(
@@ -342,13 +323,14 @@ class DescribeParallelExecutorExecute:
         sample_data_paths: tuple[str, str],
         sample_config: MagicMock,
         mock_checkpoint_provider: MagicMock,
-        mock_versioning_provider: MagicMock,
     ) -> None:
         """Verify results are returned as list."""
         executor = ParallelExecutor(n_jobs=1)
 
-        def simple_runner(*args: Any) -> str:
-            return f"task-{args[6]}"
+        def simple_runner(context: ExperimentContext) -> ExperimentResult:
+            result = MagicMock(spec=ExperimentResult)
+            result.task_id = f"task-{context.identity.seed}"
+            return result
 
         results = executor.execute(
             tasks=sample_tasks,
@@ -356,7 +338,6 @@ class DescribeParallelExecutorExecute:
             data_paths=sample_data_paths,
             config=sample_config,
             checkpoint_provider=mock_checkpoint_provider,
-            versioning_provider=mock_versioning_provider,
         )
 
         assert isinstance(results, list)
