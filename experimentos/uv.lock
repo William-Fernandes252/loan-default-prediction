@@ -542,7 +542,6 @@ version = "0.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },
-    { name = "cuml-cu12" },
     { name = "dependency-injector" },
     { name = "gcsfs" },
     { name = "gitpython" },
@@ -552,7 +551,7 @@ dependencies = [
     { name = "loguru" },
     { name = "matplotlib" },
     { name = "pandas" },
-    { name = "polars", extra = ["gpu"] },
+    { name = "polars" },
     { name = "psutil" },
     { name = "pyarrow" },
     { name = "pydantic-settings" },
@@ -579,11 +578,14 @@ dev = [
     { name = "ruff" },
     { name = "types-boto3" },
 ]
+gpu = [
+    { name = "cuml-cu12" },
+    { name = "polars", extra = ["gpu"] },
+]
 
 [package.metadata]
 requires-dist = [
     { name = "boto3", specifier = ">=1.42.17" },
-    { name = "cuml-cu12", specifier = ">=25.12.0" },
     { name = "dependency-injector", specifier = ">=4.48.3" },
     { name = "gcsfs", specifier = ">=2025.12.0" },
     { name = "gitpython", specifier = ">=3.1.43" },
@@ -593,7 +595,7 @@ requires-dist = [
     { name = "loguru" },
     { name = "matplotlib", specifier = ">=3.10.7" },
     { name = "pandas", specifier = ">=2.3.2" },
-    { name = "polars", extras = ["gpu"], specifier = ">=1.32.3" },
+    { name = "polars", specifier = ">=1.32.3" },
     { name = "psutil", specifier = ">=7.2.1" },
     { name = "pyarrow", specifier = ">=22.0.0" },
     { name = "pydantic-settings", specifier = ">=2.12.0" },
@@ -619,6 +621,10 @@ dev = [
     { name = "pytest-camel-collect", specifier = ">=1.0.2" },
     { name = "ruff", specifier = ">=0.14.10" },
     { name = "types-boto3", specifier = ">=1.42.17" },
+]
+gpu = [
+    { name = "cuml-cu12", specifier = ">=25.12.0" },
+    { name = "polars", extras = ["gpu"], specifier = ">=1.32.3" },
 ]
 
 [[package]]

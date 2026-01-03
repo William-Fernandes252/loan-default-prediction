@@ -27,7 +27,7 @@ COPY pyproject.toml uv.lock ./
 
 # Install dependencies into the environment without installing the project itself yet.
 # --no-install-project: Skips installing the root package, keeping this layer pure deps.
-RUN uv sync --frozen --no-install-project
+RUN uv sync --frozen --no-install-project --all-groups
 
 # 4. Install Application Code
 # This layer changes frequently, but because it's after the heavy install,

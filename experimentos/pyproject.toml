@@ -17,7 +17,6 @@ classifiers = [
 ]
 dependencies = [
   "boto3>=1.42.17",
-  "cuml-cu12>=25.12.0",
   "dependency-injector>=4.48.3",
   "gcsfs>=2025.12.0",
   "GitPython>=3.1.43",
@@ -27,7 +26,7 @@ dependencies = [
   "loguru",
   "matplotlib>=3.10.7",
   "pandas>=2.3.2",
-  "polars[gpu]>=1.32.3",
+  "polars>=1.32.3",
   "psutil>=7.2.1",
   "pyarrow>=22.0.0",
   "pydantic-settings>=2.12.0",
@@ -76,4 +75,8 @@ dev = [
     "pytest-camel-collect>=1.0.2",
     "ruff>=0.14.10",
     "types-boto3>=1.42.17",
+]
+gpu = [
+    "cuml-cu12>=25.12.0",
+    "polars[gpu]>=1.32.3",
 ]
