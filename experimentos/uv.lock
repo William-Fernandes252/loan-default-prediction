@@ -576,7 +576,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-camel-collect" },
     { name = "ruff" },
-    { name = "types-boto3" },
+    { name = "types-boto3", extra = ["s3"] },
 ]
 gpu = [
     { name = "cuml-cu12" },
@@ -620,7 +620,7 @@ dev = [
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest-camel-collect", specifier = ">=1.0.2" },
     { name = "ruff", specifier = ">=0.14.10" },
-    { name = "types-boto3", specifier = ">=1.42.17" },
+    { name = "types-boto3", extras = ["s3"], specifier = ">=1.42.17" },
 ]
 gpu = [
     { name = "cuml-cu12", specifier = ">=25.12.0" },
@@ -2551,6 +2551,20 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/23/3c/da077b9ad983cb1c1ebd480448d99f7ad4ee298ad1c1f46db7976597e149/types_boto3-1.42.17.tar.gz", hash = "sha256:c758889bcc31786f2950eb74bd159a4ac3b5859a68749f5c14d922c65d9617d4", size = 101467, upload-time = "2025-12-26T20:34:37.269Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/15/5f/2cf7e22a96510fc82b280be1fab9d01cda9736b6a6795d1ec75caa884b83/types_boto3-1.42.17-py3-none-any.whl", hash = "sha256:5ad50f6024804e2225b00207696a92176aa1f3793d3c825495183057edc402fa", size = 69784, upload-time = "2025-12-26T20:34:34.188Z" },
+]
+
+[package.optional-dependencies]
+s3 = [
+    { name = "types-boto3-s3" },
+]
+
+[[package]]
+name = "types-boto3-s3"
+version = "1.42.16"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/08/40/aaddcda4c42ac4ca276a1d00505b063a3cd557b0c5b936432bc050fd1654/types_boto3_s3-1.42.16.tar.gz", hash = "sha256:bcdb30ff3b416e8acfb0bf7e9ef9152c680a3328d451c542032047154381cee1", size = 75895, upload-time = "2025-12-23T20:47:33.328Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/14/aa/21d6791a8340aadee7f10e460cd6619003bd50d3822660277025e68dd6d6/types_boto3_s3-1.42.16-py3-none-any.whl", hash = "sha256:49bada3b8f67c762e31c3a84d473d5878ee6fcbb7d8c4df578dd5a8cc695c403", size = 82997, upload-time = "2025-12-23T20:47:31.528Z" },
 ]
 
 [[package]]
