@@ -22,13 +22,41 @@ def s3_client():
     return boto3.client("s3", endpoint_url=ENDPOINT_URL, **AWS_CREDS)
 
 
+@pytest.fixture(scope="session", autouse=True)
+def set_environment_variables(num_seeds: int):
+    """Sets environment variables for the tests."""
+    os.environ["AWS_ACCESS_KEY_ID"] = AWS_CREDS["aws_access_key_id"]
+    os.environ["AWS_SECRET_ACCESS_KEY"] = AWS_CREDS["aws_secret_access_key"]
+    os.environ["AWS_DEFAULT_REGION"] = AWS_CREDS["region_name"]
+    os.environ["S3_ENDPOINT_URL"] = ENDPOINT_URL
+    os.environ["S3_BUCKET_NAME"] = BUCKET_NAME
+    os.environ["LDP_NUM_SEEDS"] = str(num_seeds)
+    yield
+    # Cleanup if necessary
+    del os.environ["AWS_ACCESS_KEY_ID"]
+    del os.environ["AWS_SECRET_ACCESS_KEY"]
+    del os.environ["AWS_DEFAULT_REGION"]
+    del os.environ["S3_ENDPOINT_URL"]
+    del os.environ["S3_BUCKET_NAME"]
+
+
 @pytest.fixture(scope="module", autouse=True)
-def docker_compose(s3_client):
+def start_stack(s3_client: S3Client):
     """Starts the E2E stack and tears it down after tests."""
     # Start containers
     subprocess.run(
-        ["docker", "compose", "-f", "docker-compose.e2e.yaml", "up", "-d", "--build"], check=True
+        [
+            "docker",
+            "compose",
+            "-f",
+            "docker-compose.e2e.yaml",
+            "up",
+            "-d",
+            "--build",
+        ],
+        check=True,
     )
+    print("Started stack.")
 
     # Wait for LocalStack to be ready
     print("Waiting for LocalStack S3...")
@@ -51,8 +79,15 @@ def docker_compose(s3_client):
     )
 
 
-def run_cli(args):
-    """Helper to run CLI commands inside the container."""
+def run_cli(args: list[str]) -> subprocess.CompletedProcess:
+    """Helper to run CLI commands inside the container.
+
+    Args:
+        args: List of command line arguments to pass to the CLI.
+
+    Returns:
+        CompletedProcess instance with command results.
+    """
     cmd = [
         "docker",
         "compose",
@@ -64,34 +99,21 @@ def run_cli(args):
         "python",
         "-m",
         "experiments.cli",
-    ] + args
+        *args,
+    ]
+    cmd.extend(args)
 
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        print(f"Command failed. Stderr:\n{result.stderr}")
-        raise RuntimeError(f"Command {' '.join(args)} failed: {result.stderr}")
-    return result
+    return subprocess.run(cmd, capture_output=True, text=True)
 
 
-def test_full_pipeline_execution(s3_client: S3Client):
+@pytest.fixture(scope="module")
+def setup_test_data(s3_client: S3Client):
+    """Generates and uploads test data once for the entire module.
+
+    This avoids repeating expensive setup for every parameterized test case.
     """
-    Scenario:
-    1. Create S3 Bucket.
-    2. Generate raw data inside the App container.
-    3. Upload raw data to S3 (simulating ETL ingestion).
-    4. Run 'process' CLI command.
-    5. Run 'features' CLI command.
-    6. Run 'train' CLI command.
-    7. Verify artifacts in S3.
-    """
-
     # Prepare S3
     s3_client.create_bucket(Bucket=BUCKET_NAME)
-
-    # Generate Data & Upload to S3
-    # We run the generation script inside the app container to ensure env compatibility,
-    # then upload it using aws cli or boto3 from *outside* (or inside if configured).
-    # Here we simulate an external ETL process putting data into the raw bucket.
 
     raw_csv_path = "taiwan_credit.csv"
     container_path = f"/tmp/{raw_csv_path}"
@@ -140,35 +162,61 @@ def test_full_pipeline_execution(s3_client: S3Client):
         if os.path.exists(raw_csv_path):
             os.remove(raw_csv_path)
 
+
+@pytest.mark.usefixtures("setup_test_data")
+@pytest.mark.parametrize(
+    "use_gpu",
+    [
+        False,
+        True,
+    ],
+)
+def test_full_pipeline_execution(s3_client: S3Client, use_gpu: bool):
+    """Runs the full pipeline with different configurations (CPU/GPU)."""
+
+    # Dynamic check: If GPU is requested, ensure the container sees it.
+    if use_gpu:
+        check = subprocess.run(
+            [
+                "docker",
+                "compose",
+                "-f",
+                "docker-compose.e2e.yaml",
+                "exec",
+                "-T",
+                "app",
+                "nvidia-smi",
+            ],
+            capture_output=True,
+        )
+        if check.returncode != 0:
+            pytest.skip("Skipping GPU test: nvidia-smi not found inside container.")
+
     # Run Data Processing CLI
-    # This reads from S3 raw -> transforms -> writes to S3 interim
     print("Running data processing...")
-    run_cli(["data", "process", "taiwan_credit", "--jobs", "1"])
+    run_cli(["data", "process", "taiwan_credit", "--jobs", "1", "--use-gpu" if use_gpu else ""])
 
     # Validation: Check if interim parquet exists
     interim_objects = s3_client.list_objects_v2(
         Bucket=BUCKET_NAME, Prefix="data/interim/taiwan_credit.parquet"
     )
     assert "Contents" in interim_objects, "Interim parquet file not found in S3"
-    print("Interim data verified in S3.")
 
     # Run Feature Engineering CLI
     print("Running feature engineering...")
-    run_cli(["features", "prepare", "taiwan_credit"])
+    run_cli(["features", "prepare", "taiwan_credit", "--jobs", "1"])
 
     # Run Training Experiment CLI
-    # This reads from S3 interim -> trains -> writes results to S3 results
     print("Running training experiment...")
-    # Using --jobs 1 for deterministic, low-memory test run
-    run_cli(["train", "experiment", "taiwan_credit", "--jobs", "1"])
+    run_cli(
+        ["train", "experiment", "taiwan_credit", "--jobs", "1", "--use-gpu" if use_gpu else ""]
+    )
 
-    # Validation: Check for results directory and a consolidation file (if consolidated)
+    # Validation: Check for results directory
     results_objects = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix="results/taiwan_credit")
     assert "Contents" in results_objects, "No results found in S3"
 
-    # Check if a model file was saved (optional, depends on your pipeline config)
-    # The pipeline usually saves checkpoints.
     files = [obj["Key"] for obj in results_objects["Contents"]]
     assert any("checkpoints" in f for f in files), "No checkpoints generated"
 
-    print("Training results verified in S3.")
+    print(f"Training results verified in S3 ({'GPU' if use_gpu else 'CPU'}).")

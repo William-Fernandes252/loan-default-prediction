@@ -25,6 +25,7 @@ services:
       - LDP_INTERIM_DATA_DIR=data/interim
       - LDP_PROCESSED_DATA_DIR=data/processed
       - LDP_RESULTS_DIR=results
+      - LDP_NUM_SEEDS=${LDP_NUM_SEEDS}
     depends_on:
       localstack:
         condition: service_healthy
@@ -34,3 +35,10 @@ services:
     volumes:
       # Mount the test data generator so it's available inside
       - ./tests/e2e/scripts:/app/scripts
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
