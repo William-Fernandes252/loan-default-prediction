@@ -18,12 +18,18 @@ from experiments.core.experiment import (
 )
 from experiments.core.modeling.factories import DefaultEstimatorFactory
 from experiments.core.training import TrainingPipelineConfig, TrainingPipelineFactory
+from experiments.lib.pipelines import PipelineExecutor
+from experiments.pipelines.data import (
+    DataProcessingPipelineFactory as NewDataProcessingPipelineFactory,
+)
+from experiments.services.data_repository import DataLayout, StorageDataRepository
 from experiments.services.model_versioning import ModelVersioningServiceFactory
 from experiments.services.path_manager import PathManager
 from experiments.services.resource_calculator import ResourceCalculator
 from experiments.services.storage import LocalStorageService, StorageService
 from experiments.services.storage_manager import StorageManager
 from experiments.settings import ExperimentsSettings, StorageProvider
+from experiments.storage import LocalStorage
 
 
 def create_s3_client_from_settings(settings: ExperimentsSettings) -> Any:
@@ -259,3 +265,45 @@ def create_container() -> Container:
 
 # Global container instance
 container = create_container()
+
+
+class NewContainer(containers.DeclarativeContainer):
+    """New dependency injection container for the experiments application.
+
+    This container manages all application services and their dependencies.
+    Services are accessed via the container singleton instance.
+    """
+
+    config = providers.Configuration(pydantic_settings=[ExperimentsSettings()])
+    """Application config loaded from environment/.env."""
+
+    logger = providers.Object(logger)
+    """Logger instance using loguru."""
+
+    _storage = providers.Singleton(LocalStorage, base_path=config.paths.project_root)
+    """Storage instance.
+    
+    Currently uses local storage; can be extended for cloud storage. 
+    """
+
+    resource_calculator = providers.Singleton(
+        ResourceCalculator,
+        safety_factor=config.resources.safety_factor.as_int(),
+    )
+    """Resource calculator service."""
+
+    _data_layout = providers.Singleton(DataLayout)
+    """Data layout configuration."""
+
+    data_repository = providers.Singleton(
+        StorageDataRepository,
+        storage=_storage,
+        data_layout=_data_layout,
+    )
+
+    data_processing_pipeline_factory = providers.Singleton(
+        NewDataProcessingPipelineFactory,
+        data_repository=data_repository,
+    )
+
+    executor = providers.Singleton(PipelineExecutor)
