@@ -21,7 +21,7 @@ def load_raw_data_from_csv(
     except Exception as e:
         return TaskResult(
             state,
-            TaskStatus.FAILURE,
+            TaskStatus.ERROR,
             f"Failed to load raw data for dataset {context.dataset.id}",
             e,
         )
