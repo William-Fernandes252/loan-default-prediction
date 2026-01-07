@@ -12,16 +12,24 @@ from experiments.storage import Storage
 class DataLayout:
     """Data layout on the storage for data repository operations."""
 
-    raw_data_path_template: str = "data/raw/{dataset_id}.csv"
-    interim_data_path_template: str = "data/interim/{dataset_id}.parquet"
+    raw_data_key_template: str = "data/raw/{dataset_id}.csv"
+    interim_data_key_template: str = "data/interim/{dataset_id}.parquet"
+    X_final_key_template: str = "data/processed/{dataset_id}_X.parquet"
+    y_final_key_template: str = "data/processed/{dataset_id}_y.parquet"
 
     def get_raw_data_key(self, dataset_id: str) -> str:
-        """Get the raw data path for a given dataset ID."""
-        return self.raw_data_path_template.format(dataset_id=dataset_id)
+        """Get the raw data key for a given dataset ID."""
+        return self.raw_data_key_template.format(dataset_id=dataset_id)
 
     def get_interim_data_key(self, dataset_id: str) -> str:
-        """Get the interim data path for a given dataset ID."""
-        return self.interim_data_path_template.format(dataset_id=dataset_id)
+        """Get the interim data key for a given dataset ID."""
+        return self.interim_data_key_template.format(dataset_id=dataset_id)
+
+    def get_features_and_target_keys(self, dataset_id: str) -> tuple[str, str]:
+        """Get the final features (X) key for a given dataset ID."""
+        return self.X_final_key_template.format(
+            dataset_id=dataset_id
+        ), self.y_final_key_template.format(dataset_id=dataset_id)
 
 
 class StorageDataRepository:
@@ -50,6 +58,16 @@ class StorageDataRepository:
         key = self._data_layout.get_interim_data_key(dataset.id)
         self._storage.write_parquet(data, key)
 
-    def is_processed(self, dataset: Dataset) -> bool:
+    def get_interim_data(self, dataset: Dataset) -> pl.LazyFrame:
         key = self._data_layout.get_interim_data_key(dataset.id)
-        return self._storage.exists(key)
+        df = self._storage.scan_parquet(key)
+        return df
+
+    def is_processed(self, dataset: Dataset) -> bool:
+        X_key, y_key = self._data_layout.get_features_and_target_keys(dataset.id)
+        return self._storage.exists(X_key) and self._storage.exists(y_key)
+
+    def save_final_features(self, dataset: Dataset, X: pl.DataFrame, y: pl.DataFrame) -> None:
+        X_key, y_key = self._data_layout.get_features_and_target_keys(dataset.id)
+        self._storage.write_parquet(X, X_key)
+        self._storage.write_parquet(y, y_key)

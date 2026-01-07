@@ -55,6 +55,33 @@ class DataRepository(Protocol):
         """
         ...
 
+    def get_interim_data(self, dataset: Dataset) -> pl.LazyFrame:
+        """Fetches the transformed (ready to split) data for the specified dataset.
+
+        Args:
+            dataset (Dataset): The dataset for which to fetch processed data.
+
+        Returns:
+            pl.LazyFrame: The processed data as a Polars LazyFrame.
+
+        Raises:
+            Exception: If there is an error retrieving the data.
+        """
+        ...
+
+    def save_final_features(self, dataset: Dataset, X: pl.DataFrame, y: pl.DataFrame) -> None:
+        """Saves the final features and target for the specified dataset.
+
+        Args:
+            dataset (Dataset): The dataset for which to save final features.
+            X (pl.DataFrame): The final features data.
+            y (pl.DataFrame): The final target data.
+
+        Raises:
+            Exception: If there is an error saving the data.
+        """
+        ...
+
     def is_processed(self, dataset: Dataset) -> bool:
         """Checks if the processed data for the specified dataset exists.
 

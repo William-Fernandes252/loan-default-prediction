@@ -8,10 +8,14 @@ from experiments.core.data_new import (
 from experiments.core.data_new.registry import TransformerRegistry
 from experiments.core.data_new.repository import DataRepository
 from experiments.core.data_new.transformer import Transformer
+from experiments.core.modeling.features import extract_features_and_target
 from experiments.lib.pipelines import Pipeline, errors
 from experiments.lib.pipelines.steps import Runnable
 from experiments.pipelines.data.context import DataPipelineContext
-from experiments.pipelines.data.exporters import export_processed_data_as_parquet
+from experiments.pipelines.data.exporters import (
+    export_final_features_as_parquet,
+    export_processed_data_as_parquet,
+)
 from experiments.pipelines.data.loaders import load_raw_data_from_csv
 from experiments.pipelines.data.state import DataPipelineState
 
@@ -26,6 +30,8 @@ class DataProcessingPipelineSteps(Enum):
     LOAD_RAW_DATA = "LoadRawData"
     TRANSFORM_DATA = "TransformData"
     EXPORT_PROCESSED_DATA = "ExportProcessedData"
+    EXTRACT_FINAL_FEATURES = "ExtractFinalFeatures"
+    EXPORT_FINAL_FEATURES = "ExportFinalFeatures"
 
 
 def check_already_processed(
@@ -113,6 +119,14 @@ class DataProcessingPipelineFactory:
             DataProcessingPipelineSteps.EXPORT_PROCESSED_DATA.value,
             export_processed_data_as_parquet,
         )
+        pipeline.add_step(
+            DataProcessingPipelineSteps.EXTRACT_FINAL_FEATURES.value,
+            self._create_feature_extractor(),
+        )
+        pipeline.add_step(
+            DataProcessingPipelineSteps.EXPORT_FINAL_FEATURES.value,
+            export_final_features_as_parquet,
+        )
 
         return pipeline
 
@@ -137,9 +151,10 @@ class DataProcessingPipelineFactory:
             raise ValueError(f"No transformer registered for dataset: {dataset.id}")
 
         def transform(state: DataPipelineState, context: DataPipelineContext) -> DataPipelineState:
-            raw_data = state["raw_data"]
+            if state["raw_data"] is None:
+                raise errors.PipelineException("No raw data found in state for transformation.")
             try:
-                processed_data = cast(Transformer, transformer)(raw_data, context.use_gpu)
+                processed_data = cast(Transformer, transformer)(state["raw_data"], context.use_gpu)
             except Exception as e:
                 raise errors.PipelineException(
                     f"Data transformation failed for dataset {dataset.id}: {e}"
@@ -148,3 +163,29 @@ class DataProcessingPipelineFactory:
             return state
 
         return transform
+
+    def _create_feature_extractor(
+        self,
+    ) -> Runnable[DataPipelineState, DataPipelineContext]:
+        """Create a feature extractor step for the data processing pipeline."""
+
+        def extract_features(
+            state: DataPipelineState, context: DataPipelineContext
+        ) -> DataPipelineState:
+            if state["interim_data"] is None:
+                raise errors.PipelineException(
+                    "No interim data found in state for feature extraction."
+                )
+
+            try:
+                X_final, y_final = extract_features_and_target(state["interim_data"])
+            except Exception as e:
+                raise errors.PipelineException(
+                    f"Feature extraction failed for dataset {context.dataset.id}: {e}"
+                ) from e
+
+            state["X_final"] = X_final
+            state["y_final"] = y_final
+            return state
+
+        return extract_features
