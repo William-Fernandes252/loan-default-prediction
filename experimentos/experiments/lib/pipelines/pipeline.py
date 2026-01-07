@@ -2,7 +2,7 @@ from typing import Generic
 
 from experiments.lib.pipelines.context import Context
 from experiments.lib.pipelines.state import State
-from experiments.lib.pipelines.steps import Runnable, Step
+from experiments.lib.pipelines.steps import Step, Task
 
 
 class Pipeline(Generic[State, Context]):
@@ -22,13 +22,13 @@ class Pipeline(Generic[State, Context]):
         self._context = context
         self._steps = []
 
-    def add_step(self, name: str, runnable: Runnable[State, Context]) -> None:
+    def add_step(self, name: str, task: Task[State, Context]) -> None:
         """Add a step to the pipeline by name and runnable.
         Args:
             name: The name of the step.
-            runnable: The runnable operation for the step.
+            task: The task operation for the step.
         """
-        step = Step(name, runnable)
+        step = Step(name, task)
         self._steps.append(step)
 
     def __repr__(self):

@@ -8,14 +8,17 @@ from experiments.lib.pipelines.executor import (
 )
 from experiments.lib.pipelines.pipeline import Pipeline
 from experiments.lib.pipelines.state import State
-from experiments.lib.pipelines.steps import Runnable, Step
+from experiments.lib.pipelines.steps import Step
+from experiments.lib.pipelines.tasks import Task, TaskResult, TaskStatus
 
 __all__ = [
     "Pipeline",
-    "Runnable",
+    "Task",
     "ErrorHandler",
     "ErrorAction",
     "Step",
+    "TaskResult",
+    "TaskStatus",
     "State",
     "Context",
     "PipelineException",

@@ -9,8 +9,7 @@ from experiments.core.data.registry import TransformerRegistry
 from experiments.core.data.repository import DataRepository
 from experiments.core.data.transformer import Transformer
 from experiments.core.modeling.features import extract_features_and_target
-from experiments.lib.pipelines import Pipeline, errors
-from experiments.lib.pipelines.steps import Runnable
+from experiments.lib.pipelines import Pipeline, Task, TaskResult, TaskStatus
 from experiments.pipelines.data.context import DataPipelineContext
 from experiments.pipelines.data.exporters import (
     export_final_features_as_parquet,
@@ -36,14 +35,17 @@ class DataProcessingPipelineSteps(Enum):
 
 def check_already_processed(
     state: DataPipelineState, context: DataPipelineContext
-) -> DataPipelineState:
+) -> TaskResult[DataPipelineState]:
     dataset = context.dataset
     if context.data_repository.is_processed(dataset):
-        raise errors.PipelineInterruption(
+        return TaskResult(
+            state,
+            TaskStatus.REQUIRES_ACTION,
             f"Processed data for dataset {dataset.display_name} already exists. Overwrite?",
-            context,
         )
-    return state
+    return TaskResult(
+        state, TaskStatus.SUCCESS, f"No existing processed data for {dataset.display_name}."
+    )
 
 
 class DataProcessingPipelineFactory:
@@ -133,7 +135,7 @@ class DataProcessingPipelineFactory:
     def _create_transformer(
         self,
         dataset: Dataset,
-    ) -> Runnable[DataPipelineState, DataPipelineContext]:
+    ) -> Task[DataPipelineState, DataPipelineContext]:
         """Create a transformer step for the data processing pipeline.
 
         Args:
@@ -150,42 +152,54 @@ class DataProcessingPipelineFactory:
         if transformer is None:
             raise ValueError(f"No transformer registered for dataset: {dataset.id}")
 
-        def transform(state: DataPipelineState, context: DataPipelineContext) -> DataPipelineState:
+        def transform(
+            state: DataPipelineState, context: DataPipelineContext
+        ) -> TaskResult[DataPipelineState]:
             if state["raw_data"] is None:
-                raise errors.PipelineException("No raw data found in state for transformation.")
+                return TaskResult(
+                    state, TaskStatus.FAILURE, "No raw data found in state for transformation."
+                )
             try:
                 processed_data = cast(Transformer, transformer)(state["raw_data"], context.use_gpu)
             except Exception as e:
-                raise errors.PipelineException(
-                    f"Data transformation failed for dataset {dataset.id}: {e}"
-                ) from e
+                return TaskResult(
+                    state,
+                    TaskStatus.ERROR,
+                    f"Data transformation failed for dataset {dataset.id}: {e}",
+                    e,
+                )
             state["interim_data"] = processed_data
-            return state
+            return TaskResult(state, TaskStatus.SUCCESS, "Data transformation successful.")
 
         return transform
 
     def _create_feature_extractor(
         self,
-    ) -> Runnable[DataPipelineState, DataPipelineContext]:
+    ) -> Task[DataPipelineState, DataPipelineContext]:
         """Create a feature extractor step for the data processing pipeline."""
 
         def extract_features(
             state: DataPipelineState, context: DataPipelineContext
-        ) -> DataPipelineState:
+        ) -> TaskResult[DataPipelineState]:
             if state["interim_data"] is None:
-                raise errors.PipelineException(
-                    "No interim data found in state for feature extraction."
+                return TaskResult(
+                    state,
+                    TaskStatus.FAILURE,
+                    "No interim data found in state for feature extraction.",
                 )
 
             try:
                 X_final, y_final = extract_features_and_target(state["interim_data"])
             except Exception as e:
-                raise errors.PipelineException(
-                    f"Feature extraction failed for dataset {context.dataset.id}: {e}"
-                ) from e
+                return TaskResult(
+                    state,
+                    TaskStatus.ERROR,
+                    f"Feature extraction failed for dataset {context.dataset.id}: {e}",
+                    e,
+                )
 
             state["X_final"] = X_final
             state["y_final"] = y_final
-            return state
+            return TaskResult(state, TaskStatus.SUCCESS, "Feature extraction successful.")
 
         return extract_features

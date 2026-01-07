@@ -118,7 +118,7 @@ class PipelineExecutor:
             step_start_time = time.time()
             try:
                 logger.info(f"Starting step: {step_id}")
-                current_state = step(current_state, context)
+                current_state, *_ = step(current_state, context)
             except (PipelineException, PipelineInterruption) as e:
                 if not isinstance(e, PipelineInterruption):
                     errors_dict[step.name] = e
