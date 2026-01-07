@@ -1,13 +1,13 @@
 from enum import Enum
 from typing import cast
 
-from experiments.core.data_new import (
+from experiments.core.data import (
     Dataset,
     get_transformer_registry,
 )
-from experiments.core.data_new.registry import TransformerRegistry
-from experiments.core.data_new.repository import DataRepository
-from experiments.core.data_new.transformer import Transformer
+from experiments.core.data.registry import TransformerRegistry
+from experiments.core.data.repository import DataRepository
+from experiments.core.data.transformer import Transformer
 from experiments.core.modeling.features import extract_features_and_target
 from experiments.lib.pipelines import Pipeline, errors
 from experiments.lib.pipelines.steps import Runnable

@@ -7,7 +7,7 @@ from typing import Protocol
 
 import polars as pl
 
-from experiments.core.data_new import Dataset
+from experiments.core.data import Dataset
 
 
 class DataRepository(Protocol):

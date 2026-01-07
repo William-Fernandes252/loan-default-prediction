@@ -8,7 +8,7 @@ from loguru import logger
 import typer
 
 from experiments.containers import NewContainer
-from experiments.core.data_new import (
+from experiments.core.data import (
     Dataset,
 )
 from experiments.lib.pipelines import PipelineException, PipelineExecutionResult

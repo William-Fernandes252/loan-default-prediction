@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import polars as pl
 
-from experiments.core.data_new import Dataset
+from experiments.core.data import Dataset
 from experiments.storage import Storage
 
 

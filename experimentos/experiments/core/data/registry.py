@@ -2,7 +2,7 @@
 
 This module provides a registration system that allows data transformers
 to self-register, eliminating the need to modify factory code when
-adding new datasets. This adheres to the Open/Closed Principle.
+adding new datasets.
 
 Example:
     ```python
@@ -14,18 +14,18 @@ Example:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, TypeVar
+from typing import Callable, Mapping
 
-if TYPE_CHECKING:
-    from experiments.core.data.base import BaseDataTransformer
+from experiments.core.data.transformer import Transformer
 
-T = TypeVar("T", bound="BaseDataTransformer")
+# Global registry mapping dataset IDs to transformers
+_TRANSFORMER_REGISTRY: dict[str, Transformer] = {}
 
-# Global registry mapping dataset IDs to transformer classes
-_TRANSFORMER_REGISTRY: dict[str, type[BaseDataTransformer]] = {}
+type TransformerRegistry = Mapping[str, Transformer]
+"""Mapping of dataset IDs to transformer instances."""
 
 
-def register_transformer(dataset_id: str) -> type[T]:
+def register_transformer(dataset_id: str) -> Callable[[Transformer], Transformer]:
     """Decorator to register a transformer for a dataset.
 
     This decorator automatically adds the transformer class to the
@@ -49,19 +49,16 @@ def register_transformer(dataset_id: str) -> type[T]:
         ValueError: If a transformer is already registered for the dataset_id.
     """
 
-    def decorator(cls: type[T]) -> type[T]:
+    def decorator(t: Transformer) -> Transformer:
         if dataset_id in _TRANSFORMER_REGISTRY:
-            raise ValueError(
-                f"Transformer already registered for dataset '{dataset_id}': "
-                f"{_TRANSFORMER_REGISTRY[dataset_id].__name__}"
-            )
-        _TRANSFORMER_REGISTRY[dataset_id] = cls
-        return cls
+            raise ValueError(f"Transformer already registered for dataset '{dataset_id}'.")
+        _TRANSFORMER_REGISTRY[dataset_id] = t
+        return t
 
     return decorator
 
 
-def get_transformer_registry() -> dict[str, type[BaseDataTransformer]]:
+def get_transformer_registry() -> TransformerRegistry:
     """Get a copy of the current transformer registry.
 
     Returns:
@@ -70,7 +67,7 @@ def get_transformer_registry() -> dict[str, type[BaseDataTransformer]]:
     return _TRANSFORMER_REGISTRY.copy()
 
 
-def get_transformer(dataset_id: str) -> type[BaseDataTransformer] | None:
+def get_transformer(dataset_id: str) -> Transformer | None:
     """Get a transformer class for a dataset ID.
 
     Args:

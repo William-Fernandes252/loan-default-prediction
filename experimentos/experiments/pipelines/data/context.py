@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from typing import Annotated
 
-from experiments.core.data_new import Dataset
-from experiments.core.data_new.repository import DataRepository
+from experiments.core.data import Dataset
+from experiments.core.data.repository import DataRepository
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

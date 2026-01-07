@@ -10,7 +10,6 @@ from typing import Any
 from dependency_injector import containers, providers
 from loguru import logger
 
-from experiments.core.data import DataProcessingPipelineFactory
 from experiments.core.experiment import (
     ExperimentPipelineConfig,
     ExperimentRunnerFactory,
@@ -189,22 +188,6 @@ class Container(containers.DeclarativeContainer):
     model_versioning_factory = providers.Singleton(
         ModelVersioningServiceFactory,
         models_dir=path_manager.provided.models_dir,
-    )
-
-    # --- Data Processing Pipeline ---
-
-    data_processing_factory = providers.Factory(
-        DataProcessingPipelineFactory,
-        storage=storage_service,
-        raw_data_uri=providers.Callable(
-            lambda s: StorageService.to_uri(s.paths.raw_data_dir),
-            settings,
-        ),
-        interim_data_uri=providers.Callable(
-            lambda s: StorageService.to_uri(s.paths.interim_data_dir),
-            settings,
-        ),
-        use_gpu=settings.provided.resources.use_gpu,
     )
 
     # --- Estimator Factory ---
