@@ -1,9 +1,8 @@
 """CLI for data processing tasks."""
 
 import sys
-from typing import Annotated, cast
+from typing import Annotated
 
-from joblib import Parallel, delayed
 from loguru import logger
 import typer
 
@@ -12,15 +11,17 @@ from experiments.core.data import (
     Dataset,
 )
 from experiments.lib.pipelines import (
+    Action,
     Pipeline,
     PipelineExecutionResult,
+    PipelineExecutor,
+    PipelineObserver,
+    PipelineStatus,
     TaskResult,
-    UserAction,
 )
 from experiments.pipelines.data import (
     DataPipelineContext,
     DataPipelineState,
-    DataProcessingPipeline,
     DataProcessingPipelineSteps,
 )
 
@@ -32,24 +33,87 @@ if __name__ == "__main__":
 app = typer.Typer()
 
 
-def _prompt_user_for_confirmation(
-    pipeline: Pipeline[DataPipelineState, DataPipelineContext],
-    step_name: str,
-    step_result: TaskResult[DataPipelineState],
-) -> UserAction:
-    """Prompt the user for confirmation on pipeline interruption."""
+class DataPipelineObserver(PipelineObserver[DataPipelineState, DataPipelineContext]):
+    """Observer for data processing pipelines.
 
-    if (
-        step_name == DataProcessingPipelineSteps.CHECK_ALREADY_PROCESSED.value
-        and step_result.message
-    ):
-        return (
-            UserAction.PROCEED
-            if typer.confirm(step_result.message, default=False)
-            else UserAction.ABORT
-        )
+    Handles lifecycle events and controls pipeline behavior through
+    lifecycle hooks instead of user interaction.
+    """
 
-    return UserAction.ABORT
+    def __init__(self, force: bool = False) -> None:
+        """Initialize the observer.
+
+        Args:
+            force: If True, overwrite existing processed data without prompting.
+        """
+        self._force = force
+
+    def on_pipeline_start(
+        self, pipeline: Pipeline[DataPipelineState, DataPipelineContext]
+    ) -> Action:
+        logger.info(f"Starting pipeline: {pipeline.name}")
+        return Action.PROCEED
+
+    def on_pipeline_finish(
+        self,
+        pipeline: Pipeline[DataPipelineState, DataPipelineContext],
+        result: PipelineExecutionResult[DataPipelineState, DataPipelineContext],
+    ) -> Action:
+        if result.succeeded():
+            logger.success(f"Pipeline {pipeline.name} completed in {result.total_duration():.2f}s")
+        else:
+            logger.warning(f"Pipeline {pipeline.name} finished with status {result.status.value}")
+        return Action.PROCEED
+
+    def on_step_start(
+        self,
+        pipeline: Pipeline[DataPipelineState, DataPipelineContext],
+        step_name: str,
+        current_state: DataPipelineState,
+    ) -> Action:
+        logger.debug(f"[{pipeline.name}] Starting step: {step_name}")
+        return Action.PROCEED
+
+    def on_step_finish(
+        self,
+        pipeline: Pipeline[DataPipelineState, DataPipelineContext],
+        step_name: str,
+        result: TaskResult[DataPipelineState],
+    ) -> Action:
+        if result.message:
+            logger.debug(f"[{pipeline.name}] {step_name}: {result.message}")
+        return Action.PROCEED
+
+    def on_error(
+        self,
+        pipeline: Pipeline[DataPipelineState, DataPipelineContext],
+        step_name: str,
+        error: Exception,
+    ) -> Action:
+        logger.error(f"[{pipeline.name}] Error in {step_name}: {error}")
+        return Action.ABORT
+
+    def on_action_required(
+        self,
+        pipeline: Pipeline[DataPipelineState, DataPipelineContext],
+        step_name: str,
+        message: str,
+    ) -> Action:
+        """Handle action-required events through lifecycle hooks.
+
+        For the CHECK_ALREADY_PROCESSED step, this decides whether to
+        continue (overwrite) or abort based on the --force flag.
+        """
+        if step_name == DataProcessingPipelineSteps.CHECK_ALREADY_PROCESSED.value:
+            if self._force:
+                logger.info(f"[{pipeline.name}] {message} Overwriting (--force)")
+                return Action.PROCEED  # Skip check and continue
+            else:
+                logger.warning(f"[{pipeline.name}] {message} Aborting (use --force to overwrite)")
+                return Action.ABORT
+
+        logger.warning(f"[{pipeline.name}] Action required in {step_name}: {message}")
+        return Action.ABORT
 
 
 @app.command(name="process")
@@ -111,40 +175,53 @@ def main(
     dataset_names = ", ".join(ds.display_name for ds in datasets_to_process)
     logger.info(f"Scheduling preprocessing for: {dataset_names}")
 
-    executor = container.executor()
-    pipelines = [
-        container.data_processing_pipeline_factory().create(ds, effective_use_gpu, force)
-        for ds in datasets_to_process
-    ]
+    # Calculate number of workers
     n_jobs = jobs or container.resource_calculator().compute_safe_jobs(
         dataset_size_gb=sum(
             data_repository.get_size_in_bytes(ds) / 1e9 for ds in datasets_to_process
         ),
     )
 
-    def run_data_pipeline(pipeline: DataProcessingPipeline) -> PipelineExecutionResult:
-        with logger.contextualize(dataset=pipeline.context.dataset.display_name):
-            return executor.execute(
-                pipeline,
-                {},
-                action_request_handler=_prompt_user_for_confirmation,
-            )
+    # Create pipelines
+    pipelines = [
+        container.data_processing_pipeline_factory().create(ds, effective_use_gpu, force)
+        for ds in datasets_to_process
+    ]
 
-    results = cast(
-        list[PipelineExecutionResult[object, DataPipelineContext]],
-        Parallel(n_jobs=n_jobs, prefer="threads")(
-            delayed(run_data_pipeline)(pipeline) for pipeline in pipelines
-        ),
+    # Create observer for lifecycle control
+    observer = DataPipelineObserver(force=force)
+
+    # Create executor with parallel workers and observer
+    executor = PipelineExecutor(
+        max_workers=n_jobs,
+        observers={observer},
+        default_action=Action.ABORT,
     )
 
+    # Schedule all pipelines with empty initial state
+    for pipeline in pipelines:
+        initial_state: DataPipelineState = {
+            "raw_data": None,
+            "interim_data": None,
+            "X_final": None,
+            "y_final": None,
+        }
+        executor.schedule(pipeline, initial_state)
+
+    executor.start()
+
+    results = executor.wait()
     failed = [result for result in results if not result.succeeded()]
     if failed:
         for result in failed:
-            error_details = result.last_error()
-            if error_details:
-                logger.error(
-                    f"Dataset {result.context.dataset.display_name} failed: {error_details}"
-                )
+            if result.status == PipelineStatus.ABORTED:
+                logger.warning(f"Pipeline {result.pipeline_name} was aborted")
+            elif result.status == PipelineStatus.PANICKED:
+                logger.error(f"Pipeline {result.pipeline_name} panicked")
+            else:
+                error_details = result.last_error()
+                if error_details:
+                    logger.error(f"Pipeline {result.pipeline_name} failed: {error_details}")
         raise typer.Exit(code=1)
 
     logger.success("All requested datasets processed successfully.")

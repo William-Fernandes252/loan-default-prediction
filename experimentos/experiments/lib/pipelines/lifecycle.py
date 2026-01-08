@@ -12,43 +12,68 @@ if TYPE_CHECKING:
     from experiments.lib.pipelines.execution import PipelineExecutionResult
 
 
-class ErrorAction(enum.IntEnum):
-    """Actions to take when an error occurs during pipeline execution.
+class Action(enum.IntEnum):
+    """Actions observers can request during pipeline execution.
 
-    - `ABORT`: Stop the pipeline execution immediately.
-    - `RETRY`: Retry the failed step.
-    - `IGNORE`: Ignore the failed step and continue with the next one.
-    - `PANIC`: Raise the error immediately without any handling.
-    """
+    Actions are ordered by severity, allowing the executor to aggregate
+    responses from multiple observers by taking the maximum value.
 
-    IGNORE = enum.auto()
-    RETRY = enum.auto()
-    ABORT = enum.auto()
-    PANIC = enum.auto()
+    Semantics vary by lifecycle hook:
 
+    - `PROCEED`: Continue normally.
+        - on_step_start: Execute the step
+        - on_step_finish: Continue to next step
+        - on_error/on_action_required: Skip the step and continue
+        - on_pipeline_start: Start execution
+        - on_pipeline_finish: Complete normally
 
-class UserAction(enum.IntEnum):
-    """Actions to take when user intervention is required during pipeline execution.
+    - `RETRY`: Retry the current unit.
+        - on_step_start: Not applicable (treated as PROCEED)
+        - on_step_finish: Re-execute this step
+        - on_error/on_action_required: Retry the failed step
+        - on_pipeline_start: Not applicable (treated as PROCEED)
+        - on_pipeline_finish: Re-execute the entire pipeline from the beginning
 
-    - `ABORT`: Stop the pipeline execution immediately.
-    - `PROCEED`: Continue with the next step.
+    - `ABORT`: Stop this pipeline, but let other pipelines continue.
+        - All hooks: Immediately stop this pipeline's execution
+
+    - `PANIC`: Stop all pipeline execution immediately.
+        - All hooks: Shut down the executor and raise the error (if any)
     """
 
     PROCEED = enum.auto()
     RETRY = enum.auto()
     ABORT = enum.auto()
+    PANIC = enum.auto()
 
 
 class PipelineObserver(Generic[State, Context], Protocol):
+    """Observer protocol for pipeline execution lifecycle events.
+
+    Observers receive notifications about pipeline and step lifecycle events,
+    and can influence execution flow through their return values.
+
+    All observer methods must be thread-safe, as they may be called from
+    multiple worker threads concurrently when executing multiple pipelines.
+
+    All methods return an `Action` that controls pipeline execution flow.
+    When multiple observers are registered, the executor takes the action
+    with the highest severity (max value).
+    """
+
     def on_step_start(
         self, pipeline: Pipeline[State, Context], step_name: str, current_state: State
-    ) -> None:
-        """Called when a pipeline step starts.
+    ) -> Action:
+        """Called when a pipeline step is about to start.
 
         Args:
             pipeline: The pipeline to which the step belongs.
             step_name: The name of the step that is starting.
             current_state: The current state before the step execution.
+
+        Returns:
+            Action: PROCEED to execute, ABORT to skip and stop pipeline,
+                PANIC to stop all pipelines.
         """
         ...
 
@@ -57,27 +82,33 @@ class PipelineObserver(Generic[State, Context], Protocol):
         pipeline: Pipeline[State, Context],
         step_name: str,
         result: TaskResult[State],
-    ) -> None:
-        """Called when a pipeline step finishes.
+    ) -> Action:
+        """Called when a pipeline step finishes successfully.
 
         Args:
             pipeline: The pipeline to which the step belongs.
             step_name: The name of the step that has finished.
             result: The result of the step execution.
+
+        Returns:
+            Action: PROCEED to continue, RETRY to re-execute this step,
+                ABORT to stop pipeline, PANIC to stop all pipelines.
         """
         ...
 
     def on_error(
         self, pipeline: Pipeline[State, Context], step_name: str, error: Exception
-    ) -> ErrorAction:
+    ) -> Action:
         """Called when an error occurs during a pipeline step.
-
-        It allows the observer to decide how to handle the error by returning an `ErrorAction`.
 
         Args:
             pipeline: The pipeline to which the step belongs.
             step_name: The name of the step where the error occurred.
             error: The exception that was raised.
+
+        Returns:
+            Action: PROCEED to skip step and continue, RETRY to retry,
+                ABORT to stop pipeline, PANIC to stop all and raise error.
         """
         ...
 
@@ -86,23 +117,31 @@ class PipelineObserver(Generic[State, Context], Protocol):
         pipeline: Pipeline[State, Context],
         step_name: str,
         message: str,
-    ) -> ErrorAction:
-        """Called when a pipeline step requires user action to proceed.
+    ) -> Action:
+        """Called when a pipeline step requires external action to proceed.
 
-        It allows the observer to decide how to handle the situation by returning an `ErrorAction`.
+        This is triggered when a step returns `TaskStatus.REQUIRES_ACTION`.
 
         Args:
             pipeline: The pipeline to which the step belongs.
             step_name: The name of the step that requires action.
             message: A message describing the required action.
+
+        Returns:
+            Action: PROCEED to skip step and continue, RETRY to retry,
+                ABORT to stop pipeline, PANIC to stop all pipelines.
         """
         ...
 
-    def on_pipeline_start(self, pipeline: Pipeline[State, Context]) -> None:
+    def on_pipeline_start(self, pipeline: Pipeline[State, Context]) -> Action:
         """Called when the pipeline execution starts.
 
         Args:
             pipeline: The pipeline that is starting.
+
+        Returns:
+            Action: PROCEED to start, ABORT to skip this pipeline,
+                PANIC to stop all pipelines.
         """
         ...
 
@@ -110,69 +149,105 @@ class PipelineObserver(Generic[State, Context], Protocol):
         self,
         pipeline: Pipeline[State, Context],
         result: "PipelineExecutionResult[State, Context]",
-    ) -> None:
+    ) -> Action:
         """Called when the pipeline execution finishes.
 
         Args:
             pipeline: The pipeline that has finished.
             result: The result of the pipeline execution.
+
+        Returns:
+            Action: PROCEED to complete, RETRY to re-execute entire pipeline,
+                ABORT to mark as aborted, PANIC to stop all pipelines.
         """
         ...
 
 
-class IgnoreActionsPipelineObserver(Generic[State, Context], PipelineObserver[State, Context]):
-    """A pipeline observer that ignores all events. Useful to logging or monitoring."""
+class IgnoreAllObserver(Generic[State, Context]):
+    """A pipeline observer that proceeds through all events.
+
+    This observer returns PROCEED for all events, allowing pipelines to
+    continue normally. Useful as a base class for logging observers or
+    when combined with other observers.
+    """
 
     def on_step_start(
         self, pipeline: Pipeline[State, Context], step_name: str, current_state: State
-    ) -> None: ...
+    ) -> Action:
+        return Action.PROCEED
 
     def on_step_finish(
         self,
         pipeline: Pipeline[State, Context],
         step_name: str,
         result: TaskResult[State],
-    ) -> None: ...
+    ) -> Action:
+        return Action.PROCEED
 
     def on_error(
         self, pipeline: Pipeline[State, Context], step_name: str, error: Exception
-    ) -> ErrorAction:
-        return ErrorAction.IGNORE
+    ) -> Action:
+        return Action.PROCEED
 
     def on_action_required(
         self,
         pipeline: Pipeline[State, Context],
         step_name: str,
         message: str,
-    ) -> ErrorAction:
-        return ErrorAction.IGNORE
+    ) -> Action:
+        return Action.PROCEED
 
-    def on_pipeline_start(self, pipeline: Pipeline[State, Context]) -> None: ...
+    def on_pipeline_start(self, pipeline: Pipeline[State, Context]) -> Action:
+        return Action.PROCEED
 
     def on_pipeline_finish(
         self,
         pipeline: Pipeline[State, Context],
         result: "PipelineExecutionResult[State, Context]",
-    ) -> None: ...
+    ) -> Action:
+        return Action.PROCEED
 
 
-class PipelineActionRequestHandler(Generic[State, Context], Protocol):
-    """An interface for handling user action requests during pipeline execution."""
+class AbortOnErrorObserver(Generic[State, Context]):
+    """A pipeline observer that aborts the pipeline on any error.
 
-    def __call__(
+    This observer returns ABORT for errors and PROCEED for other events,
+    providing a fail-fast behavior for individual pipelines while
+    allowing other pipelines to continue.
+    """
+
+    def on_step_start(
+        self, pipeline: Pipeline[State, Context], step_name: str, current_state: State
+    ) -> Action:
+        return Action.PROCEED
+
+    def on_step_finish(
         self,
         pipeline: Pipeline[State, Context],
         step_name: str,
-        step_result: TaskResult[State],
-    ) -> UserAction:
-        """Handle a user action request during pipeline execution.
+        result: TaskResult[State],
+    ) -> Action:
+        return Action.PROCEED
 
-        Args:
-            pipeline: The pipeline where the action is requested.
-            step_name: The name of the step requesting action.
-            message: A message describing the required action.
+    def on_error(
+        self, pipeline: Pipeline[State, Context], step_name: str, error: Exception
+    ) -> Action:
+        return Action.ABORT
 
-        Returns:
-            UserAction: The action to take in response to the request.
-        """
-        ...
+    def on_action_required(
+        self,
+        pipeline: Pipeline[State, Context],
+        step_name: str,
+        message: str,
+    ) -> Action:
+        return Action.PROCEED
+
+    def on_pipeline_start(self, pipeline: Pipeline[State, Context]) -> Action:
+        return Action.PROCEED
+
+    def on_pipeline_finish(
+        self,
+        pipeline: Pipeline[State, Context],
+        result: "PipelineExecutionResult[State, Context]",
+    ) -> Action:
+        return Action.PROCEED

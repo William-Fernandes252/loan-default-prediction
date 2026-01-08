@@ -1,22 +1,32 @@
-"""Defines the pipeline execution engine."""
+"""Defines the pipeline execution engine with managed parallel execution."""
 
-from collections.abc import Set
-from dataclasses import dataclass
-from queue import Queue
+from collections.abc import Sequence, Set
+from concurrent.futures import Future, ThreadPoolExecutor
+from dataclasses import dataclass, field
+from enum import Enum
+import threading
 import time
 from typing import Annotated, Any, Generic, final
 
 from experiments.lib.pipelines.context import Context
 from experiments.lib.pipelines.lifecycle import (
-    ErrorAction,
-    PipelineActionRequestHandler,
+    Action,
     PipelineObserver,
-    UserAction,
 )
 from experiments.lib.pipelines.pipeline import Pipeline
 from experiments.lib.pipelines.state import State
 from experiments.lib.pipelines.steps import Step
 from experiments.lib.pipelines.tasks import TaskResult, TaskStatus
+
+
+class PipelineStatus(Enum):
+    """Status of a pipeline in the executor."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    ABORTED = "aborted"
+    PANICKED = "panicked"
 
 
 @dataclass
@@ -30,10 +40,12 @@ class StepTrace:
     error: Annotated[Exception | None, "The exception raised during step execution, if any."]
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass
 class PipelineExecutionResult(Generic[State, Context]):
     """Result of pipeline execution."""
 
+    pipeline_name: Annotated[str, "Name of the pipeline."]
+    status: Annotated[PipelineStatus, "Final status of the pipeline."]
     step_traces: Annotated[list[StepTrace], "List of step execution traces."]
     context: Annotated[Context, "The context used during pipeline execution."]
     final_state: Annotated[State, "Final state after pipeline execution."]
@@ -61,7 +73,7 @@ class PipelineExecutionResult(Generic[State, Context]):
 
     def succeeded(self) -> bool:
         """Check if the pipeline execution succeeded without errors."""
-        return len(self.errors) == 0
+        return self.status == PipelineStatus.COMPLETED and len(self.errors) == 0
 
     def last_error(self) -> Exception | None:
         """Get the last error that occurred during pipeline execution, if any."""
@@ -73,191 +85,694 @@ class PipelineExecutionResult(Generic[State, Context]):
         return None
 
 
+@dataclass
+class _PipelineContext(Generic[State, Context]):
+    """Internal context for tracking pipeline execution state."""
+
+    pipeline: Pipeline[State, Context]
+    initial_state: State
+    current_state: State
+    step_index: int = 0
+    step_traces: list[StepTrace] = field(default_factory=list)
+    status: PipelineStatus = PipelineStatus.PENDING
+    lock: threading.Lock = field(default_factory=threading.Lock)
+
+    @property
+    def current_step(self) -> Step[State, Context] | None:
+        """Get the current step to execute, or None if finished."""
+        if self.step_index >= len(self.pipeline.steps):
+            return None
+        return self.pipeline.steps[self.step_index]
+
+    def advance(self) -> None:
+        """Advance to the next step."""
+        self.step_index += 1
+
+    def reset(self) -> None:
+        """Reset the pipeline to initial state for retry."""
+        self.step_index = 0
+        self.current_state = self.initial_state
+        self.step_traces = []
+        self.status = PipelineStatus.RUNNING
+
+    def is_finished(self) -> bool:
+        """Check if all steps have been executed."""
+        return self.step_index >= len(self.pipeline.steps)
+
+
+@dataclass
+class _StepExecution(Generic[State, Context]):
+    """Represents a step execution unit for the thread pool."""
+
+    pipeline_ctx: _PipelineContext[State, Context]
+    step: Step[State, Context]
+    state: State
+    context: Context
+
+
+@dataclass
+class _StepResult(Generic[State, Context]):
+    """Result of a step execution from the thread pool."""
+
+    pipeline_ctx: _PipelineContext[State, Context]
+    step_name: str
+    task_result: TaskResult[State] | None
+    exception: Exception | None
+    duration: float
+
+
 @final
 class PipelineExecutor:
-    """Orchestrates the execution of pipeline steps.
+    """Orchestrates parallel execution of multiple pipelines.
 
-    It manages the sequential execution of steps in a pipeline, handles errors using provided error handlers, and collects execution results.
+    The executor manages a pool of worker threads that execute pipeline steps
+    concurrently. Steps from different pipelines can run in parallel, while
+    steps within a single pipeline are executed sequentially.
+
+    All control flow (retries, aborts, panics) is managed through lifecycle
+    hooks provided by observers. Observers can be provided at construction
+    time (default observers) and/or at execution time.
 
     Args:
-        default_observers: A set of default observers to notify during execution. These are used in addition to any observers provided at execution time.
-        default_error_action: The default action to take on errors if no specific handler is provided. Default is `ErrorAction.PANIC`, i.e., raise the error immediately without any handling.
+        max_workers: Maximum number of worker threads. Defaults to 4.
+        observers: A set of default observers to notify during execution.
+        default_action: The default action to take if no observer provides
+            guidance. Default is `Action.ABORT`.
     """
 
     def __init__(
         self,
-        default_observers: Set[PipelineObserver[Any, Any]] | None = None,
-        default_error_action: ErrorAction = ErrorAction.PANIC,
-        default_action_request_handler: PipelineActionRequestHandler[Any, Any] | None = None,
+        max_workers: int = 4,
+        observers: Set[PipelineObserver[Any, Any]] | None = None,
+        default_action: Action = Action.ABORT,
     ) -> None:
-        self._default_observers = default_observers or set()
-        self._default_error_action = default_error_action
-        self._default_action_request_handler = default_action_request_handler
+        self._max_workers = max_workers
+        self._default_observers: Set[PipelineObserver[Any, Any]] = observers or set()
+        self._default_action = default_action
 
-    def execute[State, Context](
+        self._executor: ThreadPoolExecutor | None = None
+        self._pipeline_contexts: dict[str, _PipelineContext[Any, Any]] = {}
+        self._pending_futures: dict[Future[_StepResult[Any, Any]], str] = {}
+        self._results: list[PipelineExecutionResult[Any, Any]] = []
+        self._panic_error: Exception | None = None
+
+        # Observers for current execution (merged with defaults)
+        self._active_observers: Set[PipelineObserver[Any, Any]] = set()
+
+        self._lock = threading.Lock()
+        self._completion_event = threading.Event()
+        self._started = False
+        self._shutdown = False
+
+    def schedule(
         self,
         pipeline: Pipeline[State, Context],
         initial_state: State,
-        observers: Set[PipelineObserver[State, Context]] | None = None,
-        action_request_handler: PipelineActionRequestHandler[State, Context] | None = None,
-    ) -> PipelineExecutionResult[State, Context]:
-        """Execute a pipeline from the initial state.
+    ) -> None:
+        """Schedule a pipeline for execution.
+
+        The pipeline will be queued and executed when `start()` is called.
+        Multiple pipelines can be scheduled before starting execution.
 
         Args:
             pipeline: The pipeline to execute.
             initial_state: The initial state to start the pipeline with.
-            observers: Optional set of observers to notify during execution.
+
+        Raises:
+            RuntimeError: If the executor has already been started.
+        """
+        if self._started:
+            raise RuntimeError("Cannot schedule pipelines after execution has started.")
+
+        pipeline_id = f"{pipeline.name}_{id(pipeline)}"
+        ctx = _PipelineContext(
+            pipeline=pipeline,
+            initial_state=initial_state,
+            current_state=initial_state,
+        )
+        self._pipeline_contexts[pipeline_id] = ctx
+
+    def start(
+        self,
+        observers: Set[PipelineObserver[Any, Any]] | None = None,
+    ) -> None:
+        """Start execution of all scheduled pipelines.
+
+        This method is non-blocking. Use `wait()` to block until all
+        pipelines have completed.
+
+        Args:
+            observers: Optional set of observers to use in addition to
+                the default observers.
+
+        Raises:
+            RuntimeError: If the executor has already been started.
+        """
+        if self._started:
+            raise RuntimeError("Executor has already been started.")
+
+        self._started = True
+        self._active_observers = self._default_observers | (observers or set())
+        self._completion_event.clear()
+
+        if not self._pipeline_contexts:
+            self._completion_event.set()
+            return
+
+        self._executor = ThreadPoolExecutor(max_workers=self._max_workers)
+
+        # Submit initial steps for all pipelines
+        for pipeline_id, ctx in self._pipeline_contexts.items():
+            self._start_pipeline(pipeline_id, ctx)
+
+    def wait(self) -> Sequence[PipelineExecutionResult[Any, Any]]:
+        """Wait for all pipelines to complete and return results.
+
+        This method blocks until all scheduled pipelines have finished
+        execution. It does not raise exceptions for pipeline failures
+        unless a PANIC action was requested by an observer.
 
         Returns:
-            PipelineExecutionResult: The result of the pipeline execution.
+            A sequence of execution results for all scheduled pipelines.
+
+        Raises:
+            Exception: If any observer requested a PANIC action, the
+                original exception is re-raised.
         """
-        self.__notify_pipeline_start(pipeline, observers)
+        self._completion_event.wait()
 
-        context = pipeline.context
-        step_traces: list[StepTrace] = []
-        steps = self.__create_steps_queue(pipeline)
-        current_state = initial_state
-        while not steps.empty():
-            step = steps.get()
-            step_result: TaskResult[State] | None = None
-            step_start_time = time.time()
-            self.__notify_step_start(pipeline, step.name, current_state, observers)
-            try:
-                step_result = step(current_state, context)
-                if step_result.status == TaskStatus.REQUIRES_ACTION and (
-                    handler := self.__get_action_request_handler(action_request_handler)
-                ):
-                    action = handler(pipeline, step.name, step_result)
-                    if action == UserAction.ABORT:
-                        break
-                    elif action == UserAction.RETRY:
-                        steps.put(step)
-                        continue
-                current_state = step_result.state
-            except Exception as e:
-                action = self.__notify_error(pipeline, step.name, e, observers)
-                if action == ErrorAction.IGNORE:
-                    continue
-                elif action == ErrorAction.RETRY:
-                    steps.put(step)
-                elif action == ErrorAction.ABORT:
-                    break
-                elif action == ErrorAction.PANIC:
-                    raise e
-            else:
-                self.__notify_step_finish(pipeline, step.name, step_result, observers)
-            finally:
-                end_time = time.time()
-                duration = end_time - step_start_time
-                step_traces.append(
-                    StepTrace(
-                        name=step.name,
-                        duration=duration,
-                        status=step_result.status if step_result else TaskStatus.ERROR,
-                        message=step_result.message if step_result else None,
-                        error=step_result.error if step_result else None,
-                    )
-                )
+        if self._executor:
+            self._executor.shutdown(wait=True)
+            self._executor = None
 
-        result = PipelineExecutionResult(
-            step_traces=step_traces,
-            context=context,
-            final_state=current_state,
-        )
-        self.__notify_pipeline_finish(
-            pipeline,
-            result,
-            observers,
-        )
+        if self._panic_error:
+            raise self._panic_error
 
-        return result
+        return self._results
 
-    @staticmethod
-    def __create_steps_queue(
-        pipeline: Pipeline[State, Context],
-    ) -> Queue[Step[State, Context]]:
-        """Create a queue of steps from the pipeline."""
-        steps_queue: Queue[Step[State, Context]] = Queue()
-        for step in pipeline.steps:
-            steps_queue.put(step)
-        return steps_queue
-
-    def __notify_pipeline_start[State, Context](
+    def execute(
         self,
         pipeline: Pipeline[State, Context],
+        initial_state: State,
         observers: Set[PipelineObserver[State, Context]] | None = None,
-    ) -> None:
-        """Notify observers that the pipeline is starting."""
-        all_observers = self.__merge_observers(observers)
-        for observer in all_observers:
-            observer.on_pipeline_start(pipeline)
+    ) -> PipelineExecutionResult[State, Context]:
+        """Execute a single pipeline synchronously.
 
-    def __notify_pipeline_finish[State, Context](
+        This is a convenience method that schedules, starts, and waits
+        for a single pipeline.
+
+        Args:
+            pipeline: The pipeline to execute.
+            initial_state: The initial state to start the pipeline with.
+            observers: Optional set of observers to use in addition to
+                the default observers.
+
+        Returns:
+            The execution result for the pipeline.
+        """
+        self.schedule(pipeline, initial_state)
+        self.start(observers)
+        results = self.wait()
+        return results[0]  # type: ignore[return-value]
+
+    def execute_all(
+        self,
+        pipelines: Sequence[tuple[Pipeline[State, Context], State]],
+        observers: Set[PipelineObserver[State, Context]] | None = None,
+    ) -> Sequence[PipelineExecutionResult[State, Context]]:
+        """Execute multiple pipelines in parallel.
+
+        This is a convenience method that schedules all pipelines, starts
+        execution, and waits for completion.
+
+        Args:
+            pipelines: A sequence of (pipeline, initial_state) tuples.
+            observers: Optional set of observers to use in addition to
+                the default observers.
+
+        Returns:
+            A sequence of execution results for all pipelines.
+        """
+        for pipeline, state in pipelines:
+            self.schedule(pipeline, state)
+        self.start(observers)
+        return self.wait()  # type: ignore[return-value]
+
+    def _start_pipeline(
+        self,
+        pipeline_id: str,
+        ctx: _PipelineContext[State, Context],
+    ) -> None:
+        """Start execution of a pipeline."""
+        ctx.status = PipelineStatus.RUNNING
+
+        action = self._notify_pipeline_start(ctx.pipeline)
+
+        if action == Action.PANIC:
+            error = RuntimeError(f"Pipeline {ctx.pipeline.name} start was rejected with PANIC")
+            self._handle_panic(error, ctx)
+            return
+
+        if action == Action.ABORT:
+            self._finalize_pipeline(pipeline_id, ctx, PipelineStatus.ABORTED)
+            return
+
+        self._submit_next_step(pipeline_id, ctx)
+
+    def _submit_next_step(
+        self,
+        pipeline_id: str,
+        ctx: _PipelineContext[State, Context],
+    ) -> None:
+        """Submit the next step of a pipeline for execution."""
+        if self._shutdown or self._panic_error:
+            self._finalize_pipeline(pipeline_id, ctx, PipelineStatus.ABORTED)
+            return
+
+        step = ctx.current_step
+        if step is None:
+            self._complete_pipeline(pipeline_id, ctx)
+            return
+
+        # Notify step start and check for abort/panic
+        action = self._notify_step_start(ctx.pipeline, step.name, ctx.current_state)
+
+        if action == Action.PANIC:
+            error = RuntimeError(f"Step {step.name} start was rejected with PANIC")
+            self._handle_panic(error, ctx)
+            return
+
+        if action == Action.ABORT:
+            self._finalize_pipeline(pipeline_id, ctx, PipelineStatus.ABORTED)
+            return
+
+        execution = _StepExecution(
+            pipeline_ctx=ctx,
+            step=step,
+            state=ctx.current_state,
+            context=ctx.pipeline.context,
+        )
+
+        future = self._executor.submit(self._execute_step, execution)  # type: ignore[union-attr]
+        future.add_done_callback(lambda f: self._on_step_complete(pipeline_id, f))
+
+        with self._lock:
+            self._pending_futures[future] = pipeline_id
+
+    def _execute_step(
+        self,
+        execution: _StepExecution[State, Context],
+    ) -> _StepResult[State, Context]:
+        """Execute a single step in a worker thread."""
+        start_time = time.time()
+        task_result: TaskResult[State] | None = None
+        exception: Exception | None = None
+
+        try:
+            task_result = execution.step(execution.state, execution.context)
+        except Exception as e:
+            exception = e
+
+        duration = time.time() - start_time
+
+        return _StepResult(
+            pipeline_ctx=execution.pipeline_ctx,
+            step_name=execution.step.name,
+            task_result=task_result,
+            exception=exception,
+            duration=duration,
+        )
+
+    def _on_step_complete(
+        self,
+        pipeline_id: str,
+        future: Future[_StepResult[Any, Any]],
+    ) -> None:
+        """Handle completion of a step execution."""
+        with self._lock:
+            self._pending_futures.pop(future, None)
+
+        try:
+            result = future.result()
+        except Exception as e:
+            # Future itself failed (shouldn't happen normally)
+            ctx = self._pipeline_contexts.get(pipeline_id)
+            if ctx:
+                self._handle_panic(e, ctx)
+            return
+
+        ctx = result.pipeline_ctx
+        step_name = result.step_name
+
+        # Record trace
+        trace = StepTrace(
+            name=step_name,
+            duration=result.duration,
+            status=(result.task_result.status if result.task_result else TaskStatus.ERROR),
+            message=result.task_result.message if result.task_result else None,
+            error=result.exception or (result.task_result.error if result.task_result else None),
+        )
+
+        with ctx.lock:
+            ctx.step_traces.append(trace)
+
+        # Handle exception from step execution
+        if result.exception:
+            self._handle_step_error(pipeline_id, ctx, step_name, result.exception)
+            return
+
+        # Handle task result
+        task_result = result.task_result
+        assert task_result is not None
+
+        if task_result.status == TaskStatus.REQUIRES_ACTION:
+            self._handle_action_required(pipeline_id, ctx, step_name, task_result.message or "")
+            return
+
+        if task_result.status == TaskStatus.ERROR and task_result.error:
+            self._handle_step_error(pipeline_id, ctx, step_name, task_result.error)
+            return
+
+        # Success path - notify observers and check their response
+        action = self._notify_step_finish(ctx.pipeline, step_name, task_result)
+
+        if action == Action.PANIC:
+            error = RuntimeError(f"Step {step_name} finish triggered PANIC")
+            self._handle_panic(error, ctx)
+            return
+
+        if action == Action.ABORT:
+            self._finalize_pipeline(pipeline_id, ctx, PipelineStatus.ABORTED)
+            return
+
+        if action == Action.RETRY:
+            # Re-execute this step (don't advance)
+            self._submit_next_step(pipeline_id, ctx)
+            return
+
+        # PROCEED - advance to next step
+        with ctx.lock:
+            ctx.current_state = task_result.state
+            ctx.advance()
+
+        self._submit_next_step(pipeline_id, ctx)
+
+    def _handle_step_error(
+        self,
+        pipeline_id: str,
+        ctx: _PipelineContext[State, Context],
+        step_name: str,
+        error: Exception,
+    ) -> None:
+        """Handle an error that occurred during step execution."""
+        action = self._notify_error(ctx.pipeline, step_name, error)
+
+        if action == Action.PANIC:
+            self._handle_panic(error, ctx)
+            return
+
+        if action == Action.ABORT:
+            self._finalize_pipeline(pipeline_id, ctx, PipelineStatus.ABORTED)
+            return
+
+        if action == Action.PROCEED:
+            # Skip the failed step and continue
+            with ctx.lock:
+                ctx.advance()
+            self._submit_next_step(pipeline_id, ctx)
+            return
+
+        if action == Action.RETRY:
+            self._submit_next_step(pipeline_id, ctx)
+            return
+
+    def _handle_action_required(
+        self,
+        pipeline_id: str,
+        ctx: _PipelineContext[State, Context],
+        step_name: str,
+        message: str,
+    ) -> None:
+        """Handle a step that requires action through lifecycle hooks."""
+        action = self._notify_action_required(ctx.pipeline, step_name, message)
+
+        if action == Action.PANIC:
+            error = RuntimeError(f"Action required but PANIC requested: {message}")
+            self._handle_panic(error, ctx)
+            return
+
+        if action == Action.ABORT:
+            self._finalize_pipeline(pipeline_id, ctx, PipelineStatus.ABORTED)
+            return
+
+        if action == Action.PROCEED:
+            # Skip the step and continue
+            with ctx.lock:
+                ctx.advance()
+            self._submit_next_step(pipeline_id, ctx)
+            return
+
+        if action == Action.RETRY:
+            self._submit_next_step(pipeline_id, ctx)
+            return
+
+    def _complete_pipeline(
+        self,
+        pipeline_id: str,
+        ctx: _PipelineContext[State, Context],
+    ) -> None:
+        """Complete a pipeline and check observer response for retry."""
+        result = PipelineExecutionResult(
+            pipeline_name=ctx.pipeline.name,
+            status=PipelineStatus.COMPLETED,
+            step_traces=ctx.step_traces,
+            context=ctx.pipeline.context,
+            final_state=ctx.current_state,
+        )
+
+        action = self._notify_pipeline_finish(ctx.pipeline, result)
+
+        if action == Action.PANIC:
+            error = RuntimeError(f"Pipeline {ctx.pipeline.name} finish triggered PANIC")
+            self._handle_panic(error, ctx)
+            return
+
+        if action == Action.RETRY:
+            # Re-execute the entire pipeline from the beginning
+            with ctx.lock:
+                ctx.reset()
+            self._notify_pipeline_start(ctx.pipeline)
+            self._submit_next_step(pipeline_id, ctx)
+            return
+
+        if action == Action.ABORT:
+            self._finalize_pipeline(pipeline_id, ctx, PipelineStatus.ABORTED)
+            return
+
+        # PROCEED - finalize normally
+        self._record_result(result)
+
+    def _handle_panic(
+        self,
+        error: Exception,
+        ctx: _PipelineContext[State, Context],
+    ) -> None:
+        """Handle a PANIC action by shutting down all execution."""
+        with self._lock:
+            if self._panic_error is not None:
+                return  # Already panicking
+
+            self._panic_error = error
+            self._shutdown = True
+            ctx.status = PipelineStatus.PANICKED
+
+        # Finalize remaining pipelines
+        self._finalize_all_remaining()
+
+    def _finalize_pipeline(
+        self,
+        pipeline_id: str,
+        ctx: _PipelineContext[State, Context],
+        status: PipelineStatus,
+    ) -> None:
+        """Finalize a pipeline and record its result."""
+        with ctx.lock:
+            if ctx.status not in (PipelineStatus.PENDING, PipelineStatus.RUNNING):
+                return  # Already finalized
+            ctx.status = status
+
+        result = PipelineExecutionResult(
+            pipeline_name=ctx.pipeline.name,
+            status=status,
+            step_traces=ctx.step_traces,
+            context=ctx.pipeline.context,
+            final_state=ctx.current_state,
+        )
+
+        # Notify but don't act on response for aborted/panicked pipelines
+        self._notify_pipeline_finish(ctx.pipeline, result)
+        self._record_result(result)
+
+    def _record_result(
+        self,
+        result: PipelineExecutionResult[Any, Any],
+    ) -> None:
+        """Record a pipeline result and check for completion."""
+        with self._lock:
+            self._results.append(result)
+            self._check_completion()
+
+    def _finalize_all_remaining(self) -> None:
+        """Finalize all pipelines that haven't completed yet."""
+        for pipeline_id, ctx in self._pipeline_contexts.items():
+            with ctx.lock:
+                if ctx.status in (PipelineStatus.PENDING, PipelineStatus.RUNNING):
+                    self._finalize_pipeline(pipeline_id, ctx, PipelineStatus.ABORTED)
+
+    def _check_completion(self) -> None:
+        """Check if all pipelines have completed and signal if so."""
+        if len(self._results) >= len(self._pipeline_contexts):
+            self._completion_event.set()
+
+    # Observer notification methods
+
+    def _notify_pipeline_start(
+        self,
+        pipeline: Pipeline[State, Context],
+    ) -> Action:
+        """Notify observers that a pipeline is starting."""
+        if not self._active_observers:
+            return Action.PROCEED
+
+        actions: list[Action] = []
+        for observer in self._active_observers:
+            try:
+                action = observer.on_pipeline_start(pipeline)
+                actions.append(action)
+            except Exception:
+                pass  # Don't let observer errors affect execution
+
+        if not actions:
+            return Action.PROCEED
+
+        return max(actions, key=lambda a: a.value)
+
+    def _notify_pipeline_finish(
         self,
         pipeline: Pipeline[State, Context],
         result: PipelineExecutionResult[State, Context],
-        observers: Set[PipelineObserver[State, Context]] | None = None,
-    ) -> None:
-        """Notify observers that the pipeline has ended."""
-        all_observers = self.__merge_observers(observers)
-        for observer in all_observers:
-            observer.on_pipeline_finish(pipeline, result)
+    ) -> Action:
+        """Notify observers that a pipeline has finished."""
+        if not self._active_observers:
+            return Action.PROCEED
 
-    def __notify_step_start[State, Context](
+        actions: list[Action] = []
+        for observer in self._active_observers:
+            try:
+                action = observer.on_pipeline_finish(pipeline, result)
+                actions.append(action)
+            except Exception:
+                pass
+
+        if not actions:
+            return Action.PROCEED
+
+        return max(actions, key=lambda a: a.value)
+
+    def _notify_step_start(
         self,
         pipeline: Pipeline[State, Context],
         step_name: str,
         current_state: State,
-        observers: Set[PipelineObserver[State, Context]] | None = None,
-    ) -> None:
+    ) -> Action:
         """Notify observers that a step is starting."""
-        all_observers = self.__merge_observers(observers)
-        for observer in all_observers:
-            observer.on_step_start(pipeline, step_name, current_state)
+        if not self._active_observers:
+            return Action.PROCEED
 
-    def __notify_step_finish[State, Context](
+        actions: list[Action] = []
+        for observer in self._active_observers:
+            try:
+                action = observer.on_step_start(pipeline, step_name, current_state)
+                actions.append(action)
+            except Exception:
+                pass
+
+        if not actions:
+            return Action.PROCEED
+
+        return max(actions, key=lambda a: a.value)
+
+    def _notify_step_finish(
         self,
         pipeline: Pipeline[State, Context],
         step_name: str,
         step_result: TaskResult[State],
-        observers: Set[PipelineObserver[State, Context]] | None = None,
-    ) -> None:
-        """Notify observers that a step has ended."""
-        all_observers = self.__merge_observers(observers)
-        for observer in all_observers:
-            observer.on_step_finish(pipeline, step_name, step_result)
+    ) -> Action:
+        """Notify observers that a step has finished."""
+        if not self._active_observers:
+            return Action.PROCEED
 
-    def __notify_error[State, Context](
+        actions: list[Action] = []
+        for observer in self._active_observers:
+            try:
+                action = observer.on_step_finish(pipeline, step_name, step_result)
+                actions.append(action)
+            except Exception:
+                pass
+
+        if not actions:
+            return Action.PROCEED
+
+        return max(actions, key=lambda a: a.value)
+
+    def _notify_error(
         self,
         pipeline: Pipeline[State, Context],
         step_name: str,
         error: Exception,
-        observers: Set[PipelineObserver[State, Context]] | None = None,
-    ) -> ErrorAction:
-        """Notify observers that an error has occurred.
+    ) -> Action:
+        """Notify observers of an error and collect their response.
 
-        Returns:
-            ErrorAction: The aggregated error action from all observers. It is determined by taking the maximum severity action returned by each observer (`IGNORE` < `SKIP` < `RETRY` < `ABORT` < `PANIC`).
+        Returns the highest-priority action among all observers.
         """
-        all_observers = self.__merge_observers(observers)
-        if len(all_observers) == 0:
-            return self._default_error_action
-        return ErrorAction(
-            max(
-                [observer.on_error(pipeline, step_name, error).value for observer in all_observers]
-            )
-        )
+        if not self._active_observers:
+            return self._default_action
 
-    def __merge_observers(
-        self,
-        observers: Set[PipelineObserver[State, Context]] | None = None,
-    ) -> Set[PipelineObserver[State, Context]]:
-        """Merge default observers with provided observers."""
-        return self._default_observers | (observers or set())
+        actions: list[Action] = []
+        for observer in self._active_observers:
+            try:
+                action = observer.on_error(pipeline, step_name, error)
+                actions.append(action)
+            except Exception:
+                pass
 
-    def __get_action_request_handler[State, Context](
+        if not actions:
+            return self._default_action
+
+        return max(actions, key=lambda a: a.value)
+
+    def _notify_action_required(
         self,
-        action_request_handler: PipelineActionRequestHandler[State, Context] | None = None,
-    ) -> PipelineActionRequestHandler[State, Context] | None:
-        """Get the action request handler to use for the execution."""
-        return action_request_handler or self._default_action_request_handler
+        pipeline: Pipeline[State, Context],
+        step_name: str,
+        message: str,
+    ) -> Action:
+        """Notify observers that action is required and collect their response.
+
+        Returns the highest-priority action among all observers.
+        """
+        if not self._active_observers:
+            return self._default_action
+
+        actions: list[Action] = []
+        for observer in self._active_observers:
+            try:
+                action = observer.on_action_required(pipeline, step_name, message)
+                actions.append(action)
+            except Exception:
+                pass
+
+        if not actions:
+            return self._default_action
+
+        return max(actions, key=lambda a: a.value)

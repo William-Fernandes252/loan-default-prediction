@@ -1,11 +1,16 @@
 from experiments.lib.pipelines.context import Context
 from experiments.lib.pipelines.errors import PipelineException, PipelineInterruption
 from experiments.lib.pipelines.execution import (
-    ErrorAction,
     PipelineExecutionResult,
     PipelineExecutor,
+    PipelineStatus,
     StepTrace,
-    UserAction,
+)
+from experiments.lib.pipelines.lifecycle import (
+    AbortOnErrorObserver,
+    Action,
+    IgnoreAllObserver,
+    PipelineObserver,
 )
 from experiments.lib.pipelines.pipeline import Pipeline
 from experiments.lib.pipelines.state import State
@@ -13,18 +18,26 @@ from experiments.lib.pipelines.steps import Step
 from experiments.lib.pipelines.tasks import Task, TaskResult, TaskStatus
 
 __all__ = [
+    # Core types
     "Pipeline",
     "Task",
-    "ErrorAction",
-    "UserAction",
     "Step",
-    "StepTrace",
-    "TaskResult",
-    "TaskStatus",
     "State",
     "Context",
-    "PipelineException",
-    "PipelineInterruption",
+    # Execution
     "PipelineExecutor",
     "PipelineExecutionResult",
+    "PipelineStatus",
+    "StepTrace",
+    # Lifecycle
+    "Action",
+    "PipelineObserver",
+    "IgnoreAllObserver",
+    "AbortOnErrorObserver",
+    # Tasks
+    "TaskResult",
+    "TaskStatus",
+    # Errors
+    "PipelineException",
+    "PipelineInterruption",
 ]
