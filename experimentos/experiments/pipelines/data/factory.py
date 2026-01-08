@@ -159,16 +159,9 @@ class DataProcessingPipelineFactory:
                 return TaskResult(
                     state, TaskStatus.FAILURE, "No raw data found in state for transformation."
                 )
-            try:
-                processed_data = cast(Transformer, transformer)(state["raw_data"], context.use_gpu)
-            except Exception as e:
-                return TaskResult(
-                    state,
-                    TaskStatus.ERROR,
-                    f"Data transformation failed for dataset {dataset.id}: {e}",
-                    e,
-                )
-            state["interim_data"] = processed_data
+            state["interim_data"] = cast(Transformer, transformer)(
+                state["raw_data"], context.use_gpu
+            )
             return TaskResult(state, TaskStatus.SUCCESS, "Data transformation successful.")
 
         return transform
@@ -188,18 +181,7 @@ class DataProcessingPipelineFactory:
                     "No interim data found in state for feature extraction.",
                 )
 
-            try:
-                X_final, y_final = extract_features_and_target(state["interim_data"])
-            except Exception as e:
-                return TaskResult(
-                    state,
-                    TaskStatus.ERROR,
-                    f"Feature extraction failed for dataset {context.dataset.id}: {e}",
-                    e,
-                )
-
-            state["X_final"] = X_final
-            state["y_final"] = y_final
+            state["X_final"], state["y_final"] = extract_features_and_target(state["interim_data"])
             return TaskResult(state, TaskStatus.SUCCESS, "Feature extraction successful.")
 
         return extract_features

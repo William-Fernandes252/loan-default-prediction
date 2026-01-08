@@ -11,11 +11,18 @@ from experiments.containers import NewContainer
 from experiments.core.data import (
     Dataset,
 )
-from experiments.lib.pipelines import PipelineException, PipelineExecutionResult
-from experiments.lib.pipelines.errors import PipelineInterruption
-from experiments.lib.pipelines.executor import ErrorAction
-from experiments.pipelines.data.context import DataPipelineContext
-from experiments.pipelines.data.factory import DataProcessingPipeline, DataProcessingPipelineSteps
+from experiments.lib.pipelines import (
+    Pipeline,
+    PipelineExecutionResult,
+    TaskResult,
+    UserAction,
+)
+from experiments.pipelines.data import (
+    DataPipelineContext,
+    DataPipelineState,
+    DataProcessingPipeline,
+    DataProcessingPipelineSteps,
+)
 
 MODULE_NAME = "experiments.cli.data"
 
@@ -26,20 +33,23 @@ app = typer.Typer()
 
 
 def _prompt_user_for_confirmation(
-    step_name: str, exception: PipelineException | PipelineInterruption
-) -> ErrorAction:
+    pipeline: Pipeline[DataPipelineState, DataPipelineContext],
+    step_name: str,
+    step_result: TaskResult[DataPipelineState],
+) -> UserAction:
     """Prompt the user for confirmation on pipeline interruption."""
 
-    if step_name == DataProcessingPipelineSteps.CHECK_ALREADY_PROCESSED.value and isinstance(
-        exception, PipelineInterruption
+    if (
+        step_name == DataProcessingPipelineSteps.CHECK_ALREADY_PROCESSED.value
+        and step_result.message
     ):
         return (
-            ErrorAction.IGNORE
-            if typer.confirm(str(exception), default=False)
-            else ErrorAction.ABORT
+            UserAction.PROCEED
+            if typer.confirm(step_result.message, default=False)
+            else UserAction.ABORT
         )
 
-    return ErrorAction.ABORT
+    return UserAction.ABORT
 
 
 @app.command(name="process")
@@ -117,9 +127,7 @@ def main(
             return executor.execute(
                 pipeline,
                 {},
-                error_handlers={
-                    DataProcessingPipelineSteps.CHECK_ALREADY_PROCESSED.value: _prompt_user_for_confirmation
-                },
+                action_request_handler=_prompt_user_for_confirmation,
             )
 
     results = cast(

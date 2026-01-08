@@ -20,20 +20,12 @@ def export_processed_data_as_parquet(
     if state["interim_data"] is None:
         return TaskResult(state, TaskStatus.FAILURE, "No interim data found in state to export.")
 
-    try:
-        context.data_repository.save_interim_data(context.dataset, state["interim_data"])
-        return TaskResult(
-            state,
-            TaskStatus.SUCCESS,
-            f"Processed data for the dataset {context.dataset.id} exported successfully.",
-        )
-    except Exception as e:
-        return TaskResult(
-            state,
-            TaskStatus.ERROR,
-            f"Failed to export processed data as parquet for dataset {context.dataset.id}",
-            e,
-        )
+    context.data_repository.save_interim_data(context.dataset, state["interim_data"])
+    return TaskResult(
+        state,
+        TaskStatus.SUCCESS,
+        f"Processed data for the dataset {context.dataset.id} exported successfully.",
+    )
 
 
 def export_final_features_as_parquet(
@@ -51,17 +43,9 @@ def export_final_features_as_parquet(
     if state["X_final"] is None or state["y_final"] is None:
         return TaskResult(state, TaskStatus.FAILURE, "No final features found in state to export.")
 
-    try:
-        context.data_repository.save_final_features(
-            context.dataset, state["X_final"], state["y_final"]
-        )
-    except Exception as e:
-        return TaskResult(
-            state,
-            TaskStatus.ERROR,
-            f"Failed to export final features as parquet for dataset {context.dataset.id}",
-            e,
-        )
+    context.data_repository.save_final_features(
+        context.dataset, state["X_final"], state["y_final"]
+    )
     return TaskResult(
         state,
         TaskStatus.SUCCESS,

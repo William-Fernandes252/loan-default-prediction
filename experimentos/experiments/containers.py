@@ -10,6 +10,7 @@ from typing import Any
 from dependency_injector import containers, providers
 from loguru import logger
 
+from experiments.config.logging import LoggingObserver
 from experiments.core.experiment import (
     ExperimentPipelineConfig,
     ExperimentRunnerFactory,
@@ -289,4 +290,4 @@ class NewContainer(containers.DeclarativeContainer):
         data_repository=data_repository,
     )
 
-    executor = providers.Singleton(PipelineExecutor)
+    executor = providers.Singleton(PipelineExecutor, default_observers={LoggingObserver()})
