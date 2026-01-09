@@ -17,14 +17,12 @@ class TaskStatus(enum.Enum):
     - `FAILURE`: The task failed to complete (due to missing data, for example).
     - `SKIPPED`: The task was skipped.
     - `ERROR`: An error occurred during the execution of the task.
-    - `REQUIRES_ACTION`: The task requires user action to proceed.
     """
 
     SUCCESS = "success"
     FAILURE = "failure"
     SKIPPED = "skipped"
     ERROR = "error"
-    REQUIRES_ACTION = "requires_action"
 
 
 class TaskResult(Generic[State], NamedTuple):

@@ -445,10 +445,6 @@ class PipelineExecutor:
         task_result = result.task_result
         assert task_result is not None
 
-        if task_result.status == TaskStatus.REQUIRES_ACTION:
-            self._handle_action_required(pipeline_id, ctx, step_name, task_result.message or "")
-            return
-
         if task_result.status == TaskStatus.ERROR and task_result.error:
             self._handle_step_error(pipeline_id, ctx, step_name, task_result.error)
             return
@@ -497,36 +493,6 @@ class PipelineExecutor:
 
         if action == Action.PROCEED:
             # Skip the failed step and continue
-            with ctx.lock:
-                ctx.advance()
-            self._submit_next_step(pipeline_id, ctx)
-            return
-
-        if action == Action.RETRY:
-            self._submit_next_step(pipeline_id, ctx)
-            return
-
-    def _handle_action_required(
-        self,
-        pipeline_id: str,
-        ctx: _PipelineContext[State, Context],
-        step_name: str,
-        message: str,
-    ) -> None:
-        """Handle a step that requires action through lifecycle hooks."""
-        action = self._notify_action_required(ctx.pipeline, step_name, message)
-
-        if action == Action.PANIC:
-            error = RuntimeError(f"Action required but PANIC requested: {message}")
-            self._handle_panic(error, ctx)
-            return
-
-        if action == Action.ABORT:
-            self._finalize_pipeline(pipeline_id, ctx, PipelineStatus.ABORTED)
-            return
-
-        if action == Action.PROCEED:
-            # Skip the step and continue
             with ctx.lock:
                 ctx.advance()
             self._submit_next_step(pipeline_id, ctx)
@@ -742,32 +708,6 @@ class PipelineExecutor:
         for observer in self._active_observers:
             try:
                 action = observer.on_error(pipeline, step_name, error)
-                actions.append(action)
-            except Exception:
-                pass
-
-        if not actions:
-            return self._default_action
-
-        return max(actions, key=lambda a: a.value)
-
-    def _notify_action_required(
-        self,
-        pipeline: Pipeline[State, Context],
-        step_name: str,
-        message: str,
-    ) -> Action:
-        """Notify observers that action is required and collect their response.
-
-        Returns the highest-priority action among all observers.
-        """
-        if not self._active_observers:
-            return self._default_action
-
-        actions: list[Action] = []
-        for observer in self._active_observers:
-            try:
-                action = observer.on_action_required(pipeline, step_name, message)
                 actions.append(action)
             except Exception:
                 pass

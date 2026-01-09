@@ -18,6 +18,7 @@ from experiments.lib.pipelines import (
     PipelineObserver,
     PipelineStatus,
     TaskResult,
+    TaskStatus,
 )
 from experiments.pipelines.data import (
     DataPipelineContext,
@@ -37,14 +38,14 @@ class DataPipelineObserver(PipelineObserver[DataPipelineState, DataPipelineConte
     """Observer for data processing pipelines.
 
     Handles lifecycle events and controls pipeline behavior through
-    lifecycle hooks instead of user interaction.
+    lifecycle hooks.
     """
 
     def __init__(self, force: bool = False) -> None:
         """Initialize the observer.
 
         Args:
-            force: If True, overwrite existing processed data without prompting.
+            force: If True, overwrite existing processed data.
         """
         self._force = force
 
@@ -80,8 +81,26 @@ class DataPipelineObserver(PipelineObserver[DataPipelineState, DataPipelineConte
         step_name: str,
         result: TaskResult[DataPipelineState],
     ) -> Action:
+        """Handle step completion and control flow based on results.
+
+        For the CHECK_ALREADY_PROCESSED step, decides whether to
+        continue (overwrite) or abort based on the --force flag.
+        """
         if result.message:
             logger.debug(f"[{pipeline.name}] {step_name}: {result.message}")
+
+        # Handle the check for existing processed data
+        if step_name == DataProcessingPipelineSteps.CHECK_ALREADY_PROCESSED.value:
+            if result.status == TaskStatus.SKIPPED:
+                if self._force:
+                    logger.info(f"[{pipeline.name}] {result.message} Overwriting (--force)")
+                    return Action.PROCEED
+                else:
+                    logger.warning(
+                        f"[{pipeline.name}] {result.message} Aborting (use --force to overwrite)"
+                    )
+                    return Action.ABORT
+
         return Action.PROCEED
 
     def on_error(
@@ -91,28 +110,6 @@ class DataPipelineObserver(PipelineObserver[DataPipelineState, DataPipelineConte
         error: Exception,
     ) -> Action:
         logger.error(f"[{pipeline.name}] Error in {step_name}: {error}")
-        return Action.ABORT
-
-    def on_action_required(
-        self,
-        pipeline: Pipeline[DataPipelineState, DataPipelineContext],
-        step_name: str,
-        message: str,
-    ) -> Action:
-        """Handle action-required events through lifecycle hooks.
-
-        For the CHECK_ALREADY_PROCESSED step, this decides whether to
-        continue (overwrite) or abort based on the --force flag.
-        """
-        if step_name == DataProcessingPipelineSteps.CHECK_ALREADY_PROCESSED.value:
-            if self._force:
-                logger.info(f"[{pipeline.name}] {message} Overwriting (--force)")
-                return Action.PROCEED  # Skip check and continue
-            else:
-                logger.warning(f"[{pipeline.name}] {message} Aborting (use --force to overwrite)")
-                return Action.ABORT
-
-        logger.warning(f"[{pipeline.name}] Action required in {step_name}: {message}")
         return Action.ABORT
 
 

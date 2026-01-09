@@ -40,8 +40,8 @@ def check_already_processed(
     if context.data_repository.is_processed(dataset):
         return TaskResult(
             state,
-            TaskStatus.REQUIRES_ACTION,
-            f"Processed data for dataset {dataset.display_name} already exists. Overwrite?",
+            TaskStatus.SKIPPED,
+            f"Processed data for dataset {dataset.display_name} already exists.",
         )
     return TaskResult(
         state, TaskStatus.SUCCESS, f"No existing processed data for {dataset.display_name}."

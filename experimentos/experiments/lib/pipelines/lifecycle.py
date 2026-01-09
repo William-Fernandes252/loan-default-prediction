@@ -23,14 +23,14 @@ class Action(enum.IntEnum):
     - `PROCEED`: Continue normally.
         - on_step_start: Execute the step
         - on_step_finish: Continue to next step
-        - on_error/on_action_required: Skip the step and continue
+        - on_error: Skip the step and continue
         - on_pipeline_start: Start execution
         - on_pipeline_finish: Complete normally
 
     - `RETRY`: Retry the current unit.
         - on_step_start: Not applicable (treated as PROCEED)
         - on_step_finish: Re-execute this step
-        - on_error/on_action_required: Retry the failed step
+        - on_error: Retry the failed step
         - on_pipeline_start: Not applicable (treated as PROCEED)
         - on_pipeline_finish: Re-execute the entire pipeline from the beginning
 
@@ -112,27 +112,6 @@ class PipelineObserver(Generic[State, Context], Protocol):
         """
         ...
 
-    def on_action_required(
-        self,
-        pipeline: Pipeline[State, Context],
-        step_name: str,
-        message: str,
-    ) -> Action:
-        """Called when a pipeline step requires external action to proceed.
-
-        This is triggered when a step returns `TaskStatus.REQUIRES_ACTION`.
-
-        Args:
-            pipeline: The pipeline to which the step belongs.
-            step_name: The name of the step that requires action.
-            message: A message describing the required action.
-
-        Returns:
-            Action: PROCEED to skip step and continue, RETRY to retry,
-                ABORT to stop pipeline, PANIC to stop all pipelines.
-        """
-        ...
-
     def on_pipeline_start(self, pipeline: Pipeline[State, Context]) -> Action:
         """Called when the pipeline execution starts.
 
@@ -189,14 +168,6 @@ class IgnoreAllObserver(Generic[State, Context]):
     ) -> Action:
         return Action.PROCEED
 
-    def on_action_required(
-        self,
-        pipeline: Pipeline[State, Context],
-        step_name: str,
-        message: str,
-    ) -> Action:
-        return Action.PROCEED
-
     def on_pipeline_start(self, pipeline: Pipeline[State, Context]) -> Action:
         return Action.PROCEED
 
@@ -233,14 +204,6 @@ class AbortOnErrorObserver(Generic[State, Context]):
         self, pipeline: Pipeline[State, Context], step_name: str, error: Exception
     ) -> Action:
         return Action.ABORT
-
-    def on_action_required(
-        self,
-        pipeline: Pipeline[State, Context],
-        step_name: str,
-        message: str,
-    ) -> Action:
-        return Action.PROCEED
 
     def on_pipeline_start(self, pipeline: Pipeline[State, Context]) -> Action:
         return Action.PROCEED

@@ -64,21 +64,6 @@ class LoggingObserver(IgnoreAllObserver[Any, Any]):
             )
         return Action.ABORT
 
-    def on_action_required(
-        self,
-        pipeline: Pipeline[Any, Any],
-        step_name: str,
-        message: str,
-    ) -> Action:
-        with logger.contextualize(pipeline_name=pipeline.name, step_name=step_name):
-            logger.warning(
-                "Action required in step '{step_name}' of pipeline '{pipeline_name}': {message}",
-                message=message,
-                step_name=step_name,
-                pipeline_name=pipeline.name,
-            )
-        return Action.PROCEED
-
     def on_pipeline_start(self, pipeline: Pipeline[Any, Any]) -> Action:
         with logger.contextualize(pipeline_name=pipeline.name):
             logger.info("Starting pipeline '{pipeline_name}'", pipeline_name=pipeline.name)
