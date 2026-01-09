@@ -6,17 +6,21 @@ from dataclasses import dataclass, field
 from enum import Enum
 import threading
 import time
-from typing import Annotated, Any, Generic, final
+from typing import Annotated, Any, final
 
-from experiments.lib.pipelines.context import Context
 from experiments.lib.pipelines.lifecycle import (
     Action,
     PipelineObserver,
 )
 from experiments.lib.pipelines.pipeline import Pipeline, PipelineStep, StepConfig
-from experiments.lib.pipelines.state import State
 from experiments.lib.pipelines.steps import Step
 from experiments.lib.pipelines.tasks import TaskResult, TaskStatus
+
+type _AnyPipeline = Pipeline[Any, Any]
+"""Type alias for a pipeline with any state and context types."""
+
+type _AnyTaskResult = TaskResult[Any]
+"""Type alias for a task result with any state type."""
 
 
 class PipelineStatus(Enum):
@@ -41,7 +45,7 @@ class StepTrace:
 
 
 @dataclass
-class PipelineExecutionResult(Generic[State, Context]):
+class PipelineExecutionResult[State, Context]:
     """Result of pipeline execution."""
 
     pipeline_name: Annotated[str, "Name of the pipeline."]
@@ -86,12 +90,12 @@ class PipelineExecutionResult(Generic[State, Context]):
 
 
 @dataclass
-class _PipelineContext(Generic[State, Context]):
+class _PipelineContext:
     """Internal context for tracking pipeline execution state."""
 
-    pipeline: Pipeline[State, Context]
-    initial_state: State
-    current_state: State
+    pipeline: _AnyPipeline
+    initial_state: Any
+    current_state: Any
     step_index: int = 0
     step_traces: list[StepTrace] = field(default_factory=list)
     step_retry_counts: dict[int, int] = field(default_factory=dict)
@@ -99,14 +103,14 @@ class _PipelineContext(Generic[State, Context]):
     lock: threading.Lock = field(default_factory=threading.Lock)
 
     @property
-    def current_pipeline_step(self) -> PipelineStep[State, Context] | None:
+    def current_pipeline_step(self) -> PipelineStep[Any, Any] | None:
         """Get the current pipeline step tuple (step, config), or None if finished."""
         if self.step_index >= len(self.pipeline.steps):
             return None
         return self.pipeline.steps[self.step_index]
 
     @property
-    def current_step(self) -> Step[State, Context] | None:
+    def current_step(self) -> Step[Any, Any] | None:
         """Get the current step to execute, or None if finished."""
         ps = self.current_pipeline_step
         return ps.step if ps else None
@@ -160,22 +164,22 @@ class _PipelineContext(Generic[State, Context]):
 
 
 @dataclass
-class _StepExecution(Generic[State, Context]):
+class _StepExecution:
     """Represents a step execution unit for the thread pool."""
 
-    pipeline_ctx: _PipelineContext[State, Context]
-    step: Step[State, Context]
-    state: State
-    context: Context
+    pipeline_ctx: _PipelineContext
+    step: Step[Any, Any]
+    state: Any
+    context: Any
 
 
 @dataclass
-class _StepResult(Generic[State, Context]):
+class _StepResult:
     """Result of a step execution from the thread pool."""
 
-    pipeline_ctx: _PipelineContext[State, Context]
+    pipeline_ctx: _PipelineContext
     step_name: str
-    task_result: TaskResult[State] | None
+    task_result: _AnyTaskResult | None
     exception: Exception | None
     duration: float
 
@@ -210,8 +214,8 @@ class PipelineExecutor:
         self._default_action = default_action
 
         self._executor: ThreadPoolExecutor | None = None
-        self._pipeline_contexts: dict[str, _PipelineContext[Any, Any]] = {}
-        self._pending_futures: dict[Future[_StepResult[Any, Any]], str] = {}
+        self._pipeline_contexts: dict[str, _PipelineContext] = {}
+        self._pending_futures: dict[Future[_StepResult], str] = {}
         self._results: list[PipelineExecutionResult[Any, Any]] = []
         self._panic_error: Exception | None = None
 
@@ -225,8 +229,8 @@ class PipelineExecutor:
 
     def schedule(
         self,
-        pipeline: Pipeline[State, Context],
-        initial_state: State,
+        pipeline: _AnyPipeline,
+        initial_state: Any,
     ) -> None:
         """Schedule a pipeline for execution.
 
@@ -309,7 +313,7 @@ class PipelineExecutor:
 
         return self._results
 
-    def execute(
+    def execute[State, Context](
         self,
         pipeline: Pipeline[State, Context],
         initial_state: State,
@@ -334,11 +338,11 @@ class PipelineExecutor:
         results = self.wait()
         return results[0]  # type: ignore[return-value]
 
-    def execute_all(
+    def execute_all[State, Context](
         self,
         pipelines: Sequence[tuple[Pipeline[State, Context], State]],
         observers: Set[PipelineObserver[State, Context]] | None = None,
-    ) -> Sequence[PipelineExecutionResult[State, Context]]:
+    ) -> list[PipelineExecutionResult[State, Context]]:
         """Execute multiple pipelines in parallel.
 
         This is a convenience method that schedules all pipelines, starts
@@ -360,7 +364,7 @@ class PipelineExecutor:
     def _start_pipeline(
         self,
         pipeline_id: str,
-        ctx: _PipelineContext[State, Context],
+        ctx: _PipelineContext,
     ) -> None:
         """Start execution of a pipeline."""
         ctx.status = PipelineStatus.RUNNING
@@ -381,7 +385,7 @@ class PipelineExecutor:
     def _submit_next_step(
         self,
         pipeline_id: str,
-        ctx: _PipelineContext[State, Context],
+        ctx: _PipelineContext,
     ) -> None:
         """Submit the next step of a pipeline for execution."""
         if self._shutdown or self._panic_error:
@@ -420,11 +424,11 @@ class PipelineExecutor:
 
     def _execute_step(
         self,
-        execution: _StepExecution[State, Context],
-    ) -> _StepResult[State, Context]:
+        execution: _StepExecution,
+    ) -> _StepResult:
         """Execute a single step in a worker thread."""
         start_time = time.time()
-        task_result: TaskResult[State] | None = None
+        task_result: _AnyTaskResult | None = None
         exception: Exception | None = None
 
         try:
@@ -445,7 +449,7 @@ class PipelineExecutor:
     def _on_step_complete(
         self,
         pipeline_id: str,
-        future: Future[_StepResult[Any, Any]],
+        future: Future[_StepResult],
     ) -> None:
         """Handle completion of a step execution."""
         with self._lock:
@@ -521,7 +525,7 @@ class PipelineExecutor:
     def _handle_step_error(
         self,
         pipeline_id: str,
-        ctx: _PipelineContext[State, Context],
+        ctx: _PipelineContext,
         step_name: str,
         error: Exception,
     ) -> None:
@@ -563,7 +567,7 @@ class PipelineExecutor:
     def _complete_pipeline(
         self,
         pipeline_id: str,
-        ctx: _PipelineContext[State, Context],
+        ctx: _PipelineContext,
     ) -> None:
         """Complete a pipeline and check observer response for retry."""
         result = PipelineExecutionResult(
@@ -599,7 +603,7 @@ class PipelineExecutor:
     def _handle_panic(
         self,
         error: Exception,
-        ctx: _PipelineContext[State, Context],
+        ctx: _PipelineContext,
     ) -> None:
         """Handle a PANIC action by shutting down all execution."""
         with self._lock:
@@ -615,7 +619,7 @@ class PipelineExecutor:
 
     def _finalize_pipeline(
         self,
-        ctx: _PipelineContext[State, Context],
+        ctx: _PipelineContext,
         status: PipelineStatus,
     ) -> None:
         """Finalize a pipeline and record its result."""
@@ -661,7 +665,7 @@ class PipelineExecutor:
 
     def _notify_pipeline_start(
         self,
-        pipeline: Pipeline[State, Context],
+        pipeline: _AnyPipeline,
     ) -> Action:
         """Notify observers that a pipeline is starting."""
         if not self._active_observers:
@@ -682,8 +686,8 @@ class PipelineExecutor:
 
     def _notify_pipeline_finish(
         self,
-        pipeline: Pipeline[State, Context],
-        result: PipelineExecutionResult[State, Context],
+        pipeline: _AnyPipeline,
+        result: PipelineExecutionResult[Any, Any],
     ) -> Action:
         """Notify observers that a pipeline has finished."""
         if not self._active_observers:
@@ -704,9 +708,9 @@ class PipelineExecutor:
 
     def _notify_step_start(
         self,
-        pipeline: Pipeline[State, Context],
+        pipeline: _AnyPipeline,
         step_name: str,
-        current_state: State,
+        current_state: Any,
     ) -> Action:
         """Notify observers that a step is starting."""
         if not self._active_observers:
@@ -727,9 +731,9 @@ class PipelineExecutor:
 
     def _notify_step_finish(
         self,
-        pipeline: Pipeline[State, Context],
+        pipeline: _AnyPipeline,
         step_name: str,
-        step_result: TaskResult[State],
+        step_result: _AnyTaskResult,
     ) -> Action:
         """Notify observers that a step has finished."""
         if not self._active_observers:
@@ -750,7 +754,7 @@ class PipelineExecutor:
 
     def _notify_error(
         self,
-        pipeline: Pipeline[State, Context],
+        pipeline: _AnyPipeline,
         step_name: str,
         error: Exception,
     ) -> Action:

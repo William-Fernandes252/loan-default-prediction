@@ -1,7 +1,5 @@
-from typing import Annotated, Generic, NamedTuple, TypedDict
+from typing import Annotated, NamedTuple, TypedDict
 
-from experiments.lib.pipelines.context import Context
-from experiments.lib.pipelines.state import State
 from experiments.lib.pipelines.steps import Step, Task
 
 
@@ -12,14 +10,14 @@ class StepConfig(TypedDict, total=False):
     auto_retry: Annotated[bool, "Whether to automatically retry on failure"]
 
 
-class PipelineStep(Generic[State, Context], NamedTuple):
+class PipelineStep[State, Context](NamedTuple):
     """Represents a step in the pipeline along with its configuration."""
 
     step: Step[State, Context]
     config: StepConfig
 
 
-class Pipeline(Generic[State, Context]):
+class Pipeline[State, Context]:
     """Pipeline represents a sequence of steps to be executed in order.
 
     A pipeline consists of multiple steps, each represented by a `Step` object. The `run` method executes each step in sequence, passing the state from one step to the next.
@@ -27,6 +25,7 @@ class Pipeline(Generic[State, Context]):
     Args:
         name: The name of the pipeline.
         context: The context for the pipeline.
+
     """
 
     _steps: list[PipelineStep[State, Context]]

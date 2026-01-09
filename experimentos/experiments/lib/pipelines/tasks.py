@@ -1,13 +1,14 @@
 """Defines the Task protocol and related classes for pipeline tasks.
 
-A Task represents a unit of work in a pipeline that processes a given state and returns an updated state.
+A Task represents a unit of work in a pipeline. It is a callable that takes the current `State` and `Context`, performs some operation, and returns an updated state along with a status indicating the outcome of the operation.
+
+The `State` can be any type, allowing for flexibility in defining different pipeline states. It is mutable, meaning that pipeline steps can modify and return updated versions of the state as needed.
+
+The `Context` is also a generic type variable that can be any type, allowing for flexibility in defining different pipeline contexts. It is immutable (read-only), meaning that pipeline steps should not modify the context directly, and it should be used only for things like configuration or shared resources.
 """
 
 import enum
-from typing import Generic, NamedTuple, Protocol
-
-from experiments.lib.pipelines.context import Context
-from experiments.lib.pipelines.state import State
+from typing import NamedTuple, Protocol
 
 
 class TaskStatus(enum.Enum):
@@ -25,7 +26,7 @@ class TaskStatus(enum.Enum):
     ERROR = "error"
 
 
-class TaskResult(Generic[State], NamedTuple):
+class TaskResult[State](NamedTuple):
     """Result of executing a task in a pipeline.
 
     It contains the updated state after the step execution.
@@ -43,7 +44,7 @@ class TaskResult(Generic[State], NamedTuple):
     error: Exception | None = None
 
 
-class Task(Generic[State, Context], Protocol):
+class Task[State, Context](Protocol):
     """Task is a protocol that defines the contract for anything that can be executed in a pipeline.
 
     It takes the current state of type `State` and returns a new state of the same type `State`.

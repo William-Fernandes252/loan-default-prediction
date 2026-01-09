@@ -1,11 +1,7 @@
-from typing import Generic
-
-from experiments.lib.pipelines.context import Context
-from experiments.lib.pipelines.state import State
 from experiments.lib.pipelines.tasks import Task, TaskResult
 
 
-class Step(Generic[State, Context]):
+class Step[State, Context]:
     """Step represents a single step in a pipeline.
 
     Each step has a name and a task that defines the operation to be performed. The task is called with the current state and a context, and returns the updated state.

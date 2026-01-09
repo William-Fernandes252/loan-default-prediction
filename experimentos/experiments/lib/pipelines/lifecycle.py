@@ -1,11 +1,9 @@
 """Defines lifecycle hooks functionalities for pipeline execution."""
 
 import enum
-from typing import TYPE_CHECKING, Generic, Protocol
+from typing import TYPE_CHECKING, Protocol
 
-from experiments.lib.pipelines.context import Context
 from experiments.lib.pipelines.pipeline import Pipeline
-from experiments.lib.pipelines.state import State
 from experiments.lib.pipelines.tasks import TaskResult
 
 if TYPE_CHECKING:
@@ -47,7 +45,7 @@ class Action(enum.IntEnum):
     PANIC = enum.auto()
 
 
-class PipelineObserver(Generic[State, Context], Protocol):
+class PipelineObserver[State, Context](Protocol):
     """Observer protocol for pipeline execution lifecycle events.
 
     Observers receive notifications about pipeline and step lifecycle events,
@@ -119,8 +117,8 @@ class PipelineObserver(Generic[State, Context], Protocol):
             pipeline: The pipeline that is starting.
 
         Returns:
-            Action: PROCEED to start, ABORT to skip this pipeline,
-                PANIC to stop all pipelines.
+            Action: `PROCEED` to start, `ABORT` to skip this pipeline,
+                `PANIC` to stop all pipelines.
         """
         ...
 
@@ -136,16 +134,16 @@ class PipelineObserver(Generic[State, Context], Protocol):
             result: The result of the pipeline execution.
 
         Returns:
-            Action: PROCEED to complete, RETRY to re-execute entire pipeline,
-                ABORT to mark as aborted, PANIC to stop all pipelines.
+            Action: `PROCEED` to complete, `RETRY` to re-execute entire pipeline,
+                `ABORT` to mark as aborted, `PANIC` to stop all pipelines.
         """
         ...
 
 
-class IgnoreAllObserver(Generic[State, Context]):
+class IgnoreAllObserver[State, Context]:
     """A pipeline observer that proceeds through all events.
 
-    This observer returns PROCEED for all events, allowing pipelines to
+    This observer returns `PROCEED` for all events, allowing pipelines to
     continue normally. Useful as a base class for logging observers or
     when combined with other observers.
     """
@@ -179,10 +177,10 @@ class IgnoreAllObserver(Generic[State, Context]):
         return Action.PROCEED
 
 
-class AbortOnErrorObserver(Generic[State, Context]):
+class AbortOnErrorObserver[State, Context]:
     """A pipeline observer that aborts the pipeline on any error.
 
-    This observer returns ABORT for errors and PROCEED for other events,
+    This observer returns `ABORT` for errors and `PROCEED` for other events,
     providing a fail-fast behavior for individual pipelines while
     allowing other pipelines to continue.
     """
