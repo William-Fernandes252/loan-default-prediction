@@ -10,7 +10,7 @@ from typing import Any
 
 import pandas as pd
 
-from experiments.core.analysis.constants import (
+from experiments.core.analysis.metrics import (
     IMBALANCE_METRICS,
     IMBALANCE_RATIOS,
     STABILITY_METRICS,

@@ -34,7 +34,7 @@ class TaskResult(Generic[State], NamedTuple):
         state: The updated state after executing the step.
         status: The status of the step execution.
         message: An optional message providing additional information about the step execution.
-        error: An optional `PipelineException` if an error occurred during step execution.
+        error: An optional `Exception` if an error occurred during step execution.
     """
 
     state: State
@@ -60,6 +60,6 @@ class Task(Generic[State, Context], Protocol):
             The updated state after processing.
 
         Raises:
-            PipelineException: If there is an error during execution.
+            Exception: If there is an error during execution.
         """
         ...

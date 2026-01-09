@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-from experiments.core.analysis.constants import DEFAULT_FIGURE_DPI, DEFAULT_THEME_STYLE
+from experiments.core.analysis.metrics import DEFAULT_FIGURE_DPI, DEFAULT_THEME_STYLE
 from experiments.core.analysis.protocols import TranslationFunc
 from experiments.core.data import Dataset
 
