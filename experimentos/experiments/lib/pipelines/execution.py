@@ -13,7 +13,7 @@ from experiments.lib.pipelines.lifecycle import (
     Action,
     PipelineObserver,
 )
-from experiments.lib.pipelines.pipeline import Pipeline
+from experiments.lib.pipelines.pipeline import Pipeline, PipelineStep, StepConfig
 from experiments.lib.pipelines.state import State
 from experiments.lib.pipelines.steps import Step
 from experiments.lib.pipelines.tasks import TaskResult, TaskStatus
@@ -94,15 +94,28 @@ class _PipelineContext(Generic[State, Context]):
     current_state: State
     step_index: int = 0
     step_traces: list[StepTrace] = field(default_factory=list)
+    step_retry_counts: dict[int, int] = field(default_factory=dict)
     status: PipelineStatus = PipelineStatus.PENDING
     lock: threading.Lock = field(default_factory=threading.Lock)
 
     @property
-    def current_step(self) -> Step[State, Context] | None:
-        """Get the current step to execute, or None if finished."""
+    def current_pipeline_step(self) -> PipelineStep[State, Context] | None:
+        """Get the current pipeline step tuple (step, config), or None if finished."""
         if self.step_index >= len(self.pipeline.steps):
             return None
         return self.pipeline.steps[self.step_index]
+
+    @property
+    def current_step(self) -> Step[State, Context] | None:
+        """Get the current step to execute, or None if finished."""
+        ps = self.current_pipeline_step
+        return ps.step if ps else None
+
+    @property
+    def current_step_config(self) -> StepConfig | None:
+        """Get the configuration for the current step."""
+        ps = self.current_pipeline_step
+        return ps.config if ps else None
 
     def advance(self) -> None:
         """Advance to the next step."""
@@ -113,11 +126,37 @@ class _PipelineContext(Generic[State, Context]):
         self.step_index = 0
         self.current_state = self.initial_state
         self.step_traces = []
+        self.step_retry_counts = {}
         self.status = PipelineStatus.RUNNING
 
     def is_finished(self) -> bool:
         """Check if all steps have been executed."""
         return self.step_index >= len(self.pipeline.steps)
+
+    def get_retry_count(self) -> int:
+        """Get the current retry count for the current step."""
+        return self.step_retry_counts.get(self.step_index, 0)
+
+    def increment_retry_count(self) -> int:
+        """Increment and return the retry count for the current step."""
+        count = self.step_retry_counts.get(self.step_index, 0) + 1
+        self.step_retry_counts[self.step_index] = count
+        return count
+
+    def can_retry(self) -> bool:
+        """Check if the current step can be retried based on StepConfig."""
+        config = self.current_step_config
+        if not config:
+            return False
+        max_retries = config.get("max_retries", 3)
+        return self.get_retry_count() < max_retries
+
+    def should_auto_retry(self) -> bool:
+        """Check if the current step should automatically retry on error."""
+        config = self.current_step_config
+        if not config:
+            return False
+        return config.get("auto_retry", False) and self.can_retry()
 
 
 @dataclass
@@ -463,6 +502,12 @@ class PipelineExecutor:
 
         if action == Action.RETRY:
             # Re-execute this step (don't advance)
+            with ctx.lock:
+                if not ctx.can_retry():
+                    # Max retries exceeded, abort
+                    self._finalize_pipeline(ctx, PipelineStatus.ABORTED)
+                    return
+                ctx.increment_retry_count()
             self._submit_next_step(pipeline_id, ctx)
             return
 
@@ -481,6 +526,13 @@ class PipelineExecutor:
         error: Exception,
     ) -> None:
         """Handle an error that occurred during step execution."""
+        # Check auto_retry before consulting observers (only for errors)
+        with ctx.lock:
+            if ctx.should_auto_retry():
+                ctx.increment_retry_count()
+                self._submit_next_step(pipeline_id, ctx)
+                return
+
         action = self._notify_error(ctx.pipeline, step_name, error)
 
         if action == Action.PANIC:
@@ -499,6 +551,12 @@ class PipelineExecutor:
             return
 
         if action == Action.RETRY:
+            with ctx.lock:
+                if not ctx.can_retry():
+                    # Max retries exceeded, abort
+                    self._finalize_pipeline(ctx, PipelineStatus.ABORTED)
+                    return
+                ctx.increment_retry_count()
             self._submit_next_step(pipeline_id, ctx)
             return
 

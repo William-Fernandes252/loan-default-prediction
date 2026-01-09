@@ -1,8 +1,22 @@
-from typing import Generic
+from typing import Annotated, Generic, NamedTuple, TypedDict
 
 from experiments.lib.pipelines.context import Context
 from experiments.lib.pipelines.state import State
 from experiments.lib.pipelines.steps import Step, Task
+
+
+class StepConfig(TypedDict, total=False):
+    """Configuration for a pipeline step."""
+
+    max_retries: Annotated[int, "Maximum number of retries for the step"]
+    auto_retry: Annotated[bool, "Whether to automatically retry on failure"]
+
+
+class PipelineStep(Generic[State, Context], NamedTuple):
+    """Represents a step in the pipeline along with its configuration."""
+
+    step: Step[State, Context]
+    config: StepConfig
 
 
 class Pipeline(Generic[State, Context]):
@@ -15,28 +29,37 @@ class Pipeline(Generic[State, Context]):
         context: The context for the pipeline.
     """
 
-    _steps: list[Step[State, Context]]
+    _steps: list[PipelineStep[State, Context]]
 
     def __init__(self, name: str, context: Context) -> None:
         self._name = name
         self._context = context
         self._steps = []
 
-    def add_step(self, name: str, task: Task[State, Context]) -> None:
+    def add_step(
+        self, name: str, task: Task[State, Context], config: StepConfig | None = None
+    ) -> None:
         """Add a step to the pipeline by name and runnable.
+
         Args:
             name: The name of the step.
             task: The task operation for the step.
+            config: Optional configuration for the step.
         """
         step = Step(name, task)
-        self._steps.append(step)
+
+        config = config or {}
+        config.update(_default_step_config)
+
+        self._steps.append(PipelineStep(step, config))
 
     def __repr__(self):
-        step_names = ", ".join(step.name for step in self.steps)
+        step_names = ", ".join(ps.step.name for ps in self.steps)
         return f"{self.name}(steps=[{step_names}])"
 
     @property
-    def steps(self) -> list[Step[State, Context]]:
+    def steps(self) -> list[PipelineStep[State, Context]]:
+        """Get the steps of the pipeline."""
         return self._steps
 
     @property
@@ -46,3 +69,18 @@ class Pipeline(Generic[State, Context]):
     @property
     def name(self) -> str:
         return self._name
+
+
+_default_step_config: StepConfig = {
+    "max_retries": 3,
+    "auto_retry": False,
+}
+
+
+def set_step_config_defaults(config: StepConfig) -> None:
+    """Set the default configuration for pipeline steps.
+
+    Args:
+        config: The default step configuration to set.
+    """
+    _default_step_config.update(config)
