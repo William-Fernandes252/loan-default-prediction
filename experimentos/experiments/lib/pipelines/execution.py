@@ -334,7 +334,7 @@ class PipelineExecutor:
             return
 
         if action == Action.ABORT:
-            self._finalize_pipeline(pipeline_id, ctx, PipelineStatus.ABORTED)
+            self._finalize_pipeline(ctx, PipelineStatus.ABORTED)
             return
 
         self._submit_next_step(pipeline_id, ctx)
@@ -346,7 +346,7 @@ class PipelineExecutor:
     ) -> None:
         """Submit the next step of a pipeline for execution."""
         if self._shutdown or self._panic_error:
-            self._finalize_pipeline(pipeline_id, ctx, PipelineStatus.ABORTED)
+            self._finalize_pipeline(ctx, PipelineStatus.ABORTED)
             return
 
         step = ctx.current_step
@@ -363,7 +363,7 @@ class PipelineExecutor:
             return
 
         if action == Action.ABORT:
-            self._finalize_pipeline(pipeline_id, ctx, PipelineStatus.ABORTED)
+            self._finalize_pipeline(ctx, PipelineStatus.ABORTED)
             return
 
         execution = _StepExecution(
@@ -458,7 +458,7 @@ class PipelineExecutor:
             return
 
         if action == Action.ABORT:
-            self._finalize_pipeline(pipeline_id, ctx, PipelineStatus.ABORTED)
+            self._finalize_pipeline(ctx, PipelineStatus.ABORTED)
             return
 
         if action == Action.RETRY:
@@ -488,7 +488,7 @@ class PipelineExecutor:
             return
 
         if action == Action.ABORT:
-            self._finalize_pipeline(pipeline_id, ctx, PipelineStatus.ABORTED)
+            self._finalize_pipeline(ctx, PipelineStatus.ABORTED)
             return
 
         if action == Action.PROCEED:
@@ -532,7 +532,7 @@ class PipelineExecutor:
             return
 
         if action == Action.ABORT:
-            self._finalize_pipeline(pipeline_id, ctx, PipelineStatus.ABORTED)
+            self._finalize_pipeline(ctx, PipelineStatus.ABORTED)
             return
 
         # PROCEED - finalize normally
@@ -557,7 +557,6 @@ class PipelineExecutor:
 
     def _finalize_pipeline(
         self,
-        pipeline_id: str,
         ctx: _PipelineContext[State, Context],
         status: PipelineStatus,
     ) -> None:
@@ -593,7 +592,7 @@ class PipelineExecutor:
         for pipeline_id, ctx in self._pipeline_contexts.items():
             with ctx.lock:
                 if ctx.status in (PipelineStatus.PENDING, PipelineStatus.RUNNING):
-                    self._finalize_pipeline(pipeline_id, ctx, PipelineStatus.ABORTED)
+                    self._finalize_pipeline(ctx, PipelineStatus.ABORTED)
 
     def _check_completion(self) -> None:
         """Check if all pipelines have completed and signal if so."""
