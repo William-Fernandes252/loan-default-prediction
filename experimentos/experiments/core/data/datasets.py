@@ -18,3 +18,6 @@ class Dataset(enum.Enum):
             Dataset.TAIWAN_CREDIT: {"infer_schema_length": None},
         }
         return extra_params.get(self, {})
+
+    def __str__(self) -> str:
+        return self.value

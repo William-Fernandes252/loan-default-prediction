@@ -102,7 +102,7 @@ class DataProcessingPipelineFactory:
         )
 
         pipeline = Pipeline[DataPipelineState, DataPipelineContext](
-            "DataProcessingPipeline", context
+            f"DataProcessingPipeline[dataset={dataset}]", context
         )
 
         if not force_overwrite:

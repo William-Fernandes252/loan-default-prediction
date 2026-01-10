@@ -16,15 +16,14 @@ class LoggingObserver(IgnoreAllObserver[Any, Any]):
     for all events except errors, which return ABORT.
     """
 
+    def _format_pipeline_and_step(self, pipeline: Pipeline[Any, Any], step_name: str) -> str:
+        return f"{pipeline.name}.{step_name}"
+
     def on_step_start(
         self, pipeline: Pipeline[Any, Any], step_name: str, current_state: Any
     ) -> Action:
         with logger.contextualize(pipeline_name=pipeline.name, step_name=step_name):
-            logger.info(
-                "Starting step '{step_name}' in pipeline '{pipeline_name}'",
-                step_name=step_name,
-                pipeline_name=pipeline.name,
-            )
+            logger.info(f"{self._format_pipeline_and_step(pipeline, step_name)}: Starting step")
         return Action.PROCEED
 
     def on_step_finish(
@@ -36,32 +35,21 @@ class LoggingObserver(IgnoreAllObserver[Any, Any]):
         with logger.contextualize(pipeline_name=pipeline.name, step_name=step_name):
             if result.status == TaskStatus.SUCCESS:
                 logger.info(
-                    "Finished step '{step_name}' in pipeline '{pipeline_name}' successfully",
-                    step_name=step_name,
-                    pipeline_name=pipeline.name,
+                    f"{self._format_pipeline_and_step(pipeline, step_name)}: Step completed successfully"
                 )
             elif result.status == TaskStatus.FAILURE:
                 logger.warning(
-                    "Step '{step_name}' in pipeline '{pipeline_name}' failed",
-                    step_name=step_name,
-                    pipeline_name=pipeline.name,
+                    f"{self._format_pipeline_and_step(pipeline, step_name)}: Step failed"
                 )
             elif result.status == TaskStatus.SKIPPED:
                 logger.info(
-                    "Step '{step_name}' in pipeline '{pipeline_name}' was skipped",
-                    step_name=step_name,
-                    pipeline_name=pipeline.name,
+                    f"{self._format_pipeline_and_step(pipeline, step_name)}: Step was skipped"
                 )
         return Action.PROCEED
 
     def on_error(self, pipeline: Pipeline[Any, Any], step_name: str, error: Exception) -> Action:
         with logger.contextualize(pipeline_name=pipeline.name, step_name=step_name):
-            logger.error(
-                "Error in step '{step_name}' of pipeline '{pipeline_name}': {error}",
-                error=error,
-                step_name=step_name,
-                pipeline_name=pipeline.name,
-            )
+            logger.error(f"{self._format_pipeline_and_step(pipeline, step_name)}: {error}")
         return Action.ABORT
 
     def on_pipeline_start(self, pipeline: Pipeline[Any, Any]) -> Action:

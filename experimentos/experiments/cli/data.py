@@ -6,23 +6,23 @@ from typing import Annotated
 from loguru import logger
 import typer
 
+from experiments.config.logging import LoggingObserver
 from experiments.containers import NewContainer
 from experiments.core.data import (
     Dataset,
 )
 from experiments.lib.pipelines import (
     Action,
-    Pipeline,
-    PipelineExecutionResult,
     PipelineExecutor,
-    PipelineObserver,
     PipelineStatus,
     TaskResult,
     TaskStatus,
 )
+from experiments.lib.pipelines.lifecycle import IgnoreAllObserver
 from experiments.pipelines.data import (
     DataPipelineContext,
     DataPipelineState,
+    DataProcessingPipeline,
     DataProcessingPipelineSteps,
 )
 
@@ -34,12 +34,8 @@ if __name__ == "__main__":
 app = typer.Typer()
 
 
-class DataPipelineObserver(PipelineObserver[DataPipelineState, DataPipelineContext]):
-    """Observer for data processing pipelines.
-
-    Handles lifecycle events and controls pipeline behavior through
-    lifecycle hooks.
-    """
+class AbortIfAlreadyProcessedObserver(IgnoreAllObserver[DataPipelineState, DataPipelineContext]):
+    """Observer that aborts the pipeline if processed data already exists."""
 
     def __init__(self, force: bool = False) -> None:
         """Initialize the observer.
@@ -49,35 +45,9 @@ class DataPipelineObserver(PipelineObserver[DataPipelineState, DataPipelineConte
         """
         self._force = force
 
-    def on_pipeline_start(
-        self, pipeline: Pipeline[DataPipelineState, DataPipelineContext]
-    ) -> Action:
-        logger.info(f"Starting pipeline: {pipeline.name}")
-        return Action.PROCEED
-
-    def on_pipeline_finish(
-        self,
-        pipeline: Pipeline[DataPipelineState, DataPipelineContext],
-        result: PipelineExecutionResult[DataPipelineState, DataPipelineContext],
-    ) -> Action:
-        if result.succeeded():
-            logger.success(f"Pipeline {pipeline.name} completed in {result.total_duration():.2f}s")
-        else:
-            logger.warning(f"Pipeline {pipeline.name} finished with status {result.status.value}")
-        return Action.PROCEED
-
-    def on_step_start(
-        self,
-        pipeline: Pipeline[DataPipelineState, DataPipelineContext],
-        step_name: str,
-        current_state: DataPipelineState,
-    ) -> Action:
-        logger.debug(f"[{pipeline.name}] Starting step: {step_name}")
-        return Action.PROCEED
-
     def on_step_finish(
         self,
-        pipeline: Pipeline[DataPipelineState, DataPipelineContext],
+        pipeline: DataProcessingPipeline,
         step_name: str,
         result: TaskResult[DataPipelineState],
     ) -> Action:
@@ -86,9 +56,6 @@ class DataPipelineObserver(PipelineObserver[DataPipelineState, DataPipelineConte
         For the CHECK_ALREADY_PROCESSED step, decides whether to
         continue (overwrite) or abort based on the --force flag.
         """
-        if result.message:
-            logger.debug(f"[{pipeline.name}] {step_name}: {result.message}")
-
         # Handle the check for existing processed data
         if step_name == DataProcessingPipelineSteps.CHECK_ALREADY_PROCESSED.value:
             if result.status == TaskStatus.SKIPPED:
@@ -102,15 +69,6 @@ class DataPipelineObserver(PipelineObserver[DataPipelineState, DataPipelineConte
                     return Action.ABORT
 
         return Action.PROCEED
-
-    def on_error(
-        self,
-        pipeline: Pipeline[DataPipelineState, DataPipelineContext],
-        step_name: str,
-        error: Exception,
-    ) -> Action:
-        logger.error(f"[{pipeline.name}] Error in {step_name}: {error}")
-        return Action.ABORT
 
 
 @app.command(name="process")
@@ -185,13 +143,13 @@ def main(
         for ds in datasets_to_process
     ]
 
-    # Create observer for lifecycle control
-    observer = DataPipelineObserver(force=force)
+    # Create observers
+    observers = {AbortIfAlreadyProcessedObserver(force=force), LoggingObserver()}
 
     # Create executor with parallel workers and observer
     executor = PipelineExecutor(
         max_workers=n_jobs,
-        observers={observer},
+        observers=observers,
         default_action=Action.ABORT,
     )
 
