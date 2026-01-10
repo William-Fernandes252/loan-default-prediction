@@ -24,7 +24,7 @@ def export_processed_data_as_parquet(
     return TaskResult(
         state,
         TaskStatus.SUCCESS,
-        f"Processed data for the dataset {context.dataset.id} exported successfully.",
+        "Processed data exported successfully.",
     )
 
 
@@ -49,5 +49,5 @@ def export_final_features_as_parquet(
     return TaskResult(
         state,
         TaskStatus.SUCCESS,
-        f"Final features for the dataset {context.dataset.id} exported successfully.",
+        "Final features exported successfully.",
     )

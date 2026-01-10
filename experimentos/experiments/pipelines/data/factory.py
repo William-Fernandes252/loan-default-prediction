@@ -41,11 +41,9 @@ def check_already_processed(
         return TaskResult(
             state,
             TaskStatus.SKIPPED,
-            f"Processed data for dataset {dataset.display_name} already exists.",
+            "Processed data already exists.",
         )
-    return TaskResult(
-        state, TaskStatus.SUCCESS, f"No existing processed data for {dataset.display_name}."
-    )
+    return TaskResult(state, TaskStatus.SUCCESS, "No existing processed data found.")
 
 
 class DataProcessingPipelineFactory:
@@ -91,7 +89,7 @@ class DataProcessingPipelineFactory:
             error_handlers: Optional mapping of pipeline steps to error handler functions.
 
         Returns:
-            A configured DataProcessingPipeline instance.
+            A configured `DataProcessingPipeline` instance.
 
         Raises:
             ValueError: If no transformer is registered for the dataset.
@@ -104,7 +102,7 @@ class DataProcessingPipelineFactory:
         )
 
         pipeline = Pipeline[DataPipelineState, DataPipelineContext](
-            f"DataProcessingPipeline_{dataset.id}", context
+            "DataProcessingPipeline", context
         )
 
         if not force_overwrite:
@@ -148,9 +146,9 @@ class DataProcessingPipelineFactory:
         Raises:
             ValueError: If no transformer is registered for the dataset.
         """
-        transformer = self._transformer_registry.get(dataset.id)
+        transformer = self._transformer_registry.get(dataset.value)
         if transformer is None:
-            raise ValueError(f"No transformer registered for dataset: {dataset.id}")
+            raise ValueError(f"No transformer registered for dataset: '{dataset.value}'")
 
         def transform(
             state: DataPipelineState, context: DataPipelineContext

@@ -169,7 +169,7 @@ def main(
         logger.info("No datasets selected for processing. Exiting.")
         return
 
-    dataset_names = ", ".join(ds.display_name for ds in datasets_to_process)
+    dataset_names = ", ".join(ds.value for ds in datasets_to_process)
     logger.info(f"Scheduling preprocessing for: {dataset_names}")
 
     # Calculate number of workers
