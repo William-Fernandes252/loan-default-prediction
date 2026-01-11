@@ -15,16 +15,11 @@ from experiments.lib.pipelines import (
     Action,
     PipelineExecutor,
     PipelineStatus,
-    TaskResult,
-    TaskStatus,
 )
-from experiments.lib.pipelines.lifecycle import IgnoreAllObserver
 from experiments.pipelines.data import (
-    DataPipelineContext,
     DataPipelineState,
-    DataProcessingPipeline,
-    DataProcessingPipelineSteps,
 )
+from experiments.pipelines.data.state import get_default_initial_state
 
 MODULE_NAME = "experiments.cli.data"
 
@@ -32,43 +27,6 @@ if __name__ == "__main__":
     sys.modules.setdefault(MODULE_NAME, sys.modules[__name__])
 
 app = typer.Typer()
-
-
-class AbortIfAlreadyProcessedObserver(IgnoreAllObserver[DataPipelineState, DataPipelineContext]):
-    """Observer that aborts the pipeline if processed data already exists."""
-
-    def __init__(self, force: bool = False) -> None:
-        """Initialize the observer.
-
-        Args:
-            force: If True, overwrite existing processed data.
-        """
-        self._force = force
-
-    def on_step_finish(
-        self,
-        pipeline: DataProcessingPipeline,
-        step_name: str,
-        result: TaskResult[DataPipelineState],
-    ) -> Action:
-        """Handle step completion and control flow based on results.
-
-        For the CHECK_ALREADY_PROCESSED step, decides whether to
-        continue (overwrite) or abort based on the --force flag.
-        """
-        # Handle the check for existing processed data
-        if step_name == DataProcessingPipelineSteps.CHECK_ALREADY_PROCESSED.value:
-            if result.status == TaskStatus.SKIPPED:
-                if self._force:
-                    logger.info(f"[{pipeline.name}] {result.message} Overwriting (--force)")
-                    return Action.PROCEED
-                else:
-                    logger.warning(
-                        f"[{pipeline.name}] {result.message} Aborting (use --force to overwrite)"
-                    )
-                    return Action.ABORT
-
-        return Action.PROCEED
 
 
 @app.command(name="process")
@@ -144,7 +102,7 @@ def main(
     ]
 
     # Create observers
-    observers = {AbortIfAlreadyProcessedObserver(force=force), LoggingObserver()}
+    observers = {LoggingObserver()}
 
     # Create executor with parallel workers and observer
     executor = PipelineExecutor(
@@ -155,12 +113,7 @@ def main(
 
     # Schedule all pipelines with empty initial state
     for pipeline in pipelines:
-        initial_state: DataPipelineState = {
-            "raw_data": None,
-            "interim_data": None,
-            "X_final": None,
-            "y_final": None,
-        }
+        initial_state: DataPipelineState = get_default_initial_state()
         executor.schedule(pipeline, initial_state)
 
     executor.start()

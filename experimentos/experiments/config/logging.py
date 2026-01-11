@@ -43,6 +43,13 @@ class LoggingObserver(IgnoreAllObserver[Any, Any]):
                 )
         return Action.PROCEED
 
+    def on_step_skipped(self, pipeline, step_name, reason):
+        with logger.contextualize(pipeline_name=pipeline.name, step_name=step_name):
+            logger.info(
+                f"{self._format_pipeline_and_step(pipeline, step_name)}: Step skipped - {reason}"
+            )
+        return Action.PROCEED
+
     def on_error(self, pipeline: Pipeline[Any, Any], step_name: str, error: Exception) -> Action:
         with logger.contextualize(pipeline_name=pipeline.name, step_name=step_name):
             logger.error(f"{self._format_pipeline_and_step(pipeline, step_name)}: {error}")

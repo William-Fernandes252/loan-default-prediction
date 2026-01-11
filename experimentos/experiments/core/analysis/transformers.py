@@ -16,7 +16,6 @@ from experiments.core.analysis.metrics import (
     STABILITY_METRICS,
     SUMMARY_METRICS,
     MetricConfig,
-    get_metric_display_names,
 )
 from experiments.core.analysis.protocols import TranslationFunc
 from experiments.core.data import Dataset

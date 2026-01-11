@@ -28,8 +28,6 @@ from experiments.core.analysis.metrics import (
     IMBALANCE_RATIOS,
     MetricConfig,
     get_metric_configs,
-    get_metric_display_names,
-    translate_metric,
 )
 from experiments.core.analysis.pipeline import (
     AnalysisPipeline,

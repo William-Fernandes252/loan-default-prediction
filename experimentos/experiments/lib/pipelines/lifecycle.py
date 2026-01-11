@@ -94,6 +94,25 @@ class PipelineObserver[State, Context](Protocol):
         """
         ...
 
+    def on_step_skipped(
+        self,
+        pipeline: Pipeline[State, Context],
+        step_name: str,
+        reason: str,
+    ) -> Action:
+        """Called when a pipeline step is skipped.
+
+        Args:
+            pipeline: The pipeline to which the step belongs.
+            step_name: The name of the step that was skipped.
+            reason: The reason why the step was skipped.
+
+        Returns:
+            Action: PROCEED to continue, ABORT to stop pipeline,
+                PANIC to stop all pipelines.
+        """
+        ...
+
     def on_error(
         self, pipeline: Pipeline[State, Context], step_name: str, error: Exception
     ) -> Action:
@@ -153,6 +172,14 @@ class IgnoreAllObserver[State, Context]:
     ) -> Action:
         return Action.PROCEED
 
+    def on_step_skipped(
+        self,
+        pipeline: Pipeline[State, Context],
+        step_name: str,
+        reason: str,
+    ) -> Action:
+        return Action.PROCEED
+
     def on_step_finish(
         self,
         pipeline: Pipeline[State, Context],
@@ -177,7 +204,7 @@ class IgnoreAllObserver[State, Context]:
         return Action.PROCEED
 
 
-class AbortOnErrorObserver[State, Context]:
+class AbortOnErrorObserver[State, Context](IgnoreAllObserver[State, Context]):
     """A pipeline observer that aborts the pipeline on any error.
 
     This observer returns `ABORT` for errors and `PROCEED` for other events,
@@ -185,30 +212,7 @@ class AbortOnErrorObserver[State, Context]:
     allowing other pipelines to continue.
     """
 
-    def on_step_start(
-        self, pipeline: Pipeline[State, Context], step_name: str, current_state: State
-    ) -> Action:
-        return Action.PROCEED
-
-    def on_step_finish(
-        self,
-        pipeline: Pipeline[State, Context],
-        step_name: str,
-        result: TaskResult[State],
-    ) -> Action:
-        return Action.PROCEED
-
     def on_error(
         self, pipeline: Pipeline[State, Context], step_name: str, error: Exception
     ) -> Action:
         return Action.ABORT
-
-    def on_pipeline_start(self, pipeline: Pipeline[State, Context]) -> Action:
-        return Action.PROCEED
-
-    def on_pipeline_finish(
-        self,
-        pipeline: Pipeline[State, Context],
-        result: "PipelineExecutionResult[State, Context]",
-    ) -> Action:
-        return Action.PROCEED

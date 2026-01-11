@@ -12,3 +12,6 @@ class DataPipelineContext:
     dataset: Annotated[Dataset, "The dataset being processed."]
     data_repository: Annotated[DataRepository, "The data repository for fetching and saving data."]
     use_gpu: Annotated[bool, "Flag to indicate if GPU acceleration should be used."]
+    force_overwrite: Annotated[
+        bool, "Flag to indicate if existing processed data should be overwritten."
+    ] = False

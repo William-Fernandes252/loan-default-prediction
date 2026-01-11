@@ -392,10 +392,42 @@ class PipelineExecutor:
             self._finalize_pipeline(ctx, PipelineStatus.ABORTED)
             return
 
-        step = ctx.current_step
-        if step is None:
+        pipeline_step = ctx.current_pipeline_step
+        if pipeline_step is None:
             self._complete_pipeline(pipeline_id, ctx)
             return
+
+        step = pipeline_step.step
+        condition = pipeline_step.condition
+
+        # Evaluate condition if present
+        if condition is not None:
+            try:
+                should_execute, skip_reason = condition(ctx.current_state, ctx.pipeline.context)
+            except Exception as e:
+                self._handle_step_error(pipeline_id, ctx, step.name, e)
+                return
+
+            if not should_execute:
+                # Step should be skipped
+                action = self._notify_step_skipped(
+                    ctx.pipeline, step.name, skip_reason or "Condition not met"
+                )
+
+                if action == Action.PANIC:
+                    error = RuntimeError(f"Step {step.name} skip triggered PANIC")
+                    self._handle_panic(error, ctx)
+                    return
+
+                if action == Action.ABORT:
+                    self._finalize_pipeline(ctx, PipelineStatus.ABORTED)
+                    return
+
+                # PROCEED - advance to next step
+                with ctx.lock:
+                    ctx.advance()
+                self._submit_next_step(pipeline_id, ctx)
+                return
 
         # Notify step start and check for abort/panic
         action = self._notify_step_start(ctx.pipeline, step.name, ctx.current_state)
@@ -743,6 +775,29 @@ class PipelineExecutor:
         for observer in self._active_observers:
             try:
                 action = observer.on_step_finish(pipeline, step_name, step_result)
+                actions.append(action)
+            except Exception:
+                pass
+
+        if not actions:
+            return Action.PROCEED
+
+        return max(actions, key=lambda a: a.value)
+
+    def _notify_step_skipped(
+        self,
+        pipeline: _AnyPipeline,
+        step_name: str,
+        reason: str,
+    ) -> Action:
+        """Notify observers that a step was skipped due to a condition."""
+        if not self._active_observers:
+            return Action.PROCEED
+
+        actions: list[Action] = []
+        for observer in self._active_observers:
+            try:
+                action = observer.on_step_skipped(pipeline, step_name, reason)
                 actions.append(action)
             except Exception:
                 pass

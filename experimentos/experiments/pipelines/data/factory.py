@@ -45,6 +45,10 @@ def check_already_processed(
     )
 
 
+def run_if_not_processed(state: DataPipelineState, context: DataPipelineContext):
+    if state.get("is_processed", True) and not context.force_overwrite:
+        return False, "Data already processed; skipping step."
+    return True, None
 
 
 class DataProcessingPipelineFactory:
@@ -100,33 +104,40 @@ class DataProcessingPipelineFactory:
             dataset=dataset,
             data_repository=self._data_repository,
             use_gpu=use_gpu,
+            force_overwrite=force_overwrite,
         )
 
         pipeline = Pipeline[DataPipelineState, DataPipelineContext](
             f"DataProcessingPipeline[dataset={dataset}]", context
         )
 
-        if not force_overwrite:
-            pipeline.add_step(
-                DataProcessingPipelineSteps.CHECK_ALREADY_PROCESSED.value, check_already_processed
-            )
-
-        pipeline.add_step(DataProcessingPipelineSteps.LOAD_RAW_DATA.value, load_raw_data_from_csv)
         pipeline.add_step(
+            DataProcessingPipelineSteps.CHECK_ALREADY_PROCESSED.value, check_already_processed
+        )
+        pipeline.add_conditional_step(
+            DataProcessingPipelineSteps.LOAD_RAW_DATA.value,
+            load_raw_data_from_csv,
+            run_if_not_processed,
+        )
+        pipeline.add_conditional_step(
             DataProcessingPipelineSteps.TRANSFORM_DATA.value,
             self._create_transformer(dataset),
+            run_if_not_processed,
         )
-        pipeline.add_step(
+        pipeline.add_conditional_step(
             DataProcessingPipelineSteps.EXPORT_PROCESSED_DATA.value,
             export_processed_data_as_parquet,
+            run_if_not_processed,
         )
-        pipeline.add_step(
+        pipeline.add_conditional_step(
             DataProcessingPipelineSteps.EXTRACT_FINAL_FEATURES.value,
             self._create_feature_extractor(),
+            run_if_not_processed,
         )
-        pipeline.add_step(
+        pipeline.add_conditional_step(
             DataProcessingPipelineSteps.EXPORT_FINAL_FEATURES.value,
             export_final_features_as_parquet,
+            run_if_not_processed,
         )
 
         return pipeline

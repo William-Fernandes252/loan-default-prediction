@@ -1,6 +1,14 @@
-from typing import Annotated, NamedTuple, TypedDict
+from typing import Annotated, Callable, Literal, NamedTuple, TypedDict
 
 from experiments.lib.pipelines.steps import Step, Task
+
+type StepCondition[State, Context] = Callable[
+    [State, Context], tuple[Literal[True], None] | tuple[Literal[False], str]
+]
+"""Condition to determine if a step should execute.
+
+It takes the current state and context as input and returns a tuple where the first element is a boolean indicating whether to execute the step, and the second element is an optional reason for skipping the step.
+"""
 
 
 class StepConfig(TypedDict, total=False):
@@ -15,6 +23,7 @@ class PipelineStep[State, Context](NamedTuple):
 
     step: Step[State, Context]
     config: StepConfig
+    condition: StepCondition[State, Context] | None = None
 
 
 class Pipeline[State, Context]:
@@ -46,11 +55,36 @@ class Pipeline[State, Context]:
             config: Optional configuration for the step.
         """
         step = Step(name, task)
+        self._add_pipeline_step(step, config)
 
+    def add_conditional_step(
+        self,
+        name: str,
+        task: Task[State, Context],
+        condition: StepCondition[State, Context],
+        config: StepConfig | None = None,
+    ) -> None:
+        """Add a conditional step to the pipeline.
+
+        Args:
+            name: The name of the step.
+            task: The task operation for the step.
+            condition: The condition to determine if the step should execute.
+            config: Optional configuration for the step.
+        """
+        step = Step(name, task)
+        self._add_pipeline_step(step, config=config, condition=condition)
+
+    def _add_pipeline_step(
+        self,
+        step: Step[State, Context],
+        config: StepConfig | None = None,
+        condition: StepCondition[State, Context] | None = None,
+    ) -> None:
         config = config or {}
         config.update(_default_step_config)
 
-        self._steps.append(PipelineStep(step, config))
+        self._steps.append(PipelineStep(step, config, condition))
 
     def __repr__(self):
         step_names = ", ".join(ps.step.name for ps in self.steps)
