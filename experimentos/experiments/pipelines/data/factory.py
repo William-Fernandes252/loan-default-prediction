@@ -37,13 +37,14 @@ def check_already_processed(
     state: DataPipelineState, context: DataPipelineContext
 ) -> TaskResult[DataPipelineState]:
     dataset = context.dataset
-    if context.data_repository.is_processed(dataset):
-        return TaskResult(
-            state,
-            TaskStatus.SKIPPED,
-            "Processed data already exists.",
-        )
-    return TaskResult(state, TaskStatus.SUCCESS, "No existing processed data found.")
+    state["is_processed"] = context.data_repository.is_processed(dataset)
+    return TaskResult(
+        state,
+        TaskStatus.SUCCESS,
+        "Data already processed." if state["is_processed"] else "Data not yet processed.",
+    )
+
+
 
 
 class DataProcessingPipelineFactory:

@@ -16,13 +16,11 @@ class TaskStatus(enum.Enum):
 
     - `SUCCESS`: The task completed successfully.
     - `FAILURE`: The task failed to complete (due to missing data, for example).
-    - `SKIPPED`: The task was skipped.
     - `ERROR`: An error occurred during the execution of the task.
     """
 
     SUCCESS = "success"
     FAILURE = "failure"
-    SKIPPED = "skipped"
     ERROR = "error"
 
 

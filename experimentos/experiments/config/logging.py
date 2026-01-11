@@ -41,10 +41,6 @@ class LoggingObserver(IgnoreAllObserver[Any, Any]):
                 logger.warning(
                     f"{self._format_pipeline_and_step(pipeline, step_name)}: Step failed"
                 )
-            elif result.status == TaskStatus.SKIPPED:
-                logger.info(
-                    f"{self._format_pipeline_and_step(pipeline, step_name)}: Step was skipped"
-                )
         return Action.PROCEED
 
     def on_error(self, pipeline: Pipeline[Any, Any], step_name: str, error: Exception) -> Action:
