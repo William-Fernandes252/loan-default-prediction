@@ -82,8 +82,8 @@ class DataProcessingPipelineFactory:
     def create(
         self,
         dataset: Dataset,
-        use_gpu: bool,
-        force_overwrite: bool,
+        use_gpu: bool = False,
+        force_overwrite: bool = False,
     ) -> DataProcessingPipeline:
         """Create a pipeline configured for the specified dataset.
 
