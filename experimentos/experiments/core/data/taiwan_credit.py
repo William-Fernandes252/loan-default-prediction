@@ -8,7 +8,7 @@ from experiments.core.data.datasets import Dataset
 from experiments.core.data.transformers import get_engine, register_transformer
 
 
-@register_transformer("taiwan_credit")
+@register_transformer(Dataset.TAIWAN_CREDIT)
 def taiwan_credit_transformer(
     df: pl.DataFrame | pl.LazyFrame, use_gpu: bool = False
 ) -> pl.DataFrame:

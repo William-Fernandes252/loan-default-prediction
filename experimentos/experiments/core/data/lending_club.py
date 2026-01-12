@@ -11,7 +11,7 @@ from experiments.core.data.datasets import Dataset
 from experiments.core.data.transformers import get_engine, register_transformer
 
 
-@register_transformer("lending_club")
+@register_transformer(Dataset.LENDING_CLUB)
 def lending_club_transformer(
     df: pl.DataFrame | pl.LazyFrame, use_gpu: bool = False
 ) -> pl.DataFrame:

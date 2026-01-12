@@ -19,17 +19,17 @@ class DataLayout:
 
     def get_raw_data_key(self, dataset: Dataset) -> str:
         """Get the raw data key for a given dataset ID."""
-        return self.raw_data_key_template.format(dataset_id=dataset.value)
+        return self.raw_data_key_template.format(dataset_id=dataset)
 
     def get_interim_data_key(self, dataset: Dataset) -> str:
         """Get the interim data key for a given dataset ID."""
-        return self.interim_data_key_template.format(dataset_id=dataset.value)
+        return self.interim_data_key_template.format(dataset_id=dataset)
 
     def get_features_and_target_keys(self, dataset: Dataset) -> tuple[str, str]:
         """Get the final features (X) key for a given dataset ID."""
         return self.X_final_key_template.format(
-            dataset_id=dataset.value
-        ), self.y_final_key_template.format(dataset_id=dataset.value)
+            dataset_id=dataset
+        ), self.y_final_key_template.format(dataset_id=dataset)
 
 
 class StorageDataRepository:

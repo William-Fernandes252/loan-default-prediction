@@ -4,7 +4,7 @@ from typing import Any
 from polars import datatypes
 
 
-class Dataset(enum.Enum):
+class Dataset(enum.StrEnum):
     """Datasets used in the experiments."""
 
     CORPORATE_CREDIT_RATING = "corporate_credit_rating"
@@ -18,6 +18,3 @@ class Dataset(enum.Enum):
             Dataset.TAIWAN_CREDIT: {"infer_schema_length": None},
         }
         return extra_params.get(self, {})
-
-    def __str__(self) -> str:
-        return self.value

@@ -10,7 +10,7 @@ from experiments.core.data.datasets import Dataset
 from experiments.core.data.transformers import get_engine, register_transformer
 
 
-@register_transformer("corporate_credit_rating")
+@register_transformer(Dataset.CORPORATE_CREDIT_RATING)
 def corporate_credit_transformer(
     df: pl.DataFrame | pl.LazyFrame, use_gpu: bool = False
 ) -> pl.DataFrame:

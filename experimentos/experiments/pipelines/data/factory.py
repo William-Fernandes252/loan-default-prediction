@@ -2,12 +2,12 @@ from enum import Enum
 from typing import cast
 
 from experiments.core.data import (
+    DataRepository,
     Dataset,
+    Transformer,
+    TransformerRegistry,
     get_transformer_registry,
 )
-from experiments.core.data.registry import TransformerRegistry
-from experiments.core.data.repository import DataRepository
-from experiments.core.data.transformer import Transformer
 from experiments.core.modeling.features import extract_features_and_target
 from experiments.lib.pipelines import Pipeline, Task, TaskResult, TaskStatus
 from experiments.pipelines.data.context import DataPipelineContext
@@ -158,9 +158,9 @@ class DataProcessingPipelineFactory:
         Raises:
             ValueError: If no transformer is registered for the dataset.
         """
-        transformer = self._transformer_registry.get(dataset.value)
+        transformer = self._transformer_registry.get(dataset)
         if transformer is None:
-            raise ValueError(f"No transformer registered for dataset: '{dataset.value}'")
+            raise ValueError(f"No transformer registered for dataset: '{dataset}'")
 
         def transform(
             state: DataPipelineState, context: DataPipelineContext
