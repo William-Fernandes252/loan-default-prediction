@@ -35,7 +35,7 @@ def taiwan_credit_transformer(
     # Columns to process
     columns = schema.names() if isinstance(df, pl.LazyFrame) else df.columns
     pay_cols = [col for col in columns if re.match(r"PAY_[0-6]", col)]
-    columns_to_fix = ["LIMIT_BAL", "AGE"] + [c for c in columns if "PAY" in c or "BILL" in c]
+    columns_to_fix = ["LIMIT_BAL"] + [c for c in columns if "PAY" in c or "BILL" in c]
 
     # --- 2. Start of Preprocessing (Lazy) ---
     df_processed = (
