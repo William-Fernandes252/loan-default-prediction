@@ -4,8 +4,8 @@ import re
 
 import polars as pl
 
-from experiments.core.data.registry import register_transformer
-from experiments.core.data.transformer import get_engine
+from experiments.core.data.datasets import Dataset
+from experiments.core.data.transformers import get_engine, register_transformer
 
 
 @register_transformer("taiwan_credit")

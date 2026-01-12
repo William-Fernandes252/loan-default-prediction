@@ -1,25 +1,50 @@
-"""Transformer registry for automatic registration of data transformers.
+"""Transformer definition and registry for automatic registration of data transformers.
 
-This module provides a registration system that allows data transformers
+This module defines the protocol for data transformers that process raw datasets
+into cleaned data frames suitable for machine learning pipelines.
+
+It also provides a registration system that allows data transformers
 to self-register, eliminating the need to modify factory code when
 adding new datasets.
-
-Example:
-    ```python
-    @register_transformer("my_dataset")
-    class MyDatasetTransformer(BaseDataTransformer):
-        ...
-    ```
 """
 
 from __future__ import annotations
 
-from typing import Callable, Mapping
+from typing import Callable, Literal, Mapping
 
-from experiments.core.data.transformer import Transformer
+import polars as pl
+
+_PolarsEngine = Literal["auto", "gpu"]
+"""Type alias for Polars execution engines."""
+
+
+type Transformer = Callable[[pl.DataFrame | pl.LazyFrame, bool], pl.DataFrame]
+"""A transformer receives the raw data from the dataset and do cleaning, feature engineering, and other transformations.
+
+Args:
+    df: The raw Polars DataFrame or LazyFrame from the dataset.
+    use_gpu: Whether to enable GPU acceleration for transformations.
+
+Returns:
+    A cleaned Polars DataFrame ready for the ML pipeline.
+"""
+
+
+def get_engine(use_gpu: bool) -> _PolarsEngine:
+    """Get the appropriate Polars execution engine based on GPU usage.
+
+    Args:
+        use_gpu: Whether to enable GPU acceleration.
+
+    Returns:
+        The Polars execution engine to use.
+    """
+    return "gpu" if use_gpu else "auto"
+
 
 # Global registry mapping dataset IDs to transformers
 _TRANSFORMER_REGISTRY: dict[str, Transformer] = {}
+
 
 type TransformerRegistry = Mapping[str, Transformer]
 """Mapping of dataset IDs to transformer instances."""
