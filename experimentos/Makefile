@@ -2,22 +2,19 @@
 # GLOBALS                                                                       #
 #################################################################################
 
-PROJECT_NAME = experimentos
+PROJECT_NAME = loan-default-prediction
 PYTHON_VERSION = 3.12
 PYTHON_INTERPRETER = python
+
 
 #################################################################################
 # COMMANDS                                                                      #
 #################################################################################
 
-
 ## Install Python dependencies
 .PHONY: requirements
 requirements:
 	uv sync
-	
-
-
 
 ## Delete all compiled Python files
 .PHONY: clean
@@ -25,20 +22,20 @@ clean:
 	find . -type f -name "*.py[co]" -delete
 	find . -type d -name "__pycache__" -delete
 
-
 ## Lint using ruff (use `make format` to do formatting)
 .PHONY: lint
 lint:
-	ruff format --check
-	ruff check
+	uv run ruff check --fix .
 
 ## Format source code with ruff
 .PHONY: format
 format:
-	ruff check --fix
-	ruff format
+	uv run ruff format .
 
-
+## Format source code with ruff
+.PHONY: type-check
+type-check:
+	uv run pyrefly check .
 
 ## Run tests
 .PHONY: test
@@ -60,7 +57,6 @@ test-integration:
 test-e2e:
 	uv run pytest tests/e2e
 
-
 ## Set up Python interpreter environment
 .PHONY: create_environment
 create_environment:
@@ -69,13 +65,10 @@ create_environment:
 	@echo ">>> Windows: .\\\\.venv\\\\Scripts\\\\activate"
 	@echo ">>> Unix/macOS: source ./.venv/bin/activate"
 
-
-
 ## Compile translations
 .PHONY: compile-i18n
 compile-i18n:
 	$(PYTHON_INTERPRETER) compile_i18n.py
-
 
 ## Build documentation
 .PHONY: docs-build
@@ -91,7 +84,6 @@ docs-serve:
 #################################################################################
 # PROJECT RULES                                                                 #
 #################################################################################
-
 
 ## Process raw data
 .PHONY: process-data

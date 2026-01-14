@@ -10,13 +10,12 @@ from typing import Any
 
 import pandas as pd
 
-from experiments.core.analysis.constants import (
+from experiments.core.analysis.metrics import (
     IMBALANCE_METRICS,
     IMBALANCE_RATIOS,
     STABILITY_METRICS,
     SUMMARY_METRICS,
     MetricConfig,
-    get_metric_display_names,
 )
 from experiments.core.analysis.protocols import TranslationFunc
 from experiments.core.data import Dataset

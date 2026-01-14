@@ -193,3 +193,6 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Not the project lib
+!experiments/lib/

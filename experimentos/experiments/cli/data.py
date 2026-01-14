@@ -1,19 +1,25 @@
 """CLI for data processing tasks."""
 
 import sys
+from typing import Annotated
 
-from joblib import Parallel, delayed
 from loguru import logger
 import typer
-from typing_extensions import Annotated
 
-from experiments.containers import container
+from experiments.config.logging import LoggingObserver
+from experiments.containers import NewContainer
 from experiments.core.data import (
-    DataProcessingPipelineFactory,
     Dataset,
 )
-from experiments.utils.jobs import get_jobs_from_available_cpus
-from experiments.utils.overwrites import filter_items_for_processing
+from experiments.lib.pipelines import (
+    Action,
+    PipelineExecutor,
+    PipelineStatus,
+)
+from experiments.pipelines.data import (
+    DataPipelineState,
+)
+from experiments.pipelines.data.state import get_default_initial_state
 
 MODULE_NAME = "experiments.cli.data"
 
@@ -21,35 +27,6 @@ if __name__ == "__main__":
     sys.modules.setdefault(MODULE_NAME, sys.modules[__name__])
 
 app = typer.Typer()
-
-
-def _process_single_dataset(
-    use_gpu: bool,
-    dataset: Dataset,
-) -> tuple[Dataset, bool, str | None]:
-    """Runs the preprocessing pipeline for a single dataset."""
-    try:
-        # Get settings for URI construction
-        storage_manager = container.storage_manager()
-        storage = storage_manager.storage
-
-        # Create pipeline factory with storage layer
-        factory = DataProcessingPipelineFactory(
-            storage=storage,
-            raw_data_uri=storage_manager.raw_data_dir_uri,
-            interim_data_uri=storage_manager.interim_data_dir_uri,
-            use_gpu=use_gpu,
-        )
-
-        # Create and run the pipeline for this dataset
-        pipeline = factory.create(dataset)
-        pipeline.run(dataset)
-
-        return dataset, True, None
-
-    except Exception as exc:  # noqa: BLE001
-        logger.exception(f"Failed to process dataset {dataset.display_name}: {exc}")
-        return dataset, False, str(exc)
 
 
 @app.command(name="process")
@@ -94,49 +71,69 @@ def main(
 ):
     """Processes one or all datasets."""
     # Resolve dependencies from container
-    storage_manager = container.storage_manager()
-    storage = storage_manager.storage
-    resource_settings = container.settings().resources
+    container = NewContainer()
+
+    data_repository = container.data_repository()
+    resource_settings = container.config.resources
 
     # Override use_gpu from settings if flag is set
-    effective_use_gpu = use_gpu or resource_settings.use_gpu
+    effective_use_gpu = use_gpu or resource_settings.use_gpu()
 
     datasets_to_process = [dataset] if dataset is not None else list(Dataset)
-
-    # Use storage_manager for URI checking in filter
-    datasets_to_process = filter_items_for_processing(
-        datasets_to_process,
-        exists_fn=lambda ds: storage.exists(storage_manager.get_interim_data_uri(ds.id)),
-        prompt_fn=lambda ds: f"File '{storage_manager.get_interim_data_uri(ds.id)}' exists. Overwrite?",
-        force=force,
-        on_skip=lambda ds: logger.info(f"Skipping dataset {ds.display_name} per user choice."),
-    )
 
     if not datasets_to_process:
         logger.info("No datasets selected for processing. Exiting.")
         return
 
-    dataset_names = ", ".join(ds.display_name for ds in datasets_to_process)
+    dataset_names = ", ".join(ds.value for ds in datasets_to_process)
     logger.info(f"Scheduling preprocessing for: {dataset_names}")
 
-    n_jobs = get_jobs_from_available_cpus(jobs)
-
-    # Pass storage_manager to workers
-    results = Parallel(n_jobs=n_jobs, prefer="processes")(
-        delayed(_process_single_dataset)(effective_use_gpu, ds) for ds in datasets_to_process
+    # Calculate number of workers
+    n_jobs = jobs or container.resource_calculator().compute_safe_jobs(
+        dataset_size_gb=sum(
+            data_repository.get_size_in_bytes(ds) / 1e9 for ds in datasets_to_process
+        ),
     )
 
-    failed = [ds for ds, success, _ in results if not success]
+    # Create pipelines
+    pipelines = [
+        container.data_processing_pipeline_factory().create(ds, effective_use_gpu, force)
+        for ds in datasets_to_process
+    ]
+
+    # Create observers
+    observers = {LoggingObserver()}
+
+    # Create executor with parallel workers and observer
+    executor = PipelineExecutor(
+        max_workers=n_jobs,
+        observers=observers,
+        default_action=Action.ABORT,
+    )
+
+    # Schedule all pipelines with empty initial state
+    for pipeline, context in pipelines:
+        initial_state: DataPipelineState = get_default_initial_state()
+        executor.schedule(pipeline, initial_state, context)
+
+    executor.start()
+
+    results = executor.wait()
+    failed = [result for result in results if not result.succeeded()]
     if failed:
-        failed_names = ", ".join(ds.display_name for ds in failed)
-        logger.error(f"Processing failed for: {failed_names}")
+        for result in failed:
+            if result.status == PipelineStatus.ABORTED:
+                logger.warning(f"Pipeline {result.pipeline_name} was aborted")
+            elif result.status == PipelineStatus.PANICKED:
+                logger.error(f"Pipeline {result.pipeline_name} panicked")
+            else:
+                error_details = result.last_error()
+                if error_details:
+                    logger.error(f"Pipeline {result.pipeline_name} failed: {error_details}")
         raise typer.Exit(code=1)
 
     logger.success("All requested datasets processed successfully.")
 
 
 if __name__ == "__main__":
-    # Ensure pickle compatibility
-    for _func in [_process_single_dataset, main]:
-        _func.__module__ = MODULE_NAME
     app()

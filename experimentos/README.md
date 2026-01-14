@@ -197,8 +197,8 @@ The project uses `ruff` for both linting and formatting.
 
 ### Type Checking
 
-Static type checking is enforced using `mypy`.
+Static type checking is enforced using `pyright`.
 
 ```bash
-mypy experiments
+make type-check
 ```
