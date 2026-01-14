@@ -72,7 +72,7 @@ if HAS_CUML:
             if hasattr(probas, "get"):
                 probas = probas.get()
 
-            return self._ensure_two_classes(probas, self.classes_)
+            return self._ensure_two_classes(probas, self.classes_)  # type: ignore[arg-type]
 
 
 class RobustXGBClassifier(_ProbabilityMatrixClassesCorrectionMixin, XGBClassifier):
@@ -81,7 +81,7 @@ class RobustXGBClassifier(_ProbabilityMatrixClassesCorrectionMixin, XGBClassifie
     Inherits from XGBClassifier, so it works natively with GridSearchCV.
     """
 
-    def predict_proba(self, X, **kwargs):
+    def predict_proba(self, X, **kwargs):  # type: ignore[override]
         probas = super().predict_proba(X, **kwargs)
         return self._ensure_two_classes(probas, self.classes_)
 
@@ -182,19 +182,19 @@ class MetaCostClassifier(ClassifierMixin, BaseEstimator):
         else:
             self.final_estimator_ = clone(self.base_estimator).fit(X, y_new_np)
 
-        self.classes_ = self.final_estimator_.classes_
+        self.classes_ = self.final_estimator_.classes_  # type: ignore[attr-defined]
         return self
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         if self.final_estimator_ is None:
             raise ValueError("The model has not been fitted yet.")
-        return self.final_estimator_.predict(X)
+        return self.final_estimator_.predict(X)  # type: ignore[attr-defined]
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         if self.final_estimator_ is None:
             raise ValueError("The model has not been fitted yet.")
 
-        probas = self.final_estimator_.predict_proba(X)
+        probas = self.final_estimator_.predict_proba(X)  # type: ignore[attr-defined]
 
         # If the classifier collapsed to a single class (e.g., DummyClassifier),
         # the output will have shape (N, 1). We need to expand it to (N, 2).
@@ -204,7 +204,7 @@ class MetaCostClassifier(ClassifierMixin, BaseEstimator):
             new_probas = np.zeros((n_samples, 2), dtype=probas.dtype)
 
             # Discover which class remains (0 or 1)
-            present_class = int(self.final_estimator_.classes_[0])
+            present_class = int(self.final_estimator_.classes_[0])  # type: ignore[attr-defined]
 
             # Map the probability to the correct column
             # If the class is 0, fill column 0; if it is 1, fill column 1.
