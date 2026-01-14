@@ -39,9 +39,8 @@ class Pipeline[State, Context]:
 
     _steps: list[PipelineStep[State, Context]]
 
-    def __init__(self, name: str, context: Context) -> None:
+    def __init__(self, name: str) -> None:
         self._name = name
-        self._context = context
         self._steps = []
 
     def add_step(
@@ -94,10 +93,6 @@ class Pipeline[State, Context]:
     def steps(self) -> list[PipelineStep[State, Context]]:
         """Get the steps of the pipeline."""
         return self._steps
-
-    @property
-    def context(self) -> Context:
-        return self._context
 
     @property
     def name(self) -> str:

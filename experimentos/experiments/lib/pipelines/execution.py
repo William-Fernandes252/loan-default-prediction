@@ -96,6 +96,7 @@ class _PipelineContext:
     pipeline: _AnyPipeline
     initial_state: Any
     current_state: Any
+    context: Any
     step_index: int = 0
     step_traces: list[StepTrace] = field(default_factory=list)
     step_retry_counts: dict[int, int] = field(default_factory=dict)
@@ -231,6 +232,7 @@ class PipelineExecutor:
         self,
         pipeline: _AnyPipeline,
         initial_state: Any,
+        context: Any,
     ) -> None:
         """Schedule a pipeline for execution.
 
@@ -240,6 +242,7 @@ class PipelineExecutor:
         Args:
             pipeline: The pipeline to execute.
             initial_state: The initial state to start the pipeline with.
+            context: The context for the pipeline.
 
         Raises:
             RuntimeError: If the executor has already been started.
@@ -252,6 +255,7 @@ class PipelineExecutor:
             pipeline=pipeline,
             initial_state=initial_state,
             current_state=initial_state,
+            context=context,
         )
         self._pipeline_contexts[pipeline_id] = ctx
 
@@ -317,6 +321,7 @@ class PipelineExecutor:
         self,
         pipeline: Pipeline[State, Context],
         initial_state: State,
+        context: Context,
         observers: Set[PipelineObserver[State, Context]] | None = None,
     ) -> PipelineExecutionResult[State, Context]:
         """Execute a single pipeline synchronously.
@@ -327,13 +332,14 @@ class PipelineExecutor:
         Args:
             pipeline: The pipeline to execute.
             initial_state: The initial state to start the pipeline with.
+            context: The context for the pipeline.
             observers: Optional set of observers to use in addition to
                 the default observers.
 
         Returns:
             The execution result for the pipeline.
         """
-        self.schedule(pipeline, initial_state)
+        self.schedule(pipeline, initial_state, context)
         self.start(observers)
         results = self.wait()
         return results[0]  # type: ignore[return-value]
@@ -341,6 +347,7 @@ class PipelineExecutor:
     def execute_all[State, Context](
         self,
         pipelines: Sequence[tuple[Pipeline[State, Context], State]],
+        context: Context,
         observers: Set[PipelineObserver[State, Context]] | None = None,
     ) -> list[PipelineExecutionResult[State, Context]]:
         """Execute multiple pipelines in parallel.
@@ -357,7 +364,7 @@ class PipelineExecutor:
             A sequence of execution results for all pipelines.
         """
         for pipeline, state in pipelines:
-            self.schedule(pipeline, state)
+            self.schedule(pipeline, state, context)
         self.start(observers)
         return self.wait()  # type: ignore[return-value]
 
@@ -403,7 +410,7 @@ class PipelineExecutor:
         # Evaluate condition if present
         if condition is not None:
             try:
-                should_execute, skip_reason = condition(ctx.current_state, ctx.pipeline.context)
+                should_execute, skip_reason = condition(ctx.current_state, ctx.context)
             except Exception as e:
                 self._handle_step_error(pipeline_id, ctx, step.name, e)
                 return
@@ -445,7 +452,7 @@ class PipelineExecutor:
             pipeline_ctx=ctx,
             step=step,
             state=ctx.current_state,
-            context=ctx.pipeline.context,
+            context=ctx.context,
         )
 
         future = self._executor.submit(self._execute_step, execution)  # type: ignore[union-attr]
@@ -606,7 +613,7 @@ class PipelineExecutor:
             pipeline_name=ctx.pipeline.name,
             status=PipelineStatus.COMPLETED,
             step_traces=ctx.step_traces,
-            context=ctx.pipeline.context,
+            context=ctx.context,
             final_state=ctx.current_state,
         )
 
@@ -664,7 +671,7 @@ class PipelineExecutor:
             pipeline_name=ctx.pipeline.name,
             status=status,
             step_traces=ctx.step_traces,
-            context=ctx.pipeline.context,
+            context=ctx.context,
             final_state=ctx.current_state,
         )
 

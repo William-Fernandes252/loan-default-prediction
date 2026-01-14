@@ -84,7 +84,7 @@ class DataProcessingPipelineFactory:
         dataset: Dataset,
         use_gpu: bool = False,
         force_overwrite: bool = False,
-    ) -> DataProcessingPipeline:
+    ) -> tuple[DataProcessingPipeline, DataPipelineContext]:
         """Create a pipeline configured for the specified dataset.
 
         Args:
@@ -108,7 +108,7 @@ class DataProcessingPipelineFactory:
         )
 
         pipeline = Pipeline[DataPipelineState, DataPipelineContext](
-            f"DataProcessingPipeline[dataset={dataset}]", context
+            f"DataProcessingPipeline[dataset={dataset}]"
         )
 
         pipeline.add_step(
@@ -140,7 +140,7 @@ class DataProcessingPipelineFactory:
             run_if_not_processed,
         )
 
-        return pipeline
+        return pipeline, context
 
     def _create_transformer(
         self,

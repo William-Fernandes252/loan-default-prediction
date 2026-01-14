@@ -112,9 +112,9 @@ def main(
     )
 
     # Schedule all pipelines with empty initial state
-    for pipeline in pipelines:
+    for pipeline, context in pipelines:
         initial_state: DataPipelineState = get_default_initial_state()
-        executor.schedule(pipeline, initial_state)
+        executor.schedule(pipeline, initial_state, context)
 
     executor.start()
 
