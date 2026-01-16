@@ -262,6 +262,7 @@ class PipelineExecutor:
     def start(
         self,
         observers: Set[PipelineObserver[Any, Any]] | None = None,
+        max_workers: int | None = None,
     ) -> None:
         """Start execution of all scheduled pipelines.
 
@@ -271,6 +272,8 @@ class PipelineExecutor:
         Args:
             observers: Optional set of observers to use in addition to
                 the default observers.
+            max_workers: Optional number of worker threads to use. If not
+                provided, uses the value set during initialization.
 
         Raises:
             RuntimeError: If the executor has already been started.
@@ -286,7 +289,8 @@ class PipelineExecutor:
             self._completion_event.set()
             return
 
-        self._executor = ThreadPoolExecutor(max_workers=self._max_workers)
+        workers = max_workers if max_workers is not None else self._max_workers
+        self._executor = ThreadPoolExecutor(max_workers=workers)
 
         # Submit initial steps for all pipelines
         for pipeline_id, ctx in self._pipeline_contexts.items():
@@ -323,6 +327,7 @@ class PipelineExecutor:
         initial_state: State,
         context: Context,
         observers: Set[PipelineObserver[State, Context]] | None = None,
+        max_workers: int | None = None,
     ) -> PipelineExecutionResult[State, Context]:
         """Execute a single pipeline synchronously.
 
@@ -335,12 +340,14 @@ class PipelineExecutor:
             context: The context for the pipeline.
             observers: Optional set of observers to use in addition to
                 the default observers.
+            max_workers: Optional number of worker threads to use. If not
+                provided, uses the value set during initialization.
 
         Returns:
             The execution result for the pipeline.
         """
         self.schedule(pipeline, initial_state, context)
-        self.start(observers)
+        self.start(observers, max_workers)
         results = self.wait()
         return results[0]  # type: ignore[return-value]
 
@@ -349,6 +356,7 @@ class PipelineExecutor:
         pipelines: Sequence[tuple[Pipeline[State, Context], State]],
         context: Context,
         observers: Set[PipelineObserver[State, Context]] | None = None,
+        max_workers: int | None = None,
     ) -> list[PipelineExecutionResult[State, Context]]:
         """Execute multiple pipelines in parallel.
 
@@ -357,15 +365,17 @@ class PipelineExecutor:
 
         Args:
             pipelines: A sequence of (pipeline, initial_state) tuples.
-            observers: Optional set of observers to use in addition to
-                the default observers.
+            context (Context): The context for all pipelines
+            observers (Set[PipelineObserver[State, Context]] | None): Optional set of observers to use in addition to the default observers.
+            max_workers: Optional number of worker threads to use. If not
+                provided, uses the value set during initialization.
 
         Returns:
             A sequence of execution results for all pipelines.
         """
         for pipeline, state in pipelines:
             self.schedule(pipeline, state, context)
-        self.start(observers)
+        self.start(observers, max_workers)
         return self.wait()  # type: ignore[return-value]
 
     def _start_pipeline(
