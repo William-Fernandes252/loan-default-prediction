@@ -296,7 +296,7 @@ class PipelineExecutor:
         for pipeline_id, ctx in self._pipeline_contexts.items():
             self._start_pipeline(pipeline_id, ctx)
 
-    def wait(self) -> Sequence[PipelineExecutionResult[Any, Any]]:
+    def wait[State, Context](self) -> Sequence[PipelineExecutionResult[State, Context]]:
         """Wait for all pipelines to complete and return results.
 
         This method blocks until all scheduled pipelines have finished
