@@ -1,6 +1,5 @@
 """CLI for data processing tasks."""
 
-import sys
 from typing import Annotated
 
 from loguru import logger
@@ -11,16 +10,11 @@ from experiments.core.data import (
     Dataset,
 )
 
-MODULE_NAME = "experiments.cli.data"
-
-if __name__ == "__main__":
-    sys.modules.setdefault(MODULE_NAME, sys.modules[__name__])
-
 app = typer.Typer()
 
 
 @app.command(name="process")
-def main(
+def process_data(
     dataset: Annotated[
         Dataset | None,
         typer.Argument(
