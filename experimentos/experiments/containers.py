@@ -10,27 +10,22 @@ from typing import Any
 from dependency_injector import containers, providers
 from loguru import logger
 
-from experiments.core.experiment import (
-    ExperimentPipelineConfig,
-    ExperimentRunnerFactory,
-    create_experiment_pipeline,
-)
-from experiments.core.modeling.factories import DefaultEstimatorFactory
-from experiments.core.training import TrainingPipelineConfig, TrainingPipelineFactory
+from experiments.config.logging import LoggingObserver
+from experiments.config.settings import LdpSettings, StorageProvider
+from experiments.lib.pipelines.execution import PipelineExecutor
 from experiments.pipelines.data import (
     DataProcessingPipelineFactory as NewDataProcessingPipelineFactory,
 )
-from experiments.services.data_repository import DataLayout, StorageDataRepository
-from experiments.services.model_versioning import ModelVersioningServiceFactory
-from experiments.services.path_manager import PathManager
+from experiments.services.data_manager import DataManager
+from experiments.services.data_repository import DataStorageLayout, StorageDataRepository
+from experiments.services.feature_extractor import FeatureExtractorImpl
+from experiments.services.grid_search_trainer import GridSearchModelTrainer
 from experiments.services.resource_calculator import ResourceCalculator
-from experiments.services.storage import LocalStorageService, StorageService
-from experiments.services.storage_manager import StorageManager
-from experiments.settings import ExperimentsSettings, StorageProvider
-from experiments.storage import LocalStorage
+from experiments.services.umbalanced_learner_factory import UnbalancedLearnerFactory
+from experiments.storage import GCSStorage, LocalStorage, S3Storage, Storage
 
 
-def create_s3_client_from_settings(settings: ExperimentsSettings) -> Any:
+def create_s3_client_from_settings(settings: LdpSettings) -> Any:
     """Create an S3 client from application settings.
 
     Only creates the client if the provider is S3.
@@ -44,7 +39,7 @@ def create_s3_client_from_settings(settings: ExperimentsSettings) -> Any:
     if settings.storage.provider != StorageProvider.S3:
         return None
 
-    from experiments.services.storage.s3 import create_s3_client
+    from experiments.storage.s3 import create_s3_client
 
     storage = settings.storage
     return create_s3_client(
@@ -55,7 +50,7 @@ def create_s3_client_from_settings(settings: ExperimentsSettings) -> Any:
     )
 
 
-def create_gcs_client_from_settings(settings: ExperimentsSettings) -> Any:
+def create_gcs_client_from_settings(settings: LdpSettings) -> Any:
     """Create a GCS client from application settings.
 
     Only creates the client if the provider is GCS.
@@ -69,7 +64,7 @@ def create_gcs_client_from_settings(settings: ExperimentsSettings) -> Any:
     if settings.storage.provider != StorageProvider.GCS:
         return None
 
-    from experiments.services.storage.gcs import create_gcs_client
+    from experiments.storage.gcs import create_gcs_client
 
     storage = settings.storage
     return create_gcs_client(
@@ -78,11 +73,11 @@ def create_gcs_client_from_settings(settings: ExperimentsSettings) -> Any:
     )
 
 
-def create_storage_service(
-    settings: ExperimentsSettings,
+def create_storage(
+    settings: LdpSettings,
     s3_client: Any = None,
     gcs_client: Any = None,
-) -> StorageService:
+) -> Storage:
     """Create the appropriate storage service based on settings.
 
     Args:
@@ -96,31 +91,25 @@ def create_storage_service(
     storage_settings = settings.storage
 
     if storage_settings.provider == StorageProvider.LOCAL:
-        return LocalStorageService()
+        return LocalStorage(storage_settings.base_path)
 
     elif storage_settings.provider == StorageProvider.S3:
-        from experiments.services.storage import S3StorageService
+        if s3_client is None or storage_settings.s3_bucket is None:
+            raise ValueError("S3 client and bucket name are required for S3 storage provider")
 
-        if s3_client is None:
-            raise ValueError("S3 client is required for S3 storage provider")
-
-        return S3StorageService(
-            client=s3_client,
-            bucket=storage_settings.s3_bucket,
-            prefix=storage_settings.s3_prefix,
+        return S3Storage(
+            s3_client=s3_client,
+            bucket_name=storage_settings.s3_bucket,
             cache_dir=storage_settings.cache_dir,
         )
 
     elif storage_settings.provider == StorageProvider.GCS:
-        from experiments.services.storage import GCSStorageService
+        if gcs_client is None or storage_settings.gcs_bucket is None:
+            raise ValueError("GCS client and bucket name are required for GCS storage provider")
 
-        if gcs_client is None:
-            raise ValueError("GCS client is required for GCS storage provider")
-
-        return GCSStorageService(
-            client=gcs_client,
-            bucket=storage_settings.gcs_bucket,
-            prefix=storage_settings.gcs_prefix,
+        return GCSStorage(
+            gcs_client=gcs_client,
+            bucket_name=storage_settings.gcs_bucket,
             cache_dir=storage_settings.cache_dir,
         )
 
@@ -135,11 +124,11 @@ class Container(containers.DeclarativeContainer):
     Services are accessed via the container singleton instance.
     """
 
-    # Root settings - loaded from environment/.env
-    settings = providers.Singleton(ExperimentsSettings)
+    settings = providers.Singleton(LdpSettings)
+    """Application config loaded from environment/.env."""
 
-    # Logger - use loguru global logger
-    log = providers.Object(logger)
+    logger = providers.Object(logger)
+    """Global logger instance."""
 
     # --- Cloud Clients (lazily initialized based on provider) ---
 
@@ -157,25 +146,18 @@ class Container(containers.DeclarativeContainer):
 
     # --- Storage Layer ---
 
-    storage_service = providers.Singleton(
-        create_storage_service,
+    _storage = providers.Singleton(
+        create_storage,
         settings=settings,
         s3_client=s3_client,
         gcs_client=gcs_client,
     )
+    """Storage service based on configured provider."""
 
-    storage_manager = providers.Singleton(
-        StorageManager,
-        settings=settings.provided.paths,
-        storage=storage_service,
-    )
+    # --- Logging ---
 
-    # --- Legacy Path Manager (for backwards compatibility) ---
-
-    path_manager = providers.Singleton(
-        PathManager,
-        settings=settings.provided.paths,
-    )
+    logger = providers.Object(logger)
+    """Logger instance using loguru."""
 
     # --- Core Services ---
 
@@ -183,56 +165,59 @@ class Container(containers.DeclarativeContainer):
         ResourceCalculator,
         safety_factor=settings.provided.resources.safety_factor,
     )
+    """Resource calculator service."""
 
-    model_versioning_factory = providers.Singleton(
-        ModelVersioningServiceFactory,
-        models_dir=path_manager.provided.models_dir,
-    )
-
-    # --- Estimator Factory ---
-
-    estimator_factory = providers.Singleton(
-        DefaultEstimatorFactory,
+    classifier_factory = providers.Singleton(
+        UnbalancedLearnerFactory,
         use_gpu=settings.provided.resources.use_gpu,
     )
+    """Factory for creating unbalanced learner classifiers."""
 
-    # --- Experiment Pipeline ---
-
-    experiment_pipeline_config = providers.Factory(ExperimentPipelineConfig)
-
-    experiment_pipeline = providers.Factory(
-        create_experiment_pipeline,
-        storage=storage_service,
-        config=experiment_pipeline_config,
-        model_versioning_service_factory=model_versioning_factory,
-        estimator_factory=estimator_factory,
-    )
-
-    experiment_runner_factory = providers.Factory(
-        ExperimentRunnerFactory,
-        storage=storage_service,
-        pipeline_config=experiment_pipeline_config,
-        model_versioning_service_factory=model_versioning_factory,
-        estimator_factory=estimator_factory,
-    )
-
-    # --- Training Pipeline ---
-
-    training_pipeline_config = providers.Factory(
-        TrainingPipelineConfig,
+    model_trainer = providers.Singleton(
+        GridSearchModelTrainer,
         cv_folds=settings.provided.experiment.cv_folds,
         cost_grids=settings.provided.experiment.cost_grids,
-        num_seeds=settings.provided.experiment.num_seeds,
-        discard_checkpoints=providers.Object(False),  # Can be overridden
     )
+    """Model trainer service for training and hyperparameter tuning."""
 
-    training_pipeline_factory = providers.Factory(
-        TrainingPipelineFactory,
-        storage=storage_service,
-        data_provider=storage_manager,
-        consolidation_provider=storage_manager,
-        experiment_runner_factory=experiment_runner_factory,
+    data_repository = providers.Singleton(
+        StorageDataRepository,
+        storage=_storage,
+        data_layout=providers.Singleton(DataStorageLayout),
     )
+    """Data repository service for dataset storage and retrieval."""
+
+    resource_calculator = providers.Singleton(
+        ResourceCalculator,
+        safety_factor=settings.provided.resources.safety_factor,
+    )
+    """Resource calculator service."""
+
+    _data_layout = providers.Singleton(DataStorageLayout)
+    """Data layout configuration."""
+
+    data_repository = providers.Singleton(
+        StorageDataRepository,
+        storage=_storage,
+        data_layout=_data_layout,
+    )
+    """Data repository service for dataset storage and retrieval."""
+
+    data_processing_pipeline_factory = providers.Singleton(
+        NewDataProcessingPipelineFactory,
+        feature_extractor=providers.Singleton(FeatureExtractorImpl),
+    )
+    """Factory for creating data processing pipelines."""
+
+    data_manager = providers.Singleton(
+        DataManager,
+        data_pipeline_factory=data_processing_pipeline_factory,
+        data_repository=data_repository,
+        pipeline_executor=providers.Singleton(PipelineExecutor, observers={LoggingObserver()}),
+        resource_calculator=resource_calculator,
+        resource_settings=settings.provided.resources,
+    )
+    """Data manager service for handling dataset processing."""
 
 
 def create_container() -> Container:
@@ -245,45 +230,5 @@ def create_container() -> Container:
     return container
 
 
-# Global container instance
 container = create_container()
-
-
-class NewContainer(containers.DeclarativeContainer):
-    """New dependency injection container for the experiments application.
-
-    This container manages all application services and their dependencies.
-    Services are accessed via the container singleton instance.
-    """
-
-    config = providers.Configuration(pydantic_settings=[ExperimentsSettings()])
-    """Application config loaded from environment/.env."""
-
-    logger = providers.Object(logger)
-    """Logger instance using loguru."""
-
-    _storage = providers.Singleton(LocalStorage, base_path=config.paths.project_root)
-    """Storage instance.
-    
-    Currently uses local storage; can be extended for cloud storage. 
-    """
-
-    resource_calculator = providers.Singleton(
-        ResourceCalculator,
-        safety_factor=config.resources.safety_factor.as_int(),
-    )
-    """Resource calculator service."""
-
-    _data_layout = providers.Singleton(DataLayout)
-    """Data layout configuration."""
-
-    data_repository = providers.Singleton(
-        StorageDataRepository,
-        storage=_storage,
-        data_layout=_data_layout,
-    )
-
-    data_processing_pipeline_factory = providers.Singleton(
-        NewDataProcessingPipelineFactory,
-        data_repository=data_repository,
-    )
+"""Global container instance for application-wide dependency access."""

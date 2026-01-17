@@ -6,7 +6,7 @@ from environment variables and .env files using pydantic-settings.
 
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -14,7 +14,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 def _get_project_root() -> Path:
     """Get the project root directory."""
-    return Path(__file__).resolve().parents[1]
+    return Path(__file__).resolve().parent.parent.parent
 
 
 class StorageProvider(str, Enum):
@@ -26,7 +26,23 @@ class StorageProvider(str, Enum):
 
 
 class StorageSettings(BaseSettings):
-    """Storage-related settings."""
+    """Storage-related settings.
+
+    Attributes:
+        provider (StorageProvider): The storage provider to use.
+        base_path (Path): The base path for local storage.
+        s3_bucket (str | None): The S3 bucket name (if using S3).
+        s3_prefix (str): The S3 prefix for all paths.
+        s3_region (str | None): The AWS region for S3.
+        s3_endpoint_url (str | None): Custom S3 endpoint URL (for S3-compatible services).
+        s3_access_key_id (str | None): AWS access key ID (optional, uses default credentials if not set).
+        s3_secret_access_key (str | None): AWS secret access key.
+        gcs_bucket (str | None): The GCS bucket name (if using GCS).
+        gcs_prefix (str): The GCS prefix for all paths.
+        gcs_project (str | None): The GCP project ID.
+        gcs_credentials_file (str | None): Path to GCS credentials JSON file.
+        cache_dir (Path | None): Local cache directory for cloud storage operations.
+    """
 
     model_config = SettingsConfigDict(
         env_prefix="LDP_STORAGE_",
@@ -39,6 +55,8 @@ class StorageSettings(BaseSettings):
         default=StorageProvider.LOCAL,
         description="Storage provider: 'local', 's3', or 'gcs'",
     )
+
+    base_path: Annotated[Path, Field(default_factory=_get_project_root)]
 
     # S3-specific settings
     s3_bucket: str | None = Field(
@@ -180,7 +198,7 @@ class ResourceSettings(BaseSettings):
     use_gpu: bool = Field(default=False, description="Whether to use GPU acceleration")
 
 
-class ExperimentsSettings(BaseSettings):
+class LdpSettings(BaseSettings):
     """Root settings class that composes all settings groups."""
 
     model_config = SettingsConfigDict(

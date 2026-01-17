@@ -1,18 +1,20 @@
 """Exporters for processed data from the datasets."""
 
 from experiments.lib.pipelines import TaskResult, TaskStatus
-from experiments.pipelines.data.context import DataPipelineContext
-from experiments.pipelines.data.state import DataPipelineState
+from experiments.pipelines.data.base import (
+    DataProcessingPipelineContext,
+    DataProcessingPipelineState,
+)
 
 
 def export_processed_data_as_parquet(
-    state: DataPipelineState, context: DataPipelineContext
-) -> TaskResult[DataPipelineState]:
+    state: DataProcessingPipelineState, context: DataProcessingPipelineContext
+) -> TaskResult[DataProcessingPipelineState]:
     """Export processed data using the provided exporter.
 
     Args:
         state: The current pipeline state.
-        exporter: The exporter instance to use for exporting.
+        context: The pipeline context.
 
     Returns:
         The updated pipeline state after exporting.
@@ -29,8 +31,8 @@ def export_processed_data_as_parquet(
 
 
 def export_final_features_as_parquet(
-    state: DataPipelineState, context: DataPipelineContext
-) -> TaskResult[DataPipelineState]:
+    state: DataProcessingPipelineState, context: DataProcessingPipelineContext
+) -> TaskResult[DataProcessingPipelineState]:
     """Export final features using the provided exporter.
 
     Args:

@@ -1,10 +1,10 @@
 """Experiments package for loan default prediction."""
 
+from experiments.config.settings import LdpSettings
 from experiments.containers import Container, container
-from experiments.settings import ExperimentsSettings
 
 __all__ = [
     "Container",
     "container",
-    "ExperimentsSettings",
+    "LdpSettings",
 ]

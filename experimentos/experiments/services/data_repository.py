@@ -9,7 +9,7 @@ from experiments.storage import Storage
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class DataLayout:
+class DataStorageLayout:
     """Data layout on the storage for data repository operations."""
 
     raw_data_key_template: str = "data/raw/{dataset_id}.csv"
@@ -41,7 +41,7 @@ class StorageDataRepository:
         storage (Storage): The storage backend to use for data operations.
     """
 
-    def __init__(self, storage: Storage, data_layout: DataLayout) -> None:
+    def __init__(self, storage: Storage, data_layout: DataStorageLayout) -> None:
         self._storage = storage
         self._data_layout = data_layout
 

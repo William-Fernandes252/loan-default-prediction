@@ -6,20 +6,10 @@ from typing import Annotated
 from loguru import logger
 import typer
 
-from experiments.config.logging import LoggingObserver
-from experiments.containers import NewContainer
+from experiments.containers import container
 from experiments.core.data import (
     Dataset,
 )
-from experiments.lib.pipelines import (
-    Action,
-    PipelineExecutor,
-    PipelineStatus,
-)
-from experiments.pipelines.data import (
-    DataPipelineState,
-)
-from experiments.pipelines.data.state import get_default_initial_state
 
 MODULE_NAME = "experiments.cli.data"
 
@@ -70,17 +60,7 @@ def main(
     ] = False,
 ):
     """Processes one or all datasets."""
-    # Resolve dependencies from container
-    container = NewContainer()
-
-    data_repository = container.data_repository()
-    resource_settings = container.config.resources
-
-    # Override use_gpu from settings if flag is set
-    effective_use_gpu = use_gpu or resource_settings.use_gpu()
-
     datasets_to_process = [dataset] if dataset is not None else list(Dataset)
-
     if not datasets_to_process:
         logger.info("No datasets selected for processing. Exiting.")
         return
@@ -88,48 +68,16 @@ def main(
     dataset_names = ", ".join(ds.value for ds in datasets_to_process)
     logger.info(f"Scheduling preprocessing for: {dataset_names}")
 
-    # Calculate number of workers
-    n_jobs = jobs or container.resource_calculator().compute_safe_jobs(
-        dataset_size_gb=sum(
-            data_repository.get_size_in_bytes(ds) / 1e9 for ds in datasets_to_process
-        ),
+    data_manager = container.data_manager()
+    errors = data_manager.process_datasets(
+        datasets=datasets_to_process,
+        force_overwrite=force,
+        use_gpu=use_gpu,
+        workers=jobs,
     )
-
-    # Create pipelines
-    pipelines = [
-        container.data_processing_pipeline_factory().create(ds, effective_use_gpu, force)
-        for ds in datasets_to_process
-    ]
-
-    # Create observers
-    observers = {LoggingObserver()}
-
-    # Create executor with parallel workers and observer
-    executor = PipelineExecutor(
-        max_workers=n_jobs,
-        observers=observers,
-        default_action=Action.ABORT,
-    )
-
-    # Schedule all pipelines with empty initial state
-    for pipeline, context in pipelines:
-        initial_state: DataPipelineState = get_default_initial_state()
-        executor.schedule(pipeline, initial_state, context)
-
-    executor.start()
-
-    results = executor.wait()
-    failed = [result for result in results if not result.succeeded()]
-    if failed:
-        for result in failed:
-            if result.status == PipelineStatus.ABORTED:
-                logger.warning(f"Pipeline {result.pipeline_name} was aborted")
-            elif result.status == PipelineStatus.PANICKED:
-                logger.error(f"Pipeline {result.pipeline_name} panicked")
-            else:
-                error_details = result.last_error()
-                if error_details:
-                    logger.error(f"Pipeline {result.pipeline_name} failed: {error_details}")
+    if errors:
+        for dataset, error in errors:
+            logger.error(f"Error processing dataset {dataset}: {error}")
         raise typer.Exit(code=1)
 
     logger.success("All requested datasets processed successfully.")

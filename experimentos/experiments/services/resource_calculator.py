@@ -27,7 +27,7 @@ class ResourceCalculator:
         """
         self._safety_factor = safety_factor
 
-    def compute_safe_jobs(self, dataset_size_gb: float) -> int:
+    def compute_safe_jobs(self, dataset_size_gb: float, train_fraction: float = 0.70) -> int:
         """Calculate safe number of parallel jobs based on available RAM.
 
         The calculation considers:
@@ -37,7 +37,7 @@ class ResourceCalculator:
 
         Args:
             dataset_size_gb: Size of the dataset in GB.
-
+            train_fraction: Fraction of the dataset used for training.
         Returns:
             Safe number of parallel jobs (at least 1, at most CPU count).
         """
@@ -46,7 +46,7 @@ class ResourceCalculator:
 
         # Estimate peak memory required per worker
         # Only ~70% of data is loaded for training in splits
-        train_size_gb = dataset_size_gb * 0.70
+        train_size_gb = dataset_size_gb * train_fraction
         peak_memory_per_worker = train_size_gb * self._safety_factor
 
         # Avoid division by zero for tiny datasets

@@ -1,25 +1,21 @@
 from enum import Enum
-from typing import cast
 
 from experiments.core.data import (
-    DataRepository,
-    Dataset,
-    Transformer,
     TransformerRegistry,
     get_transformer_registry,
 )
-from experiments.core.modeling.features import extract_features_and_target
+from experiments.core.modeling.features import FeatureExtractor
 from experiments.lib.pipelines import Pipeline, Task, TaskResult, TaskStatus
-from experiments.pipelines.data.context import DataPipelineContext
+from experiments.pipelines.data.base import (
+    DataProcessingPipeline,
+    DataProcessingPipelineContext,
+    DataProcessingPipelineState,
+)
 from experiments.pipelines.data.exporters import (
     export_final_features_as_parquet,
     export_processed_data_as_parquet,
 )
 from experiments.pipelines.data.loaders import load_raw_data_from_csv
-from experiments.pipelines.data.state import DataPipelineState
-
-type DataProcessingPipeline = Pipeline[DataPipelineState, DataPipelineContext]
-"""Data processing pipeline type alias."""
 
 
 class DataProcessingPipelineSteps(Enum):
@@ -34,8 +30,8 @@ class DataProcessingPipelineSteps(Enum):
 
 
 def check_already_processed(
-    state: DataPipelineState, context: DataPipelineContext
-) -> TaskResult[DataPipelineState]:
+    state: DataProcessingPipelineState, context: DataProcessingPipelineContext
+) -> TaskResult[DataProcessingPipelineState]:
     dataset = context.dataset
     state["is_processed"] = context.data_repository.is_processed(dataset)
     return TaskResult(
@@ -45,7 +41,9 @@ def check_already_processed(
     )
 
 
-def run_if_not_processed(state: DataPipelineState, context: DataPipelineContext):
+def run_if_not_processed(
+    state: DataProcessingPipelineState, context: DataProcessingPipelineContext
+):
     if state.get("is_processed", True) and not context.force_overwrite:
         return False, "Data already processed; skipping step."
     return True, None
@@ -61,37 +59,29 @@ class DataProcessingPipelineFactory:
 
     def __init__(
         self,
-        data_repository: DataRepository,
+        feature_extractor: FeatureExtractor,
         transformer_registry: TransformerRegistry | None = None,
     ) -> None:
         """Initialize the factory.
 
         Args:
-            data_repository: The data repository for data operations.
             transformer_registry: Optional registry of transformers. If not provided, the global registry is used.
         """
-        self._data_repository = data_repository
-
-        # Use provided registry or get from global registration system
         self._transformer_registry = (
             transformer_registry
             if transformer_registry is not None
             else get_transformer_registry()
         )
+        self._feature_extractor = feature_extractor
 
     def create(
         self,
-        dataset: Dataset,
-        use_gpu: bool = False,
-        force_overwrite: bool = False,
-    ) -> tuple[DataProcessingPipeline, DataPipelineContext]:
+        name: str = "DataProcessingPipeline",
+    ) -> DataProcessingPipeline:
         """Create a pipeline configured for the specified dataset.
 
         Args:
-            dataset: The dataset to create a pipeline for.
-            use_gpu: Whether to enable GPU acceleration for transformations.
-            force_overwrite: Whether to overwrite existing processed data.
-            error_handlers: Optional mapping of pipeline steps to error handler functions.
+            name: The name of the pipeline.
 
         Returns:
             A configured `DataProcessingPipeline` instance.
@@ -100,19 +90,13 @@ class DataProcessingPipelineFactory:
             ValueError: If no transformer is registered for the dataset.
         """
 
-        context = DataPipelineContext(
-            dataset=dataset,
-            data_repository=self._data_repository,
-            use_gpu=use_gpu,
-            force_overwrite=force_overwrite,
-        )
-
-        pipeline = Pipeline[DataPipelineState, DataPipelineContext](
-            f"DataProcessingPipeline[dataset={dataset}]"
+        pipeline = Pipeline[DataProcessingPipelineState, DataProcessingPipelineContext](
+            name=name,
         )
 
         pipeline.add_step(
-            DataProcessingPipelineSteps.CHECK_ALREADY_PROCESSED.value, check_already_processed
+            DataProcessingPipelineSteps.CHECK_ALREADY_PROCESSED.value,
+            check_already_processed,
         )
         pipeline.add_conditional_step(
             DataProcessingPipelineSteps.LOAD_RAW_DATA.value,
@@ -121,7 +105,7 @@ class DataProcessingPipelineFactory:
         )
         pipeline.add_conditional_step(
             DataProcessingPipelineSteps.TRANSFORM_DATA.value,
-            self._create_transformer(dataset),
+            self._create_transformer(),
             run_if_not_processed,
         )
         pipeline.add_conditional_step(
@@ -140,17 +124,12 @@ class DataProcessingPipelineFactory:
             run_if_not_processed,
         )
 
-        return pipeline, context
+        return pipeline
 
     def _create_transformer(
         self,
-        dataset: Dataset,
-    ) -> Task[DataPipelineState, DataPipelineContext]:
+    ) -> Task[DataProcessingPipelineState, DataProcessingPipelineContext]:
         """Create a transformer step for the data processing pipeline.
-
-        Args:
-            dataset: The dataset to create the transformer for.
-            transformer_registry: Registry mapping dataset IDs to transformer classes.
 
         Returns:
             A Step that applies the appropriate transformer for the dataset.
@@ -158,32 +137,31 @@ class DataProcessingPipelineFactory:
         Raises:
             ValueError: If no transformer is registered for the dataset.
         """
-        transformer = self._transformer_registry.get(dataset)
-        if transformer is None:
-            raise ValueError(f"No transformer registered for dataset: '{dataset}'")
 
         def transform(
-            state: DataPipelineState, context: DataPipelineContext
-        ) -> TaskResult[DataPipelineState]:
+            state: DataProcessingPipelineState, context: DataProcessingPipelineContext
+        ) -> TaskResult[DataProcessingPipelineState]:
+            transformer = self._transformer_registry.get(context.dataset)
+            if transformer is None:
+                raise ValueError(f"No transformer registered for dataset: '{context.dataset}'")
+
             if state["raw_data"] is None:
                 return TaskResult(
                     state, TaskStatus.FAILURE, "No raw data found in state for transformation."
                 )
-            state["interim_data"] = cast(Transformer, transformer)(
-                state["raw_data"], context.use_gpu
-            )
+            state["interim_data"] = transformer(state["raw_data"], context.use_gpu)
             return TaskResult(state, TaskStatus.SUCCESS, "Data transformation successful.")
 
         return transform
 
     def _create_feature_extractor(
         self,
-    ) -> Task[DataPipelineState, DataPipelineContext]:
+    ) -> Task[DataProcessingPipelineState, DataProcessingPipelineContext]:
         """Create a feature extractor step for the data processing pipeline."""
 
         def extract_features(
-            state: DataPipelineState, context: DataPipelineContext
-        ) -> TaskResult[DataPipelineState]:
+            state: DataProcessingPipelineState, context: DataProcessingPipelineContext
+        ) -> TaskResult[DataProcessingPipelineState]:
             if state["interim_data"] is None:
                 return TaskResult(
                     state,
@@ -191,7 +169,9 @@ class DataProcessingPipelineFactory:
                     "No interim data found in state for feature extraction.",
                 )
 
-            state["X_final"], state["y_final"] = extract_features_and_target(state["interim_data"])
+            state["X_final"], state["y_final"] = (
+                self._feature_extractor.extract_features_and_target(state["interim_data"])
+            )
             return TaskResult(state, TaskStatus.SUCCESS, "Feature extraction successful.")
 
         return extract_features

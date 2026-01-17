@@ -254,3 +254,49 @@ class S3Storage:
             cache_path.unlink(missing_ok=True)
         except Exception as e:
             raise StorageError(key, str(e))
+
+
+def create_s3_client(
+    *,
+    aws_access_key_id: str | None = None,
+    aws_secret_access_key: str | None = None,
+    aws_session_token: str | None = None,
+    region_name: str | None = None,
+    endpoint_url: str | None = None,
+) -> "S3Client":
+    """Factory function to create a configured boto3 S3 client.
+
+    This function is used by the DI container to create the S3 client
+    that will be injected into S3StorageService.
+
+    Args:
+        aws_access_key_id: AWS access key ID. If None, uses environment/credentials.
+        aws_secret_access_key: AWS secret access key.
+        aws_session_token: AWS session token for temporary credentials.
+        region_name: AWS region name.
+        endpoint_url: Custom endpoint URL (for S3-compatible services).
+
+    Returns:
+        Configured boto3 S3 client.
+    """
+    import boto3
+
+    # Build boto3 session
+    session_kwargs: dict[str, Any] = {}
+    if aws_access_key_id:
+        session_kwargs["aws_access_key_id"] = aws_access_key_id
+    if aws_secret_access_key:
+        session_kwargs["aws_secret_access_key"] = aws_secret_access_key
+    if aws_session_token:
+        session_kwargs["aws_session_token"] = aws_session_token
+    if region_name:
+        session_kwargs["region_name"] = region_name
+
+    session = boto3.Session(**session_kwargs)
+
+    # Build client with optional endpoint
+    client_kwargs: dict[str, Any] = {}
+    if endpoint_url:
+        client_kwargs["endpoint_url"] = endpoint_url
+
+    return session.client("s3", **client_kwargs)

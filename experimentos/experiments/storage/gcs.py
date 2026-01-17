@@ -132,7 +132,7 @@ class GCSStorage:
 
         try:
             blob.reload()
-            return blob.size
+            return int(blob.size or 0)
         except NotFound:
             raise FileDoesNotExistError(key)
         except Exception as e:
@@ -284,3 +284,36 @@ class GCSStorage:
             cache_path.unlink(missing_ok=True)
         except Exception as e:
             raise StorageError(key, str(e))
+
+
+def create_gcs_client(
+    *,
+    project: str | None = None,
+    credentials_file: str | None = None,
+) -> "GCSClient":
+    """Factory function to create a configured GCS client.
+
+    This function is used by the DI container to create the GCS client
+    that will be injected into GCSStorageService.
+
+    Args:
+        project: GCP project ID.
+        credentials_file: Path to service account JSON file.
+
+    Returns:
+        Configured GCS client.
+    """
+    from google.cloud import storage as gcs_storage
+
+    client_kwargs: dict[str, Any] = {}
+    if project:
+        client_kwargs["project"] = project
+
+    if credentials_file:
+        from google.oauth2 import service_account
+
+        client_kwargs["credentials"] = service_account.Credentials.from_service_account_file(
+            credentials_file
+        )
+
+    return gcs_storage.Client(**client_kwargs)

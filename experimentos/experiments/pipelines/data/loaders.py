@@ -1,11 +1,15 @@
+"""Data loading tasks for data processing pipelines."""
+
 from experiments.lib.pipelines import TaskResult, TaskStatus
-from experiments.pipelines.data.context import DataPipelineContext
-from experiments.pipelines.data.state import DataPipelineState
+from experiments.pipelines.data.base import (
+    DataProcessingPipelineContext,
+    DataProcessingPipelineState,
+)
 
 
 def load_raw_data_from_csv(
-    state: DataPipelineState, context: DataPipelineContext
-) -> TaskResult[DataPipelineState]:
+    state: DataProcessingPipelineState, context: DataProcessingPipelineContext
+) -> TaskResult[DataProcessingPipelineState]:
     """Load raw data from CSV and update the pipeline state.
 
     Args:
