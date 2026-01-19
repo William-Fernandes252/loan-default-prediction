@@ -9,7 +9,7 @@ from typing import Optional, Tuple
 from git import Repo
 from git.exc import GitCommandError, InvalidGitRepositoryError, NoSuchPathError
 
-from experiments.settings import PathSettings
+from experiments.config.settings import PathSettings
 
 
 def _get_default_project_root() -> Path:

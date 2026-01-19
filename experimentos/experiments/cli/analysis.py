@@ -19,7 +19,6 @@ from experiments.core.analysis.pipeline import AnalysisPipelineFactory
 from experiments.core.analysis.protocols import TranslationFunc
 from experiments.core.data import Dataset
 from experiments.services.storage_manager import StorageManager
-from experiments.settings import PathSettings
 
 
 class _Language(enum.Enum):
@@ -81,7 +80,7 @@ class _OutputPathProvider:
     to determine output directories based on language setting.
     """
 
-    def __init__(self, path_settings: PathSettings, language: _Language) -> None:
+    def __init__(self, path_settings, language: _Language) -> None:
         """Initialize the provider.
 
         Args:
@@ -117,7 +116,7 @@ class _OutputPathProvider:
 
 def _create_pipeline_factory(
     storage_manager: StorageManager,
-    path_settings: PathSettings,
+    path_settings,
     language: _Language,
     translate: TranslationFunc,
 ) -> AnalysisPipelineFactory:

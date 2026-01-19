@@ -4,11 +4,9 @@ import typer
 
 from .analysis import app as analysis
 from .data import app as data
-from .predict import app as predict
-from .train import app as train
+from .models import app as models
 
 app = typer.Typer()
 app.add_typer(data, name="data", help="Data ingestion and preprocessing commands.")
-app.add_typer(train, name="train", help="Model training and evaluation commands.")
-app.add_typer(predict, name="predict", help="Prediction commands.")
 app.add_typer(analysis, name="analyze", help="Results analysis and visualization commands.")
+app.add_typer(models, name="models", help="Model management commands.")

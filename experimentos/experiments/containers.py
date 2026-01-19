@@ -16,12 +16,18 @@ from experiments.lib.pipelines.execution import PipelineExecutor
 from experiments.pipelines.data import (
     DataProcessingPipelineFactory as NewDataProcessingPipelineFactory,
 )
+from experiments.pipelines.training.factory import TrainingPipelineFactory
 from experiments.services.data_manager import DataManager
 from experiments.services.data_repository import DataStorageLayout, StorageDataRepository
 from experiments.services.feature_extractor import FeatureExtractorImpl
 from experiments.services.grid_search_trainer import GridSearchModelTrainer
+from experiments.services.model_repository import ModelStorageRepository
+from experiments.services.model_versioning import ModelVersioner
 from experiments.services.resource_calculator import ResourceCalculator
-from experiments.services.umbalanced_learner_factory import UnbalancedLearnerFactory
+from experiments.services.seed_generator import generate_seed
+from experiments.services.stratified_data_splitter import StratifiedDataSplitter
+from experiments.services.training_executor import TrainingExecutor
+from experiments.services.unbalanced_learner_factory import UnbalancedLearnerFactory
 from experiments.storage import GCSStorage, LocalStorage, S3Storage, Storage
 
 
@@ -124,11 +130,10 @@ class Container(containers.DeclarativeContainer):
     Services are accessed via the container singleton instance.
     """
 
+    # --- Configuration Settings ---
+
     settings = providers.Singleton(LdpSettings)
     """Application config loaded from environment/.env."""
-
-    logger = providers.Object(logger)
-    """Global logger instance."""
 
     # --- Cloud Clients (lazily initialized based on provider) ---
 
@@ -161,63 +166,96 @@ class Container(containers.DeclarativeContainer):
 
     # --- Core Services ---
 
-    resource_calculator = providers.Singleton(
+    _resource_calculator = providers.Singleton(
         ResourceCalculator,
         safety_factor=settings.provided.resources.safety_factor,
     )
     """Resource calculator service."""
 
-    classifier_factory = providers.Singleton(
+    _pipeline_executor = providers.Singleton(
+        PipelineExecutor,
+        observers={LoggingObserver()},
+    )
+    """Pipeline executor service."""
+
+    _classifier_factory = providers.Singleton(
         UnbalancedLearnerFactory,
         use_gpu=settings.provided.resources.use_gpu,
     )
     """Factory for creating unbalanced learner classifiers."""
 
-    model_trainer = providers.Singleton(
+    _model_trainer = providers.Singleton(
         GridSearchModelTrainer,
         cv_folds=settings.provided.experiment.cv_folds,
         cost_grids=settings.provided.experiment.cost_grids,
     )
     """Model trainer service for training and hyperparameter tuning."""
 
-    data_repository = providers.Singleton(
+    _data_splitter = providers.Singleton(
+        StratifiedDataSplitter,
+        cv_folds=settings.provided.experiment.cv_folds,
+    )
+
+    _data_repository = providers.Singleton(
         StorageDataRepository,
         storage=_storage,
         data_layout=providers.Singleton(DataStorageLayout),
     )
     """Data repository service for dataset storage and retrieval."""
 
-    resource_calculator = providers.Singleton(
-        ResourceCalculator,
-        safety_factor=settings.provided.resources.safety_factor,
-    )
-    """Resource calculator service."""
-
     _data_layout = providers.Singleton(DataStorageLayout)
     """Data layout configuration."""
 
-    data_repository = providers.Singleton(
-        StorageDataRepository,
-        storage=_storage,
-        data_layout=_data_layout,
-    )
-    """Data repository service for dataset storage and retrieval."""
-
-    data_processing_pipeline_factory = providers.Singleton(
+    _data_processing_pipeline_factory = providers.Singleton(
         NewDataProcessingPipelineFactory,
         feature_extractor=providers.Singleton(FeatureExtractorImpl),
     )
     """Factory for creating data processing pipelines."""
 
+    _training_pipeline_factory = providers.Singleton(
+        TrainingPipelineFactory,
+    )
+
+    _model_repository = providers.Singleton(
+        ModelStorageRepository,
+        storage=_storage,
+    )
+
     data_manager = providers.Singleton(
         DataManager,
-        data_pipeline_factory=data_processing_pipeline_factory,
-        data_repository=data_repository,
-        pipeline_executor=providers.Singleton(PipelineExecutor, observers={LoggingObserver()}),
-        resource_calculator=resource_calculator,
+        data_pipeline_factory=_data_processing_pipeline_factory,
+        data_repository=_data_repository,
+        pipeline_executor=_pipeline_executor,
+        resource_calculator=_resource_calculator,
         resource_settings=settings.provided.resources,
     )
     """Data manager service for handling dataset processing."""
+
+    training_executor = providers.Singleton(
+        TrainingExecutor,
+        training_pipeline_factory=_training_pipeline_factory,
+        pipeline_executor=_pipeline_executor,
+        model_trainer=_model_trainer,
+        data_splitter=_data_splitter,
+        training_data_loader=_data_repository,
+        classifier_factory=_classifier_factory,
+        seed_generator=generate_seed,
+    )
+    """Training executor service for model training and evaluation."""
+
+    model_versioner = providers.Singleton(
+        ModelVersioner,
+        model_repository=_model_repository,
+        training_executor=training_executor,
+    )
+    """Model versioning service for managing model versions."""
+
+    def init_resources(self, *args, **kwargs) -> Any:
+        super().init_resources(*args, **kwargs)
+
+        if self.settings().debug:
+            logger.debug("Application is running in DEBUG mode.")
+            logger.debug(f"Settings: {self.settings()}")
 
 
 def create_container() -> Container:

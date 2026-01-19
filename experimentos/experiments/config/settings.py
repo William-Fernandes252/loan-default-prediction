@@ -193,6 +193,9 @@ class ResourceSettings(BaseSettings):
     use_gpu: Annotated[bool, Field(default=False)]
     """Whether to use GPU for model training if available."""
 
+    n_jobs: Annotated[int, Field(default=1)]
+    """Default number of parallel jobs for processing."""
+
 
 class LdpSettings(BaseSettings):
     """Root settings class that composes all settings groups."""
@@ -207,3 +210,5 @@ class LdpSettings(BaseSettings):
     experiment: ExperimentSettings = Field(default_factory=ExperimentSettings)
     resources: ResourceSettings = Field(default_factory=ResourceSettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)
+    debug: Annotated[bool, Field(default=False)]
+    """Debug mode flag."""

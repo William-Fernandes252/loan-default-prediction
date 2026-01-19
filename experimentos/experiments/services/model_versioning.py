@@ -1,22 +1,18 @@
 """
 Utilities for models persistence, loading and versioning.
 
-This module provides a factory for creating model versioning services
-that handle saving, loading, and versioning of machine learning models
-based on dataset, model type, and technique.
+This module provides a service for managing models, including saving, loading, and listing model versions.
 """
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime, timezone
-import json
-from pathlib import Path
-from typing import Any, Protocol
+from datetime import datetime
+from typing import NamedTuple, Protocol
 
-import joblib
-from uuid_extensions import uuid7
-
-from experiments.core.modeling.types import ModelType, Technique
+from experiments.core.data.datasets import Dataset
+from experiments.core.modeling.classifiers import Classifier, ModelType, Technique
+from experiments.core.training.trainers import TrainedModel
+from experiments.services.training_executor import TrainingExecutor, TrainModelParams
 
 
 class ModelNotFoundError(Exception):
@@ -33,16 +29,6 @@ class ModelSaveError(Exception):
         super().__init__(f"Failed to save model '{model_name}': {reason}")
 
 
-class Classifier(Protocol):
-    """Protocol for classifier models, based on scikit-learn."""
-
-    def fit(self, X: Any, y: Any) -> None: ...
-
-    def predict(self, X: Any) -> Any: ...
-
-    def predict_proba(self, X: Any) -> Any: ...
-
-
 @dataclass(frozen=True, slots=True)
 class ModelVersion:
     """Represents a specific version of a model."""
@@ -51,13 +37,30 @@ class ModelVersion:
     created_at: datetime
     type: ModelType
     technique: Technique
-    dataset: str
+    dataset: Dataset
+
+
+class ModelVersionListResult(NamedTuple):
+    """Result of listing model versions."""
+
+    versions: Iterable[ModelVersion]
+    total_count: int
 
 
 class ModelRepository(Protocol):
     """Protocol for model repository operations."""
 
-    def save_model(self, model: Classifier, id: str | None) -> ModelVersion:
+    def save_model(
+        self,
+        model: Classifier,
+        id: str | None,
+        *,
+        dataset: Dataset,
+        model_type: ModelType,
+        technique: Technique,
+        params: dict,
+        seed: int,
+    ) -> ModelVersion:
         """Saves a model and returns its version information.
 
         Args:
@@ -66,22 +69,52 @@ class ModelRepository(Protocol):
         """
         ...
 
-    def load_model(self, id: str) -> Classifier: ...
+    def load_model(self, id: str) -> TrainedModel:
+        """Loads a model by its identifier.
 
-    def list_models(self) -> Iterable[ModelVersion]: ...
+        Args:
+            id (str): The identifier of the model to load.
+
+        Returns:
+            TrainedModel: The loaded model.
+        """
+        ...
+
+    def list_models(self) -> ModelVersionListResult:
+        """Lists all models in the repository.
+
+        Returns:
+            ModelVersionListResult: The list of model versions and total count.
+        """
+        ...
 
 
-class ModelVersioningService(Protocol):
-    """Protocol for model versioning services."""
+class ModelVersioner:
+    """Service for managing model versions."""
 
-    def get_latest_version(self, model_type: ModelType, technique: Technique) -> ModelVersion:
+    def __init__(
+        self,
+        model_repository: ModelRepository,
+        training_executor: TrainingExecutor,
+    ) -> None:
+        self.repository = model_repository
+        self._training_executor = training_executor
+
+    def get_latest_version(
+        self, model_type: ModelType, technique: Technique
+    ) -> tuple[TrainedModel, ModelVersion]:
         """Retrieves the latest version of a specified model.
 
         Args:
             model_type (ModelType): The type of the model.
             technique (Technique): The technique used by the model.
         """
-        ...
+        versions = list(self.list_versions(model_type, technique))
+        if not versions:
+            raise ModelNotFoundError(f"{model_type}:{technique}")
+        latest_version = versions[0]
+        latest_model = self.repository.load_model(latest_version.id)
+        return latest_model, latest_version
 
     def list_versions(self, model_type: ModelType, technique: Technique) -> Iterable[ModelVersion]:
         """Lists all versions of a specified model.
@@ -90,155 +123,35 @@ class ModelVersioningService(Protocol):
             model_type (ModelType): The type of the model.
             technique (Technique): The technique used by the model.
         """
-        ...
-
-    def save_model(self, model: Classifier, id: str | None) -> ModelVersion:
-        """Saves a model and returns its version information.
-
-        Args:
-            model (Classifier): The model to save.
-            id (str | None): Optional identifier for the model. If None, a new ID is generated.
-        """
-        ...
-
-
-class FileSystemModelRepository(ModelRepository):
-    """A simple file system-based model repository implementation."""
-
-    _MODEL_EXTENSION = ".joblib"
-    _METADATA_EXTENSION = ".json"
-
-    def __init__(self, base_path: Path, dataset: str, model_type: ModelType, technique: Technique):
-        self.base_path = base_path
-        self.dataset = dataset
-        self.model_type = model_type
-        self.technique = technique
-        self._model_dir = self.base_path / dataset / model_type.id / technique.id
-        self._model_dir.mkdir(parents=True, exist_ok=True)
-
-    def save_model(self, model: Classifier, id: str | None) -> ModelVersion:
-        model_id = id or uuid7().hex
-        created_at = datetime.now(timezone.utc)
-        model_path = self._model_dir / f"{model_id}{self._MODEL_EXTENSION}"
-        metadata_path = self._model_dir / f"{model_id}{self._METADATA_EXTENSION}"
-
-        try:
-            joblib.dump(model, model_path)
-            metadata = {
-                "id": model_id,
-                "created_at": created_at.isoformat(),
-                "type": self.model_type.id,
-                "technique": self.technique.id,
-                "dataset": self.dataset,
-            }
-            metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
-        except Exception as exc:  # pragma: no cover - defensive catch for IO errors
-            if model_path.exists():
-                model_path.unlink(missing_ok=True)
-            metadata_path.unlink(missing_ok=True)
-            raise ModelSaveError(model_id, str(exc)) from exc
-
-        return ModelVersion(
-            id=model_id,
-            created_at=created_at,
-            type=self.model_type,
-            technique=self.technique,
-            dataset=self.dataset,
-        )
-
-    def load_model(self, id: str) -> Classifier:
-        model_path = self._model_dir / f"{id}{self._MODEL_EXTENSION}"
-        if not model_path.exists():
-            raise ModelNotFoundError(id)
-        try:
-            return joblib.load(model_path)
-        except Exception as exc:  # pragma: no cover - defensive catch for IO errors
-            raise ModelSaveError(id, f"Could not load model: {exc}") from exc
-
-    def list_models(self) -> Iterable[ModelVersion]:
-        versions: list[ModelVersion] = []
-        for metadata_file in self._model_dir.glob(f"*{self._METADATA_EXTENSION}"):
-            try:
-                data = json.loads(metadata_file.read_text(encoding="utf-8"))
-                created_at_str = data["created_at"]
-                model_id = data["id"]
-                created_at = datetime.fromisoformat(created_at_str)
-            except (KeyError, ValueError, json.JSONDecodeError):
-                continue
-
-            versions.append(
-                ModelVersion(
-                    id=model_id,
-                    created_at=created_at,
-                    type=self.model_type,
-                    technique=self.technique,
-                    dataset=data.get("dataset", self.dataset),
-                )
-            )
-
-        return sorted(versions, key=lambda mv: mv.created_at, reverse=True)
-
-
-class ModelVersioningServiceImpl(ModelVersioningService):
-    """A simple implementation of the ModelVersioningService."""
-
-    def __init__(self, repository: ModelRepository):
-        self.repository = repository
-
-    def get_latest_version(self, model_type: ModelType, technique: Technique) -> ModelVersion:
-        versions = list(self.list_versions(model_type, technique))
-        if not versions:
-            raise ModelNotFoundError(f"{model_type.id}:{technique.id}")
-        return versions[0]
-
-    def list_versions(self, model_type: ModelType, technique: Technique) -> Iterable[ModelVersion]:
         versions = [
             version
-            for version in self.repository.list_models()
+            for version in self.repository.list_models().versions
             if version.type == model_type and version.technique == technique
         ]
         return sorted(versions, key=lambda mv: mv.created_at, reverse=True)
 
-    def save_model(self, model: Classifier, id: str | None) -> ModelVersion:
-        return self.repository.save_model(model, id)
-
-
-class ModelVersioningServiceFactory:
-    """Factory for creating ModelVersioningService instances.
-
-    This factory creates versioning services configured for specific
-    dataset/model/technique combinations, implementing the
-    ModelVersioningProvider protocol.
-    """
-
-    def __init__(self, models_dir: Path) -> None:
-        """Initialize the factory.
-
-        Args:
-            models_dir: Root directory for model storage.
-        """
-        self._models_dir = models_dir
-
-    def get_model_versioning_service(
+    def train_new_version(
         self,
-        dataset_id: str,
-        model_type: ModelType,
-        technique: Technique,
-    ) -> ModelVersioningService:
-        """Create a ModelVersioningService for the given configuration.
+        params: TrainModelParams,
+    ) -> tuple[TrainedModel, ModelVersion]:
+        """Trains a new model version and saves it to the repository.
 
         Args:
-            dataset_id: The dataset identifier.
-            model_type: The type of model.
-            technique: The technique for handling class imbalance.
+            params (TrainModelParams): Parameters for training the model.
 
         Returns:
-            A configured ModelVersioningService instance.
+            tuple[TrainedModel, ModelVersion]: The trained model and its version information.
         """
-        repo = FileSystemModelRepository(
-            self._models_dir,
-            dataset_id,
-            model_type,
-            technique,
+        trained_model = self._training_executor.train_model(params)
+
+        model_version = self.repository.save_model(
+            model=trained_model.model,
+            id=None,
+            dataset=params.dataset,
+            model_type=params.model_type,
+            technique=params.technique,
+            params=trained_model.params,
+            seed=trained_model.seed,
         )
-        return ModelVersioningServiceImpl(repo)
+
+        return trained_model, model_version

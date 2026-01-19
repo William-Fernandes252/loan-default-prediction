@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import polars as pl
 
 from experiments.core.data import Dataset
+from experiments.core.training.data import TrainingData
 from experiments.storage import Storage
 
 
@@ -35,7 +36,7 @@ class DataStorageLayout:
 class StorageDataRepository:
     """Repository for data management using a storage backend.
 
-    It implements the DataRepository protocol to fetch and save dataset information using the provided storage system.
+    It implements the protocols to fetch and save dataset information using the provided storage system.
 
     Args:
         storage (Storage): The storage backend to use for data operations.
@@ -71,3 +72,9 @@ class StorageDataRepository:
         X_key, y_key = self._data_layout.get_features_and_target_keys(dataset)
         self._storage.write_parquet(X, X_key)
         self._storage.write_parquet(y, y_key)
+
+    def load_training_data(self, dataset: Dataset) -> TrainingData:
+        X_key, y_key = self._data_layout.get_features_and_target_keys(dataset)
+        X = self._storage.scan_parquet(X_key)
+        y = self._storage.scan_parquet(y_key)
+        return TrainingData(X=X, y=y)

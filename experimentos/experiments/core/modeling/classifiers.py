@@ -1,6 +1,7 @@
 """Custom estimators for cost-sensitive classification."""
 
-from typing import Any, Optional, cast
+import enum
+from typing import Any, Optional, Protocol, cast
 
 import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
@@ -12,6 +13,7 @@ from xgboost import XGBClassifier
 
 try:
     import cuml
+    from cuml.ensemble import RandomForestClassifier as CuRF
     from cuml.svm import SVC as CuSVC
 
     cuml.set_global_output_type("numpy")
@@ -219,3 +221,75 @@ class MetaCostClassifier(ClassifierMixin, BaseEstimator):
             return new_probas
 
         return probas
+
+
+class ModelType(enum.StrEnum):
+    """Types of models used in experiments."""
+
+    RANDOM_FOREST = "random_forest"
+    SVM = "svm"
+    XGBOOST = "xgboost"
+    MLP = "mlp"
+
+
+class Technique(enum.StrEnum):
+    """Types of techniques used in experiments."""
+
+    BASELINE = "baseline"
+    SMOTE = "smote"
+    RANDOM_UNDER_SAMPLING = "random_under_sampling"
+    SMOTE_TOMEK = "smote_tomek"
+    META_COST = "meta_cost"
+    CS_SVM = "cs_svm"
+
+
+class Classifier(Protocol):
+    """Protocol for classifier models, based on scikit-learn."""
+
+    def fit(self, X: Any, y: Any) -> None: ...
+
+    def predict(self, X: Any) -> Any: ...
+
+    def predict_proba(self, X: Any) -> Any: ...
+
+
+class ClassifierFactory(Protocol):
+    """Creates classifiers from model type and technique."""
+
+    def create_model(
+        self,
+        model_type: ModelType,
+        technique: Technique,
+        seed: int,
+        use_gpu: bool | None = None,
+        n_jobs: int = 1,
+    ) -> Classifier:
+        """Create a classifier for the given model type and technique.
+
+        Args:
+            model_type: Type of model to create.
+            technique: Technique for handling class imbalance.
+            seed: Random seed for reproducibility.
+            use_gpu: Whether to use GPU for training. Defaults to `None`, which means using the environment setting.
+            n_jobs: Number of parallel jobs for training. Defaults to `1`.
+
+        Returns:
+            The configured classifier.
+
+        Raises:
+            ValueError: If the model type is unknown.
+        """
+        ...
+
+
+__all__ = [
+    "CuRF",
+    "MetaCostClassifier",
+    "RobustSVC",
+    "RobustXGBClassifier",
+    "ModelType",
+    "Technique",
+    "Classifier",
+    "ClassifierFactory",
+    "HAS_CUML",
+]

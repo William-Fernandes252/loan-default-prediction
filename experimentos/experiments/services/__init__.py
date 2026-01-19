@@ -1,39 +1,4 @@
-"""Services module for experiments application.
+"""Services package for experiments application.
 
-This module provides various services for the experiments application,
-including path management, resource calculation, model versioning, and data management.
+This package contains implementations of various services and procedures necessary to support the experiments application, including data management, model training, and resource calculation.
 """
-
-from experiments.services.data_manager import ExperimentDataManager
-from experiments.services.model_versioning import (
-    Classifier,
-    FileSystemModelRepository,
-    ModelNotFoundError,
-    ModelRepository,
-    ModelSaveError,
-    ModelVersion,
-    ModelVersioningService,
-    ModelVersioningServiceFactory,
-    ModelVersioningServiceImpl,
-)
-from experiments.services.path_manager import PathManager
-from experiments.services.resource_calculator import ResourceCalculator
-
-__all__ = [
-    # Path management
-    "PathManager",
-    # Resource calculation
-    "ResourceCalculator",
-    # Model versioning
-    "ModelVersioningServiceFactory",
-    "ModelVersioningService",
-    "ModelVersioningServiceImpl",
-    "ModelRepository",
-    "FileSystemModelRepository",
-    "ModelVersion",
-    "ModelNotFoundError",
-    "ModelSaveError",
-    "Classifier",
-    # Data management
-    "ExperimentDataManager",
-]
