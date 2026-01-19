@@ -2,7 +2,7 @@
 
 from experiments.core.training.trainers import ModelTrainRequest
 from experiments.lib.pipelines import Pipeline, TaskResult, TaskStatus
-from experiments.pipelines.training.base import (
+from experiments.pipelines.training.pipeline import (
     TrainingPipeline,
     TrainingPipelineContext,
     TrainingPipelineState,

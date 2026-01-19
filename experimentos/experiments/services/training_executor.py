@@ -10,8 +10,8 @@ from experiments.core.training.data import TrainingDataLoader
 from experiments.core.training.splitters import DataSplitter
 from experiments.core.training.trainers import ModelTrainer, TrainedModel
 from experiments.lib.pipelines import PipelineExecutor
-from experiments.pipelines.training.base import TrainingPipelineContext, TrainingPipelineState
 from experiments.pipelines.training.factory import TrainingPipelineFactory
+from experiments.pipelines.training.pipeline import TrainingPipelineContext, TrainingPipelineState
 
 if TYPE_CHECKING:
     from experiments.pipelines.training.factory import TrainingPipelineFactory
