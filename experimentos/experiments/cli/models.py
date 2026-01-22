@@ -1,3 +1,5 @@
+import csv
+from sys import stdout
 from typing import Annotated
 
 import typer
@@ -42,3 +44,36 @@ def train_model(
         )
     )
     typer.secho(f"Trained model version: {version.id}", fg=typer.colors.GREEN)
+
+
+@app.command("predict")
+def run_inference(
+    dataset: Annotated[
+        Dataset,
+        typer.Argument(
+            help="Dataset to use for running inference.",
+        ),
+    ],
+    output: Annotated[
+        typer.FileTextWrite | None,
+        typer.Option("-o", "--output", help="Output file for predictions. Defaults to `stdout`."),
+    ],
+    model_id: Annotated[
+        str | None,
+        typer.Option(
+            "-m",
+            "--model-id",
+            help="Identifier of the model to use for predictions. If not provided, the latest model will be used.",
+        ),
+    ] = None,
+):
+    """Run inference on the specified dataset using an optional model identifier."""
+    inference_service = container.inference_service()
+    result = inference_service.run_inference_on_test_set(dataset, model_id=model_id)
+
+    writer = csv.writer(output or stdout)
+    writer.writerow(["prediction"])
+    for prediction in result.predictions:
+        writer.writerow([prediction])
+
+    typer.secho("Predictions saved successfully.", fg=typer.colors.GREEN)
