@@ -41,12 +41,12 @@ class LocalStorage:
             raise StorageError(key, str(e))
 
     def list_files(self, prefix: str, pattern: str = "*") -> Iterator[FileInfo]:
-        """List files based on a prefix and optional glob pattern."""
+        """List files recursively based on a prefix and optional glob pattern."""
         prefix_path = self._full_path(prefix)
         if not prefix_path.exists():
             return
 
-        for path in prefix_path.glob(pattern):
+        for path in prefix_path.rglob(pattern):
             if path.is_file():
                 stat = path.stat()
                 key = str(path.relative_to(self._base_path))
