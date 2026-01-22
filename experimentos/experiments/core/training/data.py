@@ -27,5 +27,8 @@ class TrainingDataLoader(Protocol):
 
         Returns:
             A dictionary containing the training data splits.
+
+        Raises:
+            ValueError: If the dataset is not found or cannot be loaded.
         """
         ...

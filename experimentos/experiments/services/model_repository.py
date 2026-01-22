@@ -12,6 +12,8 @@ from experiments.services.model_versioning import (
     ModelNotFoundError,
     ModelVersion,
     ModelVersionListResult,
+    ModelVersionRetrieveResult,
+    ModelVersionsQuery,
 )
 from experiments.storage import Storage
 from experiments.storage.errors import FileDoesNotExistError
@@ -138,36 +140,16 @@ class ModelStorageRepository:
             dataset=dataset,
         )
 
-    def load_model(self, id: str) -> TrainedModel:
-        """Loads a model from the storage backend.
+    def list_models(
+        self,
+        dataset: Dataset,
+        params: ModelVersionsQuery | None = None,
+    ) -> ModelVersionListResult:
+        """Lists all models in the repository for a given dataset.
 
         Args:
-            id: The identifier of the model to load.
-
-        Returns:
-            TrainedModel: The loaded model.
-
-        Raises:
-            ModelNotFoundError: If no model with the given ID is found.
-        """
-        # Search for the model across all datasets, model types, and techniques
-        for file_info in self._storage.list_files(self._layout.model_prefix, "*.joblib"):
-            parsed = self._layout.parse_model_key(file_info.key)
-            if parsed and parsed["model_id"] == id:
-                try:
-                    stored_model: StoredModel = self._storage.read_joblib(file_info.key)
-                    return TrainedModel(
-                        model=stored_model.model,
-                        params=stored_model.params,
-                        seed=stored_model.seed,
-                    )
-                except FileDoesNotExistError:
-                    raise ModelNotFoundError(id)
-
-        raise ModelNotFoundError(id)
-
-    def list_models(self) -> ModelVersionListResult:
-        """Lists all models in the repository.
+            dataset: The dataset to filter models by.
+            params: Optional query parameters to filter by model type and technique.
 
         Returns:
             ModelVersionListResult: The list of model versions and total count.
@@ -176,22 +158,88 @@ class ModelStorageRepository:
 
         for file_info in self._storage.list_files(self._layout.model_prefix, "*.joblib"):
             parsed = self._layout.parse_model_key(file_info.key)
-            if parsed:
-                try:
-                    dataset = Dataset(parsed["dataset"])
-                    model_type = ModelType(parsed["model_type"])
-                    technique = Technique(parsed["technique"])
+            if not parsed:
+                continue
 
-                    version = ModelVersion(
-                        id=parsed["model_id"],
-                        created_at=file_info.last_modified or datetime.now(timezone.utc),
-                        type=model_type,
-                        technique=technique,
-                        dataset=dataset,
-                    )
-                    versions.append(version)
-                except ValueError:
-                    # Skip files that don't match valid enum values
-                    continue
+            # Filter by dataset
+            if parsed["dataset"] != dataset.value:
+                continue
+
+            try:
+                model_type = ModelType(parsed["model_type"])
+                technique = Technique(parsed["technique"])
+
+                # Apply optional filters from params
+                if params:
+                    if params.model_type is not None and model_type != params.model_type:
+                        continue
+                    if params.technique is not None and technique != params.technique:
+                        continue
+
+                version = ModelVersion(
+                    id=parsed["model_id"],
+                    created_at=file_info.last_modified or datetime.now(timezone.utc),
+                    type=model_type,
+                    technique=technique,
+                    dataset=dataset,
+                )
+                versions.append(version)
+            except ValueError:
+                # Skip files that don't match valid enum values
+                continue
 
         return ModelVersionListResult(versions=versions, total_count=len(versions))
+
+    def get_version(self, dataset: Dataset, id: str) -> ModelVersionRetrieveResult:
+        """Retrieves a specific model version for a dataset by its identifier.
+
+        Args:
+            dataset: The dataset associated with the model version.
+            id: The identifier of the model version.
+
+        Returns:
+            ModelVersionRetrieveResult: The model version and its trained model.
+
+        Raises:
+            ModelNotFoundError: If no model is found for the given identifier and dataset.
+        """
+        # Search for the model within the specified dataset
+        for file_info in self._storage.list_files(self._layout.model_prefix, "*.joblib"):
+            parsed = self._layout.parse_model_key(file_info.key)
+            if not parsed:
+                continue
+
+            if parsed["dataset"] != dataset.value:
+                continue
+
+            if parsed["model_id"] != id:
+                continue
+
+            try:
+                model_type = ModelType(parsed["model_type"])
+                technique = Technique(parsed["technique"])
+
+                stored_model: StoredModel = self._storage.read_joblib(file_info.key)
+
+                version = ModelVersion(
+                    id=id,
+                    created_at=file_info.last_modified or datetime.now(timezone.utc),
+                    type=model_type,
+                    technique=technique,
+                    dataset=dataset,
+                )
+
+                trained_model = TrainedModel(
+                    model=stored_model.model,
+                    params=stored_model.params,
+                    seed=stored_model.seed,
+                )
+
+                return ModelVersionRetrieveResult(version=version, model=trained_model)
+            except FileDoesNotExistError:
+                raise ModelNotFoundError(id)
+            except ValueError:
+                # Invalid enum values in the file path
+                continue
+
+        raise ModelNotFoundError(id)

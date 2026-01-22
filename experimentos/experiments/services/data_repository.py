@@ -75,6 +75,10 @@ class StorageDataRepository:
 
     def load_training_data(self, dataset: Dataset) -> TrainingData:
         X_key, y_key = self._data_layout.get_features_and_target_keys(dataset)
-        X = self._storage.scan_parquet(X_key)
-        y = self._storage.scan_parquet(y_key)
-        return TrainingData(X=X, y=y)
+        try:
+            X = self._storage.scan_parquet(X_key)
+            y = self._storage.scan_parquet(y_key)
+        except FileNotFoundError as e:
+            raise ValueError("Training data not found for the given dataset.") from e
+        else:
+            return TrainingData(X=X, y=y)

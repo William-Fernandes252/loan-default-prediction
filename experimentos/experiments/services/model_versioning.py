@@ -4,10 +4,11 @@ Utilities for models persistence, loading and versioning.
 This module provides a service for managing models, including saving, loading, and listing model versions.
 """
 
-from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import NamedTuple, Protocol
+from typing import Annotated, Protocol
+
+from pydantic import UUID7, BaseModel, Field
 
 from experiments.core.data.datasets import Dataset
 from experiments.core.modeling.classifiers import Classifier, ModelType, Technique
@@ -29,22 +30,74 @@ class ModelSaveError(Exception):
         super().__init__(f"Failed to save model '{model_name}': {reason}")
 
 
-@dataclass(frozen=True, slots=True)
-class ModelVersion:
+class ModelVersion(BaseModel):
     """Represents a specific version of a model."""
 
-    id: str
-    created_at: datetime
-    type: ModelType
-    technique: Technique
-    dataset: Dataset
+    id: Annotated[
+        UUID7,
+        Field(
+            json_schema_extra={"description": "Unique identifier for the model version."},
+        ),
+    ]
+    created_at: Annotated[
+        datetime,
+        Field(
+            json_schema_extra={
+                "description": "The timestamp when the model version was created.",
+            }
+        ),
+    ]
+    type: Annotated[
+        ModelType,
+        Field(json_schema_extra={"description": "The type of model."}),
+    ]
+    technique: Annotated[
+        Technique,
+        Field(json_schema_extra={"description": "The technique used to handle class imbalance."}),
+    ]
+    dataset: Annotated[
+        Dataset,
+        Field(json_schema_extra={"description": "The dataset associated with the model version."}),
+    ]
 
 
-class ModelVersionListResult(NamedTuple):
+class ModelVersionsQuery(BaseModel):
+    """Query parameters for listing model versions."""
+
+    model_type: Annotated[
+        ModelType | None,
+        Field(json_schema_extra={"description": "The type of model used."}),
+    ] = None
+    technique: Annotated[
+        Technique | None,
+        Field(
+            json_schema_extra={"description": "The technique used to handle class imbalance."},
+        ),
+    ] = None
+
+
+class ModelVersionListResult(BaseModel):
     """Result of listing model versions."""
 
-    versions: Iterable[ModelVersion]
-    total_count: int
+    versions: Annotated[
+        list[ModelVersion],
+        Field(json_schema_extra={"description": "List of model versions."}, default_factory=list),
+    ]
+    total_count: Annotated[
+        int,
+        Field(json_schema_extra={"description": "Total number of model versions available."}),
+    ]
+
+
+@dataclass(frozen=True, slots=True)
+class ModelVersionRetrieveResult:
+    """Result of retrieving a specific model version."""
+
+    version: ModelVersion
+    """Version information of the model."""
+
+    model: TrainedModel
+    """The trained model associated with the version."""
 
 
 class ModelRepository(Protocol):
@@ -69,22 +122,32 @@ class ModelRepository(Protocol):
         """
         ...
 
-    def load_model(self, id: str) -> TrainedModel:
-        """Loads a model by its identifier.
+    def list_models(
+        self, dataset: Dataset, params: ModelVersionsQuery | None = None
+    ) -> ModelVersionListResult:
+        """Lists all models in the repository.
 
         Args:
-            id (str): The identifier of the model to load.
-
-        Returns:
-            TrainedModel: The loaded model.
-        """
-        ...
-
-    def list_models(self) -> ModelVersionListResult:
-        """Lists all models in the repository.
+            dataset (Dataset): The dataset associated with the models.
+            params (ModelVersionsQuery | None): Optional query parameters to filter the models
 
         Returns:
             ModelVersionListResult: The list of model versions and total count.
+        """
+        ...
+
+    def get_version(self, dataset: Dataset, id: str) -> ModelVersionRetrieveResult:
+        """Retrieves a specific model version for a dataset by its identifier.
+
+        Args:
+            dataset (Dataset): The dataset associated with the model version.
+            id (str): The identifier of the model version.
+
+        Returns:
+            ModelVersion: The model version information.
+
+        Raises:
+            ModelNotFoundError: If no model is found for the given identifier and dataset.
         """
         ...
 
@@ -101,34 +164,57 @@ class ModelVersioner:
         self._training_executor = training_executor
 
     def get_latest_version(
-        self, model_type: ModelType, technique: Technique
-    ) -> tuple[TrainedModel, ModelVersion]:
+        self, dataset: Dataset, query: ModelVersionsQuery
+    ) -> ModelVersionRetrieveResult:
         """Retrieves the latest version of a specified model.
 
         Args:
-            model_type (ModelType): The type of the model.
-            technique (Technique): The technique used by the model.
-        """
-        versions = list(self.list_versions(model_type, technique))
-        if not versions:
-            raise ModelNotFoundError(f"{model_type}:{technique}")
-        latest_version = versions[0]
-        latest_model = self.repository.load_model(latest_version.id)
-        return latest_model, latest_version
+            dataset (Dataset): The dataset associated with the model.
+            query (ModelVersionsQuery): The query parameters specifying model type and technique.
 
-    def list_versions(self, model_type: ModelType, technique: Technique) -> Iterable[ModelVersion]:
-        """Lists all versions of a specified model.
+        Returns:
+            ModelVersionRetrieveResult: The latest model version and its trained model.
+
+        Raises:
+            ModelNotFoundError: If no model is found for the given identifier and dataset.
+        """
+        versions = self.repository.list_models(dataset, query).versions
+        if not versions:
+            raise ModelNotFoundError(
+                f"No versions found for model type '{query.model_type}' "
+                f"and technique '{query.technique}'"
+            )
+
+        latest_version = max(versions, key=lambda mv: mv.created_at)
+        return self.repository.get_version(dataset, str(latest_version.id))
+
+    def get_version(self, dataset: Dataset, id: str) -> ModelVersionRetrieveResult:
+        """Retrieves a specific model version by its identifier.
 
         Args:
-            model_type (ModelType): The type of the model.
-            technique (Technique): The technique used by the model.
+            id (str): The identifier of the model version.
+
+        Returns:
+            ModelVersion: The model version information.
+
+        Raises:
+            ModelNotFoundError: If no model is found for the given identifier and dataset.
         """
-        versions = [
-            version
-            for version in self.repository.list_models().versions
-            if version.type == model_type and version.technique == technique
-        ]
-        return sorted(versions, key=lambda mv: mv.created_at, reverse=True)
+        return self.repository.get_version(dataset, id)
+
+    def list_versions(
+        self, dataset: Dataset, query: ModelVersionsQuery | None = None
+    ) -> ModelVersionListResult:
+        """Lists all model versions for a given dataset.
+
+        Args:
+            dataset (Dataset): The dataset associated with the models.
+            query (ModelVersionsQuery | None): Optional query parameters to filter the models.
+
+        Returns:
+            ModelVersionListResult: The list of model versions and total count.
+        """
+        return self.repository.list_models(dataset, query)
 
     def train_new_version(
         self,
@@ -155,3 +241,36 @@ class ModelVersioner:
         )
 
         return trained_model, model_version
+
+
+class TrainedModelLoaderImpl:
+    """Implementation of `TrainedModelLoader` using the model versioning service."""
+
+    def __init__(self, model_versioner: ModelVersioner) -> None:
+        self._model_versioner = model_versioner
+
+    def load_model(self, dataset: Dataset, model_id: str | None) -> TrainedModel:
+        """Retrieve a trained model by its identifier.
+
+        Args:
+            dataset (Dataset): The dataset associated with the trained model.
+            model_id (str | None): The identifier of the trained model, or None to load the latest model.
+
+        Returns:
+            The loaded trained model.
+
+        Raises:
+            ValueError: If no model is found for the given identifier and dataset.
+        """
+        try:
+            if model_id is None:
+                version_result = self._model_versioner.get_latest_version(
+                    dataset,
+                    ModelVersionsQuery(model_type=None, technique=None),
+                )
+            else:
+                version_result = self._model_versioner.get_version(dataset, model_id)
+        except ModelNotFoundError as e:
+            raise ValueError("No trained model found for the given identifier and dataset.") from e
+        else:
+            return version_result.model

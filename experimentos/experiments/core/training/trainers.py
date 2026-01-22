@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
+from experiments.core.data.datasets import Dataset
 from experiments.core.modeling.classifiers import Classifier, ModelType, Technique
 from experiments.core.training.splitters import SplitData
 
@@ -56,5 +57,24 @@ class ModelTrainer(Protocol):
 
         Returns:
             The trained model with best parameters.
+        """
+        ...
+
+
+class TrainedModelLoader(Protocol):
+    """Protocol for retrieving trained models."""
+
+    def load_model(self, dataset: Dataset, model_id: str | None) -> TrainedModel:
+        """Retrieve a trained model by its identifier.
+
+        Args:
+            dataset (Dataset): The dataset associated with the trained model.
+            model_id (str | None): The identifier of the trained model, or None to load the latest model for the dataset.
+
+        Returns:
+            The loaded trained model.
+
+        Raises:
+            ValueError: If no model is found for the given identifier and dataset.
         """
         ...

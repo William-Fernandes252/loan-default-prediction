@@ -16,13 +16,15 @@ from experiments.lib.pipelines.execution import PipelineExecutor
 from experiments.pipelines.data import (
     DataProcessingPipelineFactory as NewDataProcessingPipelineFactory,
 )
+from experiments.pipelines.predictions.factory import PredictionsPipelineFactory
 from experiments.pipelines.training.factory import TrainingPipelineFactory
 from experiments.services.data_manager import DataManager
 from experiments.services.data_repository import DataStorageLayout, StorageDataRepository
 from experiments.services.feature_extractor import FeatureExtractorImpl
 from experiments.services.grid_search_trainer import GridSearchModelTrainer
+from experiments.services.inference_service import InferenceService
 from experiments.services.model_repository import ModelStorageRepository
-from experiments.services.model_versioning import ModelVersioner
+from experiments.services.model_versioning import ModelVersioner, TrainedModelLoaderImpl
 from experiments.services.resource_calculator import ResourceCalculator
 from experiments.services.seed_generator import generate_seed
 from experiments.services.stratified_data_splitter import StratifiedDataSplitter
@@ -243,12 +245,33 @@ class Container(containers.DeclarativeContainer):
     )
     """Training executor service for model training and evaluation."""
 
+    _predictions_pipeline_factory = providers.Singleton(
+        PredictionsPipelineFactory,
+    )
+    """Factory for creating prediction pipelines."""
+
     model_versioner = providers.Singleton(
         ModelVersioner,
         model_repository=_model_repository,
         training_executor=training_executor,
     )
     """Model versioning service for managing model versions."""
+
+    _trained_model_loader = providers.Singleton(
+        TrainedModelLoaderImpl,
+        model_versioner=model_versioner,
+    )
+
+    inference_service = providers.Singleton(
+        InferenceService,
+        pipeline_executor=_pipeline_executor,
+        predictions_pipeline_factory=_predictions_pipeline_factory,
+        training_data_loader=_data_repository,
+        trained_model_loader=_trained_model_loader,
+        data_splitter=_data_splitter,
+        seed_generator=generate_seed,
+    )
+    """Inference service for executing prediction pipelines."""
 
     def init_resources(self, *args, **kwargs) -> Any:
         super().init_resources(*args, **kwargs)
