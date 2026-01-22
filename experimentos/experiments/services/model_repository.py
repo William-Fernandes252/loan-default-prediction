@@ -3,7 +3,8 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import re
-import uuid
+
+from uuid_extensions import uuid7str
 
 from experiments.core.data.datasets import Dataset
 from experiments.core.modeling.classifiers import Classifier, ModelType, Technique
@@ -89,7 +90,7 @@ class ModelStorageRepository:
     def save_model(
         self,
         model: Classifier,
-        id: str | None,
+        id: str | None = None,
         *,
         dataset: Dataset,
         model_type: ModelType,
@@ -111,7 +112,7 @@ class ModelStorageRepository:
         Returns:
             ModelVersion: The version information of the saved model.
         """
-        model_id = id or str(uuid.uuid4())
+        model_id = id or uuid7str()
         created_at = datetime.now(timezone.utc)
 
         key = self._layout.get_model_key(

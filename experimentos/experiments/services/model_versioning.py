@@ -106,7 +106,7 @@ class ModelRepository(Protocol):
     def save_model(
         self,
         model: Classifier,
-        id: str | None,
+        id: str | None = None,
         *,
         dataset: Dataset,
         model_type: ModelType,
@@ -232,7 +232,6 @@ class ModelVersioner:
 
         model_version = self.repository.save_model(
             model=trained_model.model,
-            id=None,
             dataset=params.dataset,
             model_type=params.model_type,
             technique=params.technique,
