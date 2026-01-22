@@ -210,5 +210,5 @@ class LdpSettings(BaseSettings):
     experiment: ExperimentSettings = Field(default_factory=ExperimentSettings)
     resources: ResourceSettings = Field(default_factory=ResourceSettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)
-    debug: Annotated[bool, Field(default=False)]
+    debug: Annotated[bool, Field(default=True)]
     """Debug mode flag."""
