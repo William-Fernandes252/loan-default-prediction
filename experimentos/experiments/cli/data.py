@@ -1,4 +1,8 @@
-"""CLI for data processing tasks."""
+"""CLI for data processing tasks.
+
+This module provides commands to preprocess datasets used in experiments, doing features extraction, normalization, and formatting.
+
+It supports processing individual datasets or all datasets in parallel, with options for overwriting existing files and utilizing GPU acceleration."""
 
 from typing import Annotated
 

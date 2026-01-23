@@ -1,3 +1,8 @@
+"""CLI for model training and inference.
+
+This module provides commands to train models using specified datasets, model types, and techniques. It also allows running inference on datasets using trained models, with options to specify output files and model identifiers for predictions.
+"""
+
 import csv
 from sys import stdout
 from typing import Annotated
@@ -7,7 +12,7 @@ import typer
 from experiments.containers import container
 from experiments.core.data.datasets import Dataset
 from experiments.core.modeling.classifiers import ModelType, Technique
-from experiments.services.training_executor import TrainModelParams
+from experiments.services.training_executor import TrainingParams
 
 app = typer.Typer()
 
@@ -35,7 +40,7 @@ def train_model(
     model_versioner = container.model_versioner()
     resource_settings = container.settings().resources
     _, version = model_versioner.train_new_version(
-        TrainModelParams(
+        TrainingParams(
             dataset=dataset,
             model_type=model_type,
             technique=technique,
