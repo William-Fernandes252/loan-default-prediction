@@ -20,7 +20,7 @@ type SeedGenerator = Callable[[], int]
 """Generates random seeds for reproducibility."""
 
 
-class TrainModelParams(BaseModel):
+class TrainingParams(BaseModel):
     """Parameters for training a model."""
 
     dataset: Dataset
@@ -73,7 +73,7 @@ class TrainingExecutor:
 
     def train_model(
         self,
-        params: TrainModelParams,
+        params: TrainingParams,
     ) -> TrainedModel:
         """Trains a model using the training pipeline.
 
@@ -114,7 +114,7 @@ class TrainingExecutor:
 
     def _get_pipeline_name(
         self,
-        params: TrainModelParams,
+        params: TrainingParams,
         seed: int,
     ) -> str:
         """Generates a name for the training pipeline.

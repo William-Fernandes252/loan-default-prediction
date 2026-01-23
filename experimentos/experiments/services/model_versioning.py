@@ -13,7 +13,7 @@ from pydantic import UUID7, BaseModel, Field
 from experiments.core.data.datasets import Dataset
 from experiments.core.modeling.classifiers import Classifier, ModelType, Technique
 from experiments.core.training.trainers import TrainedModel
-from experiments.services.training_executor import TrainingExecutor, TrainModelParams
+from experiments.services.training_executor import TrainingExecutor, TrainingParams
 
 
 class ModelNotFoundError(Exception):
@@ -218,7 +218,7 @@ class ModelVersioner:
 
     def train_new_version(
         self,
-        params: TrainModelParams,
+        params: TrainingParams,
     ) -> tuple[TrainedModel, ModelVersion]:
         """Trains a new model version and saves it to the repository.
 
