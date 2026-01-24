@@ -3,6 +3,7 @@
 from typing import Generator, override
 
 from loguru import logger
+import polars as pl
 from pydantic import BaseModel, Field, PositiveInt, field_validator
 from uuid_extensions import uuid7str
 
@@ -76,9 +77,17 @@ class _SavePredictionsOnTrainingCompletionObserver(
 
     @override
     def on_pipeline_finish(self, pipeline, result):
-        predictions = result.final_state["trained_model"].model.predict(
-            result.final_state["data_split"].X_test
-        )
+        data_split = result.final_state["data_split"]
+        trained_model = result.final_state["trained_model"]
+
+        # Get predictions as numpy array and convert to LazyFrame
+        y_pred = trained_model.model.predict(data_split.X_test)
+        predictions_lf = pl.DataFrame(
+            {
+                "target": data_split.y_test,
+                "prediction": y_pred,
+            }
+        ).lazy()
 
         try:
             self._predictions_repository.save_predictions(
@@ -87,7 +96,7 @@ class _SavePredictionsOnTrainingCompletionObserver(
                 dataset=result.context.dataset,
                 model_type=result.context.model_type,
                 technique=result.context.technique,
-                predictions=predictions,
+                predictions=predictions_lf,
             )
         except Exception as e:
             logger.error(
