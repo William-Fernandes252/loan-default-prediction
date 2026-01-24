@@ -99,14 +99,13 @@ def run(
 
     def validate_execution_id_for_continuation(exec_id: str) -> None:
         """Validate that the execution ID has prior work to continue."""
-        predictions_repository = container.predictions_repository()
-        completed = predictions_repository.get_completed_combinations(exec_id)
+        completed_count = executor.get_completed_count(exec_id)
 
-        if completed:
+        if completed_count > 0:
             logger.info(
                 "Continuing execution {execution_id}: found {count} completed combinations",
                 execution_id=exec_id,
-                count=len(completed),
+                count=completed_count,
             )
         else:
             logger.warning(

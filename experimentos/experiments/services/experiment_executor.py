@@ -118,6 +118,17 @@ class ExperimentExecutor:
         self._schedule_pipelines(params)
         self._execute_pipelines(params.execution_id, params.n_jobs)
 
+    def get_completed_count(self, execution_id: str) -> int:
+        """Get the number of completed combinations for an execution.
+
+        Args:
+            execution_id: The execution identifier to check.
+
+        Returns:
+            The number of completed combinations, or 0 if none exist.
+        """
+        return len(self._predictions_repository.get_completed_combinations(execution_id))
+
     def _schedule_pipelines(self, params: ExperimentParams) -> None:
         """Schedule training pipelines for all valid model/technique/seed combinations."""
         completed = self._get_completed_combinations(params.execution_id)
