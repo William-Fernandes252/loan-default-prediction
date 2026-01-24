@@ -5,6 +5,8 @@ from dataclasses import dataclass
 import re
 from typing import TypedDict
 
+import polars as pl
+
 from experiments.core.data.datasets import Dataset
 from experiments.core.modeling.classifiers import ModelType, Technique
 from experiments.core.predictions.repository import ModelPredictions, ModelPredictionsResults
@@ -15,6 +17,7 @@ from experiments.storage.interface import FileInfo
 class _ParsedPredictionsKey(TypedDict):
     """Parsed components from a predictions storage key."""
 
+    execution_id: str
     dataset: str
     model_type: str
     technique: str
@@ -26,12 +29,13 @@ class ModelPredictionsStorageLayout:
     """Layout for storing model predictions in the storage backend."""
 
     predictions_key_template: str = (
-        "predictions/{dataset}/{model_type}/{technique}/seed_{seed}.parquet"
+        "predictions/{execution_id}/{dataset}/{model_type}/{technique}/seed_{seed}.parquet"
     )
     predictions_prefix: str = "predictions/"
 
     def get_predictions_key(
         self,
+        execution_id: str,
         dataset: str,
         model_type: str,
         technique: str,
@@ -40,6 +44,7 @@ class ModelPredictionsStorageLayout:
         """Generate the storage key for model predictions.
 
         Args:
+            execution_id: The unique identifier for the experiment execution.
             dataset: The dataset the model was trained on.
             model_type: The type of the model.
             technique: The technique used for training.
@@ -49,6 +54,7 @@ class ModelPredictionsStorageLayout:
             str: The storage key for the model predictions.
         """
         return self.predictions_key_template.format(
+            execution_id=execution_id,
             dataset=dataset,
             model_type=model_type,
             technique=technique,
@@ -62,18 +68,18 @@ class ModelPredictionsStorageLayout:
             key: The storage key to parse.
 
         Returns:
-            A dictionary with dataset, model_type, technique, and seed,
-            or None if the key doesn't match the expected pattern.
+            _ParsedPredictionsKey | None: The parsed components, or `None` if the key does not match the expected format.
         """
-        pattern = r"^predictions/([^/]+)/([^/]+)/([^/]+)/seed_(\d+)\.parquet$"
+        pattern = r"^predictions/([^/]+)/([^/]+)/([^/]+)/([^/]+)/seed_(\d+)\.parquet$"
         match = re.match(pattern, key)
         if not match:
             return None
         return _ParsedPredictionsKey(
-            dataset=match.group(1),
-            model_type=match.group(2),
-            technique=match.group(3),
-            seed=int(match.group(4)),
+            execution_id=match.group(1),
+            dataset=match.group(2),
+            model_type=match.group(3),
+            technique=match.group(4),
+            seed=int(match.group(5)),
         )
 
 
@@ -90,34 +96,40 @@ class ModelPredictionsStorageRepository:
 
     def save_predictions(
         self,
-        predictions: ModelPredictions,
         *,
+        execution_id: str,
+        seed: int,
         dataset: Dataset,
         model_type: ModelType,
         technique: Technique,
-        seed: int,
+        predictions: pl.LazyFrame,
     ) -> None:
         """Saves model predictions to the storage backend.
 
         Args:
-            predictions: The model predictions to save.
+            execution_id: The unique identifier for the experiment execution.
+            seed: The random seed used during training.
             dataset: The dataset the model was trained on.
             model_type: The type of the model.
             technique: The technique used for training.
-            seed: The random seed used during training.
+            predictions: The predictions LazyFrame to save.
         """
         key = self._layout.get_predictions_key(
+            execution_id=execution_id,
             dataset=dataset.value,
             model_type=model_type.value,
             technique=technique.value,
             seed=seed,
         )
-        self._storage.sink_parquet(predictions.predictions, key)
+        self._storage.sink_parquet(predictions, key)
 
     def get_latest_predictions_for_experiment(
         self, dataset: Dataset
     ) -> ModelPredictionsResults | None:
         """Fetches the latest experiment results for a given dataset.
+
+        This finds the most recent execution_id (by sorting) and returns
+        all predictions for that execution.
 
         Args:
             dataset: The dataset for which to fetch results.
@@ -126,20 +138,36 @@ class ModelPredictionsStorageRepository:
             ModelPredictionsResults: An iterator of model predictions,
             or None if no results exist.
         """
-        prefix = f"{self._layout.predictions_prefix}{dataset.value}/"
-        files = list(self._storage.list_files(prefix, "*.parquet"))
+        # List all prediction files for this dataset across all executions
+        prefix = self._layout.predictions_prefix
+        all_files = list(self._storage.list_files(prefix, "*.parquet"))
 
-        if not files:
+        # Filter files for the specified dataset and group by execution_id
+        dataset_files: dict[str, list[FileInfo]] = {}
+        for file_info in all_files:
+            parsed = self._layout.parse_predictions_key(file_info.key)
+            if parsed and parsed["dataset"] == dataset.value:
+                exec_id = parsed["execution_id"]
+                if exec_id not in dataset_files:
+                    dataset_files[exec_id] = []
+                dataset_files[exec_id].append(file_info)
+
+        if not dataset_files:
             return None
 
-        return self._iter_predictions(dataset, files)
+        # Get the latest execution_id (uuid7 is time-sortable)
+        latest_execution_id = max(dataset_files.keys())
+        files = dataset_files[latest_execution_id]
+
+        return self._iter_predictions(latest_execution_id, dataset, files)
 
     def _iter_predictions(
-        self, dataset: Dataset, files: list[FileInfo]
+        self, execution_id: str, dataset: Dataset, files: list[FileInfo]
     ) -> Iterator[ModelPredictions]:
         """Iterate over prediction files and yield ModelPredictions.
 
         Args:
+            execution_id: The execution identifier for the predictions.
             dataset: The dataset associated with the predictions.
             files: List of file info objects to iterate over.
 
@@ -157,6 +185,8 @@ class ModelPredictionsStorageRepository:
                 predictions_lf = self._storage.scan_parquet(file_info.key)
 
                 yield ModelPredictions(
+                    execution_id=execution_id,
+                    seed=parsed["seed"],
                     dataset=dataset,
                     model_type=model_type,
                     technique=technique,

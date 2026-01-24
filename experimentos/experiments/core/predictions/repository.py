@@ -1,6 +1,7 @@
 """Defines the repository for managing model predictions related to experiments."""
 
-from typing import Iterator, NamedTuple, Protocol
+from dataclasses import dataclass
+from typing import Iterator, Protocol
 
 import polars as pl
 
@@ -8,12 +9,15 @@ from experiments.core.data.datasets import Dataset
 from experiments.core.modeling.classifiers import ModelType, Technique
 
 
-class ModelPredictions(NamedTuple):
+@dataclass(frozen=True, slots=True)
+class ModelPredictions:
     """Represents the results of an experiment on a dataset, for a specific model and technique.
 
     The results are stored as a Polars `LazyFrame` that contains the features, along with their target (from column `"target"`) values and predictions (from column `"prediction"`) values.
     """
 
+    execution_id: str
+    seed: int
     dataset: Dataset
     model_type: ModelType
     technique: Technique
@@ -43,6 +47,9 @@ class ModelPredictionsRepository(Protocol):
 
     def save_predictions(
         self,
+        *,
+        execution_id: str,
+        seed: int,
         dataset: Dataset,
         model_type: ModelType,
         technique: Technique,
@@ -51,9 +58,11 @@ class ModelPredictionsRepository(Protocol):
         """Saves the model predictions for a given experiment.
 
         Args:
+            execution_id (str): The unique identifier for the experiment execution.
             dataset (Dataset): The dataset associated with the experiment.
             model_type (ModelType): The type of model used.
             technique (Technique): The technique applied.
+            seed (int): The random seed used during training.
             predictions (pl.LazyFrame): The predictions to save.
 
         Raises:

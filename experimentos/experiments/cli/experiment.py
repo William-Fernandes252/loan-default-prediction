@@ -46,6 +46,13 @@ def run(
             case_sensitive=False,
         ),
     ] = None,
+    execution_id: Annotated[
+        str | None,
+        typer.Option(
+            "--execution-id",
+            help="Execution identifier. If provided, the experiment execution that refers to it will be continued, rather than starting a new one.",
+        ),
+    ] = None,
 ):
     """Run experiments on specified datasets and models."""
     executor = container.experiment_executor()
@@ -73,6 +80,16 @@ def run(
     def get_experiment_params() -> ExperimentParams:
         """Construct experiment parameters based on user input."""
         datasets = filter_datasets()
+
+        if execution_id is not None:
+            logger.info(f"Continuing experiment with execution ID: {execution_id}")
+            return ExperimentParams(
+                datasets=datasets,
+                excluded_models=exclude_models or [],
+                n_jobs=get_effective_n_jobs(),
+                use_gpu=get_effective_use_gpu(),
+                execution_id=execution_id,
+            )
         return ExperimentParams(
             datasets=datasets,
             excluded_models=exclude_models or [],

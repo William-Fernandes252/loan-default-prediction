@@ -3,6 +3,7 @@
 from typing import Generator, override
 
 from pydantic import BaseModel, Field, PositiveInt, field_validator
+from uuid_extensions import uuid7str
 
 from experiments.core.data.datasets import Dataset
 from experiments.core.modeling.classifiers import ClassifierFactory, ModelType, Technique
@@ -45,6 +46,10 @@ class ExperimentParams(BaseModel):
         default=False,
         json_schema_extra={"description": "Whether to use GPU for training."},
     )
+    execution_id: str = Field(
+        default_factory=uuid7str,
+        json_schema_extra={"description": "Unique identifier for the experiment execution."},
+    )
 
     @field_validator("excluded_models")
     @classmethod
@@ -60,7 +65,10 @@ class _SavePredictionsOnTrainingCompletionObserver(
 ):
     """Observer that saves predictions when training completes."""
 
-    def __init__(self, predictions_repository: ModelPredictionsRepository) -> None:
+    def __init__(
+        self, execution_id: str, predictions_repository: ModelPredictionsRepository
+    ) -> None:
+        self._execution_id = execution_id
         self._predictions_repository = predictions_repository
 
     @override
@@ -69,9 +77,11 @@ class _SavePredictionsOnTrainingCompletionObserver(
         if trained_model is not None:
             predictions = trained_model.model.predict(result.final_state["data_split"].X_test)
             self._predictions_repository.save_predictions(
-                result.context.dataset,
-                result.context.model_type,
-                result.context.technique,
+                execution_id=self._execution_id,
+                seed=result.context.seed,
+                dataset=result.context.dataset,
+                model_type=result.context.model_type,
+                technique=result.context.technique,
                 predictions=predictions,
             )
 
@@ -102,7 +112,7 @@ class ExperimentExecutor:
     def execute_experiment(self, params: ExperimentParams) -> None:
         """Execute the experiment with the given parameters."""
         self._schedule_pipelines(params)
-        self._execute_pipelines(params.n_jobs)
+        self._execute_pipelines(params.execution_id, params.n_jobs)
 
     def _schedule_pipelines(self, params: ExperimentParams) -> None:
         """Schedule training pipelines for all valid model/technique/seed combinations."""
@@ -159,7 +169,7 @@ class ExperimentExecutor:
         seed: int,
     ) -> str:
         """Generate a unique name for the training pipeline."""
-        return f"TrainingPipeline[dataset={dataset.name}, model_type={model_type.name}, technique={technique.name}, seed={seed}]"
+        return f"TrainingPipeline[dataset={dataset}, model_type={model_type}, technique={technique}, seed={seed}]"
 
     def _create_training_pipeline_context(
         self,
@@ -187,10 +197,14 @@ class ExperimentExecutor:
         """Get the initial state for a training pipeline."""
         return TrainingPipelineState()
 
-    def _execute_pipelines(self, workers: int) -> None:
+    def _execute_pipelines(self, execution_id: str, workers: int) -> None:
         """Execute all scheduled pipelines."""
         self._pipeline_executor.start(
-            observers={_SavePredictionsOnTrainingCompletionObserver(self._predictions_repository)},
+            observers={
+                _SavePredictionsOnTrainingCompletionObserver(
+                    execution_id, self._predictions_repository
+                )
+            },
             max_workers=workers,
         )
         self._pipeline_executor.wait()
