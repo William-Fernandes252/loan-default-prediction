@@ -20,9 +20,11 @@ from experiments.pipelines.predictions.factory import PredictionsPipelineFactory
 from experiments.pipelines.training.factory import TrainingPipelineFactory
 from experiments.services.data_manager import DataManager
 from experiments.services.data_repository import DataStorageLayout, StorageDataRepository
+from experiments.services.experiment_executor import ExperimentExecutor
 from experiments.services.feature_extractor import FeatureExtractorImpl
 from experiments.services.grid_search_trainer import GridSearchModelTrainer
 from experiments.services.inference_service import InferenceService
+from experiments.services.model_predictions_repository import ModelPredictionsStorageRepository
 from experiments.services.model_repository import ModelStorageRepository
 from experiments.services.model_versioning import ModelVersioner, TrainedModelLoaderImpl
 from experiments.services.resource_calculator import ResourceCalculator
@@ -272,6 +274,23 @@ class Container(containers.DeclarativeContainer):
         seed_generator=generate_seed,
     )
     """Inference service for executing prediction pipelines."""
+
+    _model_predictions_repository = providers.Singleton(
+        ModelPredictionsStorageRepository,
+        storage=_storage,
+    )
+    """Model predictions repository for storing and retrieving predictions."""
+
+    experiment_executor = providers.Singleton(
+        ExperimentExecutor,
+        training_pipeline_factory=_training_pipeline_factory,
+        pipeline_executor=_pipeline_executor,
+        model_trainer=_model_trainer,
+        data_splitter=_data_splitter,
+        training_data_loader=_data_repository,
+        classifier_factory=_classifier_factory,
+        predictions_repository=_model_predictions_repository,
+    )
 
     def init_resources(self, *args, **kwargs) -> Any:
         super().init_resources(*args, **kwargs)
