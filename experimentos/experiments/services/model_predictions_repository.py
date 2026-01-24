@@ -9,7 +9,11 @@ import polars as pl
 
 from experiments.core.data.datasets import Dataset
 from experiments.core.modeling.classifiers import ModelType, Technique
-from experiments.core.predictions.repository import ModelPredictions, ModelPredictionsResults
+from experiments.core.predictions.repository import (
+    ExperimentCombination,
+    ModelPredictions,
+    ModelPredictionsResults,
+)
 from experiments.storage import Storage
 from experiments.storage.interface import FileInfo
 
@@ -93,6 +97,36 @@ class ModelPredictionsStorageRepository:
     ):
         self._storage = storage
         self._layout = layout or ModelPredictionsStorageLayout()
+
+    def get_completed_combinations(self, execution_id: str) -> set[ExperimentCombination]:
+        """Get all completed experiment combinations for a given execution.
+
+        Args:
+            execution_id: The execution identifier to query.
+
+        Returns:
+            A set of completed (dataset, model_type, technique, seed) combinations.
+        """
+        prefix = f"{self._layout.predictions_prefix}{execution_id}/"
+        completed: set[ExperimentCombination] = set()
+
+        for file_info in self._storage.list_files(prefix, "*.parquet"):
+            parsed = self._layout.parse_predictions_key(file_info.key)
+            if parsed and parsed["execution_id"] == execution_id:
+                try:
+                    completed.add(
+                        ExperimentCombination(
+                            dataset=Dataset(parsed["dataset"]),
+                            model_type=ModelType(parsed["model_type"]),
+                            technique=Technique(parsed["technique"]),
+                            seed=parsed["seed"],
+                        )
+                    )
+                except ValueError:
+                    # Skip invalid enum values
+                    continue
+
+        return completed
 
     def save_predictions(
         self,

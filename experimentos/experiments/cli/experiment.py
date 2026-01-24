@@ -82,7 +82,7 @@ def run(
         datasets = filter_datasets()
 
         if execution_id is not None:
-            logger.info(f"Continuing experiment with execution ID: {execution_id}")
+            validate_execution_id_for_continuation(execution_id)
             return ExperimentParams(
                 datasets=datasets,
                 excluded_models=exclude_models or [],
@@ -96,6 +96,24 @@ def run(
             n_jobs=get_effective_n_jobs(),
             use_gpu=get_effective_use_gpu(),
         )
+
+    def validate_execution_id_for_continuation(exec_id: str) -> None:
+        """Validate that the execution ID has prior work to continue."""
+        predictions_repository = container.predictions_repository()
+        completed = predictions_repository.get_completed_combinations(exec_id)
+
+        if completed:
+            logger.info(
+                "Continuing execution {execution_id}: found {count} completed combinations",
+                execution_id=exec_id,
+                count=len(completed),
+            )
+        else:
+            logger.warning(
+                "Execution ID {execution_id} has no completed combinations. "
+                "This will start a fresh experiment with the provided ID.",
+                execution_id=exec_id,
+            )
 
     def get_effective_n_jobs() -> int:
         """Determine the effective number of parallel jobs."""

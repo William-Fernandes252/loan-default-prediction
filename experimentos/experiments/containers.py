@@ -281,6 +281,9 @@ class Container(containers.DeclarativeContainer):
     )
     """Model predictions repository for storing and retrieving predictions."""
 
+    predictions_repository = _model_predictions_repository
+    """Public accessor for the model predictions repository."""
+
     experiment_executor = providers.Singleton(
         ExperimentExecutor,
         training_pipeline_factory=_training_pipeline_factory,

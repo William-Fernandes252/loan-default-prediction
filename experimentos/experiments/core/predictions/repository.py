@@ -1,12 +1,21 @@
 """Defines the repository for managing model predictions related to experiments."""
 
 from dataclasses import dataclass
-from typing import Iterator, Protocol
+from typing import Iterator, NamedTuple, Protocol
 
 import polars as pl
 
 from experiments.core.data.datasets import Dataset
 from experiments.core.modeling.classifiers import ModelType, Technique
+
+
+class ExperimentCombination(NamedTuple):
+    """Represents a unique experiment combination."""
+
+    dataset: Dataset
+    model_type: ModelType
+    technique: Technique
+    seed: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,6 +38,17 @@ type ModelPredictionsResults = Iterator[ModelPredictions]
 
 
 class ModelPredictionsRepository(Protocol):
+    def get_completed_combinations(self, execution_id: str) -> set[ExperimentCombination]:
+        """Get all completed experiment combinations for a given execution.
+
+        Args:
+            execution_id (str): The execution identifier to query.
+
+        Returns:
+            set[ExperimentCombination]: A set of completed combinations.
+        """
+        ...
+
     def get_latest_predictions_for_experiment(
         self, dataset: Dataset
     ) -> ModelPredictionsResults | None:

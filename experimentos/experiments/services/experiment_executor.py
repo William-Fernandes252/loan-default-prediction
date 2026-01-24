@@ -2,12 +2,16 @@
 
 from typing import Generator, override
 
+from loguru import logger
 from pydantic import BaseModel, Field, PositiveInt, field_validator
 from uuid_extensions import uuid7str
 
 from experiments.core.data.datasets import Dataset
 from experiments.core.modeling.classifiers import ClassifierFactory, ModelType, Technique
-from experiments.core.predictions.repository import ModelPredictionsRepository
+from experiments.core.predictions.repository import (
+    ExperimentCombination,
+    ModelPredictionsRepository,
+)
 from experiments.core.training.data import TrainingDataLoader
 from experiments.core.training.splitters import DataSplitter
 from experiments.core.training.trainers import ModelTrainer
@@ -116,15 +120,59 @@ class ExperimentExecutor:
 
     def _schedule_pipelines(self, params: ExperimentParams) -> None:
         """Schedule training pipelines for all valid model/technique/seed combinations."""
+        completed = self._get_completed_combinations(params.execution_id)
+
+        scheduled_count = 0
+        skipped_count = 0
+
         for dataset in params.datasets:
             for model_type in self._get_model_types(params):
                 for technique in Technique:
                     if self._is_valid_combination(model_type, technique):
                         for seed in self._generate_seeds(params.num_seeds):
+                            combination = ExperimentCombination(
+                                dataset=dataset,
+                                model_type=model_type,
+                                technique=technique,
+                                seed=seed,
+                            )
+                            if combination in completed:
+                                skipped_count += 1
+                                continue
+
                             pipeline, initial_state, context = self._create_training_pipeline(
                                 dataset, model_type, technique, seed, use_gpu=params.use_gpu
                             )
                             self._pipeline_executor.schedule(pipeline, initial_state, context)
+                            scheduled_count += 1
+
+        if skipped_count > 0:
+            logger.info(
+                "Continuing execution {execution_id}: scheduled {scheduled}, skipped {skipped} completed combinations",
+                execution_id=params.execution_id,
+                scheduled=scheduled_count,
+                skipped=skipped_count,
+            )
+        else:
+            logger.info(
+                "Execution {execution_id}: scheduled {scheduled} combinations",
+                execution_id=params.execution_id,
+                scheduled=scheduled_count,
+            )
+
+    def _get_completed_combinations(self, execution_id: str) -> set[ExperimentCombination]:
+        """Get completed combinations for the execution, with validation."""
+        completed = self._predictions_repository.get_completed_combinations(execution_id)
+
+        if not completed:
+            # Check if this looks like a continuation attempt (existing execution_id passed)
+            # We can't distinguish new vs continuation here, but log for visibility
+            logger.debug(
+                "No completed combinations found for execution {execution_id}",
+                execution_id=execution_id,
+            )
+
+        return completed
 
     @staticmethod
     def _is_valid_combination(model_type: ModelType, technique: Technique) -> bool:
