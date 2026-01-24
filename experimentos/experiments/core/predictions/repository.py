@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from typing import Iterator, NamedTuple, Protocol
 
+import numpy as nd
 import polars as pl
 
 from experiments.core.data.datasets import Dataset
@@ -16,6 +17,31 @@ class ExperimentCombination(NamedTuple):
     model_type: ModelType
     technique: Technique
     seed: int
+
+
+class RawPredictions(NamedTuple):
+    """Raw predictions data structure."""
+
+    target: nd.ndarray
+    prediction: nd.ndarray
+
+
+def to_lazy_frame(raw_predictions: RawPredictions) -> pl.LazyFrame:
+    """Converts raw predictions to a Polars LazyFrame.
+
+    Args:
+        raw_predictions (RawPredictions): The raw predictions containing target and prediction arrays.
+
+    Returns:
+        pl.LazyFrame: A Polars LazyFrame with 'target' and 'prediction' columns.
+    """
+    df = pl.DataFrame(
+        {
+            "target": raw_predictions.target,
+            "prediction": raw_predictions.prediction,
+        }
+    )
+    return df.lazy()
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,7 +99,7 @@ class ModelPredictionsRepository(Protocol):
         dataset: Dataset,
         model_type: ModelType,
         technique: Technique,
-        predictions: pl.LazyFrame,
+        predictions: RawPredictions,
     ) -> None:
         """Saves the model predictions for a given experiment.
 
@@ -83,7 +109,7 @@ class ModelPredictionsRepository(Protocol):
             model_type (ModelType): The type of model used.
             technique (Technique): The technique applied.
             seed (int): The random seed used during training.
-            predictions (pl.LazyFrame): The predictions to save.
+            predictions (RawPredictions): The raw predictions to save.
 
         Raises:
             Exception: If there is an error saving the predictions.

@@ -5,14 +5,14 @@ from dataclasses import dataclass
 import re
 from typing import TypedDict
 
-import polars as pl
-
 from experiments.core.data.datasets import Dataset
 from experiments.core.modeling.classifiers import ModelType, Technique
 from experiments.core.predictions.repository import (
     ExperimentCombination,
     ModelPredictions,
     ModelPredictionsResults,
+    RawPredictions,
+    to_lazy_frame,
 )
 from experiments.storage import Storage
 from experiments.storage.interface import FileInfo
@@ -136,7 +136,7 @@ class ModelPredictionsStorageRepository:
         dataset: Dataset,
         model_type: ModelType,
         technique: Technique,
-        predictions: pl.LazyFrame,
+        predictions: RawPredictions,
     ) -> None:
         """Saves model predictions to the storage backend.
 
@@ -146,7 +146,7 @@ class ModelPredictionsStorageRepository:
             dataset: The dataset the model was trained on.
             model_type: The type of the model.
             technique: The technique used for training.
-            predictions: The predictions LazyFrame to save.
+            predictions : The raw predictions to save.
         """
         key = self._layout.get_predictions_key(
             execution_id=execution_id,
@@ -155,7 +155,7 @@ class ModelPredictionsStorageRepository:
             technique=technique.value,
             seed=seed,
         )
-        self._storage.sink_parquet(predictions, key)
+        self._storage.sink_parquet(to_lazy_frame(predictions), key)
 
     def get_latest_predictions_for_experiment(
         self, dataset: Dataset
