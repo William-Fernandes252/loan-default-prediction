@@ -15,8 +15,7 @@ from experiments.core.predictions.repository import (
 from experiments.core.training.data import TrainingDataLoader
 from experiments.core.training.splitters import DataSplitter
 from experiments.core.training.trainers import ModelTrainer
-from experiments.lib.pipelines import PipelineExecutor
-from experiments.lib.pipelines.lifecycle import IgnoreAllObserver
+from experiments.lib.pipelines import Action, IgnoreAllObserver, PipelineExecutor
 from experiments.pipelines.training.factory import TrainingPipelineFactory
 from experiments.pipelines.training.pipeline import (
     TrainingPipeline,
@@ -77,9 +76,11 @@ class _SavePredictionsOnTrainingCompletionObserver(
 
     @override
     def on_pipeline_finish(self, pipeline, result):
-        trained_model = result.final_state["trained_model"]
-        if trained_model is not None:
-            predictions = trained_model.model.predict(result.final_state["data_split"].X_test)
+        predictions = result.final_state["trained_model"].model.predict(
+            result.final_state["data_split"].X_test
+        )
+
+        try:
             self._predictions_repository.save_predictions(
                 execution_id=self._execution_id,
                 seed=result.context.seed,
@@ -88,8 +89,25 @@ class _SavePredictionsOnTrainingCompletionObserver(
                 technique=result.context.technique,
                 predictions=predictions,
             )
-
-        return super().on_pipeline_finish(pipeline, result)
+        except Exception as e:
+            logger.error(
+                "Failed to save predictions for dataset={dataset}, model_type={model_type}, technique={technique}, seed={seed}: {error}",
+                dataset=result.context.dataset,
+                model_type=result.context.model_type,
+                technique=result.context.technique,
+                seed=result.context.seed,
+                error=e,
+            )
+            return Action.PANIC
+        else:
+            logger.info(
+                "Saved predictions for dataset={dataset}, model_type={model_type}, technique={technique}, seed={seed}",
+                dataset=result.context.dataset,
+                model_type=result.context.model_type,
+                technique=result.context.technique,
+                seed=result.context.seed,
+            )
+            return Action.PROCEED
 
 
 class ExperimentExecutor:
