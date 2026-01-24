@@ -1,8 +1,8 @@
 # Data
 /data/
 
-# Results
-/results/
+# Prediction results
+/predictions/
 
 # Models
 /models/
