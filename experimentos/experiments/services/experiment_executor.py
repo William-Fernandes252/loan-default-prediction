@@ -1,11 +1,12 @@
 """Definition of the experiment execution service."""
 
-from typing import Generator, override
+from typing import Generator, TypedDict, override
 
 from loguru import logger
-from pydantic import BaseModel, Field, PositiveInt, field_validator
+from pydantic import BaseModel, Field, field_validator
 from uuid_extensions import uuid7str
 
+from experiments.config.settings import ExperimentSettings, ResourceSettings
 from experiments.core.data.datasets import Dataset
 from experiments.core.modeling.classifiers import ClassifierFactory, ModelType, Technique
 from experiments.core.predictions.repository import (
@@ -25,15 +26,17 @@ from experiments.pipelines.training.pipeline import (
 )
 
 
+class ExperimentConfig(TypedDict, total=False):
+    """Configuration for experiments."""
+
+    num_seeds: int
+    use_gpu: bool
+    n_jobs: int
+
+
 class ExperimentParams(BaseModel):
     """Parameters for executing an experiment."""
 
-    n_jobs: PositiveInt = Field(
-        default=1,
-        json_schema_extra={
-            "description": "Number of parallel jobs to use for experiment execution."
-        },
-    )
     datasets: list[Dataset] = Field(
         default_factory=lambda: list(Dataset),
         json_schema_extra={"description": "List of datasets to include in the experiment."},
@@ -41,14 +44,6 @@ class ExperimentParams(BaseModel):
     excluded_models: list[ModelType] = Field(
         default_factory=list,
         json_schema_extra={"description": "List of model types to exclude from the experiment."},
-    )
-    num_seeds: PositiveInt = Field(
-        default=30,
-        json_schema_extra={"description": "Number of random seeds to use for experiment tasks."},
-    )
-    use_gpu: bool = Field(
-        default=False,
-        json_schema_extra={"description": "Whether to use GPU for training."},
     )
     execution_id: str = Field(
         default_factory=uuid7str,
@@ -125,6 +120,8 @@ class ExperimentExecutor:
         training_data_loader: TrainingDataLoader,
         classifier_factory: ClassifierFactory,
         predictions_repository: ModelPredictionsRepository,
+        experiment_settings: ExperimentSettings,
+        resource_settings: ResourceSettings,
     ) -> None:
         self._training_pipeline_factory = training_pipeline_factory
         self._pipeline_executor = pipeline_executor
@@ -133,24 +130,30 @@ class ExperimentExecutor:
         self._training_data_loader = training_data_loader
         self._classifier_factory = classifier_factory
         self._predictions_repository = predictions_repository
+        self._experiment_settings = experiment_settings
+        self._resource_settings = resource_settings
 
-    def execute_experiment(self, params: ExperimentParams) -> None:
+        self._default_config: ExperimentConfig = {
+            "num_seeds": self._experiment_settings.num_seeds,
+            "use_gpu": self._resource_settings.use_gpu,
+            "n_jobs": self._resource_settings.n_jobs,
+        }
+
+    def execute_experiment(
+        self, params: ExperimentParams, config: ExperimentConfig | None = None
+    ) -> None:
         """Execute the experiment with the given parameters."""
-        self._schedule_pipelines(params)
-        self._execute_pipelines(params.execution_id, params.n_jobs)
+        config = self._merge_with_default_config(config or {})
+        self._schedule_pipelines(params, config)
+        self._execute_pipelines(params.execution_id, config["n_jobs"])
 
-    def get_completed_count(self, execution_id: str) -> int:
-        """Get the number of completed combinations for an execution.
+    def _merge_with_default_config(self, config: ExperimentConfig) -> ExperimentConfig:
+        """Get the default experiment configuration from settings."""
+        merged_config = self._default_config.copy()
+        merged_config.update(config)
+        return merged_config
 
-        Args:
-            execution_id: The execution identifier to check.
-
-        Returns:
-            The number of completed combinations, or 0 if none exist.
-        """
-        return len(self._predictions_repository.get_completed_combinations(execution_id))
-
-    def _schedule_pipelines(self, params: ExperimentParams) -> None:
+    def _schedule_pipelines(self, params: ExperimentParams, config: ExperimentConfig) -> None:
         """Schedule training pipelines for all valid model/technique/seed combinations."""
         completed = self._get_completed_combinations(params.execution_id)
 
@@ -161,7 +164,7 @@ class ExperimentExecutor:
             for model_type in self._get_model_types(params):
                 for technique in Technique:
                     if self._is_valid_combination(model_type, technique):
-                        for seed in self._generate_seeds(params.num_seeds):
+                        for seed in self._generate_seeds(config["num_seeds"]):
                             combination = ExperimentCombination(
                                 dataset=dataset,
                                 model_type=model_type,
@@ -173,7 +176,7 @@ class ExperimentExecutor:
                                 continue
 
                             pipeline, initial_state, context = self._create_training_pipeline(
-                                dataset, model_type, technique, seed, use_gpu=params.use_gpu
+                                dataset, model_type, technique, seed, use_gpu=config["use_gpu"]
                             )
                             self._pipeline_executor.schedule(pipeline, initial_state, context)
                             scheduled_count += 1
@@ -288,3 +291,14 @@ class ExperimentExecutor:
             max_workers=workers,
         )
         self._pipeline_executor.wait()
+
+    def get_completed_count(self, execution_id: str) -> int:
+        """Get the number of completed combinations for an execution.
+
+        Args:
+            execution_id: The execution identifier to check.
+
+        Returns:
+            The number of completed combinations, or 0 if none exist.
+        """
+        return len(self._predictions_repository.get_completed_combinations(execution_id))

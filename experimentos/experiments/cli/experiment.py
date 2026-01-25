@@ -6,7 +6,7 @@ import typer
 from experiments.containers import container
 from experiments.core.data.datasets import Dataset
 from experiments.core.modeling.classifiers import ModelType
-from experiments.services.experiment_executor import ExperimentParams
+from experiments.services.experiment_executor import ExperimentConfig, ExperimentParams
 
 app = typer.Typer()
 
@@ -63,13 +63,15 @@ def run(
         params = get_experiment_params()
         logger.debug(f"Experiment parameters: {params}")
 
+        config = get_experiment_config()
+
         logger.info(
             "Executing experiment for datasets: {datasets}",
             datasets=", ".join(d for d in params.datasets),
         )
 
         try:
-            executor.execute_experiment(params)
+            executor.execute_experiment(params, config)
         except Exception as e:
             logger.error(f"Experiment run failed: {e}")
             return typer.Exit(1)
@@ -86,16 +88,21 @@ def run(
             return ExperimentParams(
                 datasets=datasets,
                 excluded_models=exclude_models or [],
-                n_jobs=get_effective_n_jobs(),
-                use_gpu=get_effective_use_gpu(),
                 execution_id=execution_id,
             )
         return ExperimentParams(
             datasets=datasets,
             excluded_models=exclude_models or [],
-            n_jobs=get_effective_n_jobs(),
-            use_gpu=get_effective_use_gpu(),
         )
+
+    def get_experiment_config() -> ExperimentConfig:
+        """Construct experiment configuration based on user input."""
+        config: ExperimentConfig = {}
+        if jobs is not None:
+            config["n_jobs"] = get_effective_n_jobs()
+        if use_gpu:
+            config["use_gpu"] = get_effective_use_gpu()
+        return config
 
     def validate_execution_id_for_continuation(exec_id: str) -> None:
         """Validate that the execution ID has prior work to continue."""

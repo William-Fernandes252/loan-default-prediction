@@ -290,6 +290,8 @@ class Container(containers.DeclarativeContainer):
         training_data_loader=_data_repository,
         classifier_factory=_classifier_factory,
         predictions_repository=_model_predictions_repository,
+        experiment_settings=settings.provided.experiment,
+        resource_settings=settings.provided.resources,
     )
 
     def init_resources(self, *args, **kwargs) -> Any:
