@@ -12,7 +12,6 @@ from experiments.core.modeling.classifiers import ClassifierFactory, ModelType, 
 from experiments.core.predictions.repository import (
     ExperimentCombination,
     ModelPredictionsRepository,
-    RawPredictions,
 )
 from experiments.core.training.data import TrainingDataLoader
 from experiments.core.training.splitters import DataSplitter
@@ -72,9 +71,6 @@ class _SavePredictionsOnTrainingCompletionObserver(
 
     @override
     def on_pipeline_finish(self, pipeline, result):
-        trained_model = result.final_state["trained_model"]
-
-        y_pred = trained_model.model.predict(result.final_state["data_split"].X_test)
         try:
             self._predictions_repository.save_predictions(
                 execution_id=self._execution_id,
@@ -82,10 +78,7 @@ class _SavePredictionsOnTrainingCompletionObserver(
                 dataset=result.context.dataset,
                 model_type=result.context.model_type,
                 technique=result.context.technique,
-                predictions=RawPredictions(
-                    target=result.final_state["data_split"].y_test,
-                    prediction=y_pred,
-                ),
+                predictions=result.final_state["predictions"],
             )
         except Exception as e:
             logger.error(

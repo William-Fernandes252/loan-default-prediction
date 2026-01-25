@@ -8,6 +8,7 @@ from experiments.core.modeling.classifiers import (
     ModelType,
     Technique,
 )
+from experiments.core.predictions.repository import RawPredictions
 from experiments.core.training.data import TrainingData, TrainingDataLoader
 from experiments.core.training.splitters import DataSplitter, SplitData
 from experiments.core.training.trainers import ModelTrainer, TrainedModel
@@ -50,6 +51,7 @@ class TrainingPipelineState(TypedDict, total=False):
     classifier: Classifier
     trained_model: TrainedModel
     training_data: TrainingData
+    predictions: RawPredictions
 
 
 type TrainingPipelineTask = Task[TrainingPipelineState, TrainingPipelineContext]

@@ -1,5 +1,6 @@
 """Definition of the training pipeline factory."""
 
+from experiments.core.predictions.repository import RawPredictions
 from experiments.core.training.trainers import ModelTrainRequest
 from experiments.lib.pipelines import Pipeline, TaskResult, TaskStatus
 from experiments.pipelines.training.pipeline import (
@@ -95,6 +96,26 @@ def train_model(
     return TaskResult(state, TaskStatus.SUCCESS, "Model trained successfully.")
 
 
+def predict(
+    state: TrainingPipelineState, context: TrainingPipelineContext
+) -> TrainingPipelineTaskResult:
+    """Make predictions using the trained model.
+
+    Args:
+        state: Current pipeline state.
+        context: Current pipeline context.
+
+    Returns:
+        Updated pipeline state with prediction results.
+    """
+    predictions = state["trained_model"].model.predict(state["data_split"].X_test)
+    state["predictions"] = RawPredictions(
+        target=state["data_split"].y_test,
+        prediction=predictions,
+    )
+    return TaskResult(state, TaskStatus.SUCCESS, "Predictions made successfully.")
+
+
 class TrainingPipelineFactory:
     """Factory for creating training pipelines based on model type and technique.
 
@@ -115,5 +136,6 @@ class TrainingPipelineFactory:
         pipeline.add_step("LoadTrainingData", load_training_data)
         pipeline.add_step("SplitData", split_data)
         pipeline.add_step("TrainModel", train_model)
+        pipeline.add_step("Predict", predict)
 
         return pipeline
