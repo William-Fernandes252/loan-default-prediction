@@ -106,6 +106,8 @@ class _SavePredictionsOnTrainingCompletionObserver(
                 seed=result.context.seed,
             )
             return Action.PROCEED
+        finally:
+            result.final_state = {}  # Clear state to free memory
 
 
 class ExperimentExecutor:
