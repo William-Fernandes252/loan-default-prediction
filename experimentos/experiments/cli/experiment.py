@@ -29,14 +29,23 @@ def run(
             help="Number of parallel jobs. Defaults to safe number based on RAM.",
         ),
     ] = None,
+    models_jobs: Annotated[
+        int | None,
+        typer.Option(
+            "--models-jobs",
+            "-m",
+            min=1,
+            help="Number of parallel jobs for model training. Defaults to safe number based on RAM.",
+        ),
+    ] = None,
     use_gpu: Annotated[
-        bool,
+        bool | None,
         typer.Option(
             "--use-gpu",
             "-g",
             help="Utilize GPU acceleration if available during experiments.",
         ),
-    ] = False,
+    ] = None,
     exclude_models: Annotated[
         list[ModelType] | None,
         typer.Option(
@@ -50,6 +59,7 @@ def run(
         str | None,
         typer.Option(
             "--execution-id",
+            "-e",
             help="Execution identifier. If provided, the experiment execution that refers to it will be continued, rather than starting a new one.",
         ),
     ] = None,
@@ -99,9 +109,11 @@ def run(
         """Construct experiment configuration based on user input."""
         config: ExperimentConfig = {}
         if jobs is not None:
-            config["n_jobs"] = get_effective_n_jobs()
-        if use_gpu:
-            config["use_gpu"] = get_effective_use_gpu()
+            config["n_jobs"] = jobs
+        if models_jobs is not None:
+            config["models_n_jobs"] = models_jobs
+        if use_gpu is not None:
+            config["use_gpu"] = use_gpu
         return config
 
     def validate_execution_id_for_continuation(exec_id: str) -> None:
@@ -120,16 +132,6 @@ def run(
                 "This will start a fresh experiment with the provided ID.",
                 execution_id=exec_id,
             )
-
-    def get_effective_n_jobs() -> int:
-        """Determine the effective number of parallel jobs."""
-        if jobs is not None:
-            return jobs
-        return container.settings().resources.n_jobs
-
-    def get_effective_use_gpu() -> bool:
-        """Determine whether to use GPU acceleration."""
-        return use_gpu and container.settings().resources.use_gpu
 
     def filter_datasets() -> list[Dataset]:
         """Filter datasets based on user input."""

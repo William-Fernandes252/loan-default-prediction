@@ -196,6 +196,9 @@ class ResourceSettings(BaseSettings):
     n_jobs: Annotated[int, Field(default=1)]
     """Default number of parallel jobs for processing."""
 
+    models_n_jobs: Annotated[int, Field(default=1)]
+    """Number of parallel jobs for model training."""
+
 
 class LdpSettings(BaseSettings):
     """Root settings class that composes all settings groups."""

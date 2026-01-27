@@ -31,6 +31,7 @@ class ExperimentConfig(TypedDict, total=False):
     num_seeds: int
     use_gpu: bool
     n_jobs: int
+    models_n_jobs: int
 
 
 class ExperimentParams(BaseModel):
@@ -132,6 +133,7 @@ class ExperimentExecutor:
             "num_seeds": self._experiment_settings.num_seeds,
             "use_gpu": self._resource_settings.use_gpu,
             "n_jobs": self._resource_settings.n_jobs,
+            "models_n_jobs": self._resource_settings.models_n_jobs,
         }
 
     def execute_experiment(
@@ -171,7 +173,7 @@ class ExperimentExecutor:
                                 continue
 
                             pipeline, initial_state, context = self._create_training_pipeline(
-                                dataset, model_type, technique, seed, use_gpu=config["use_gpu"]
+                                dataset, model_type, technique, seed, config
                             )
                             self._pipeline_executor.schedule(pipeline, initial_state, context)
                             scheduled_count += 1
@@ -227,14 +229,14 @@ class ExperimentExecutor:
         model_type: ModelType,
         technique: Technique,
         seed: int,
-        use_gpu: bool,
+        config: ExperimentConfig,
     ) -> tuple[TrainingPipeline, TrainingPipelineState, TrainingPipelineContext]:
         """Create a training pipeline for the given parameters."""
         pipeline = self._training_pipeline_factory.create_pipeline(
             name=self._get_pipeline_name(dataset, model_type, technique, seed)
         )
         context = self._create_training_pipeline_context(
-            dataset, model_type, technique, seed, use_gpu=use_gpu
+            dataset, model_type, technique, seed, config
         )
         initial_state = self._get_training_pipeline_initial_state()
         return pipeline, initial_state, context
@@ -255,7 +257,7 @@ class ExperimentExecutor:
         model_type: ModelType,
         technique: Technique,
         seed: int,
-        use_gpu: bool,
+        config: ExperimentConfig,
     ) -> TrainingPipelineContext:
         """Create the context for a training pipeline."""
         return TrainingPipelineContext(
@@ -267,8 +269,8 @@ class ExperimentExecutor:
             technique=technique,
             seed=seed,
             training_data_loader=self._training_data_loader,
-            use_gpu=use_gpu,
-            n_jobs=1,  # Each pipeline runs in its own thread
+            use_gpu=config.get("use_gpu", False),
+            n_jobs=config.get("models_n_jobs", 1),
         )
 
     def _get_training_pipeline_initial_state(self) -> TrainingPipelineState:
