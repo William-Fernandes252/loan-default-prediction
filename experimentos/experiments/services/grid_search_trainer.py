@@ -1,11 +1,12 @@
 """Implementation of model training using grid-search to optimize hyperparameters."""
 
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
+from sklearn.base import BaseEstimator
 from sklearn.model_selection import GridSearchCV, StratifiedKFold
 
-from experiments.core.modeling.classifiers import ModelType, Technique
+from experiments.core.modeling.classifiers import Classifier, ModelType, Technique
 from experiments.core.training.trainers import ModelTrainRequest, TrainedModel
 
 
@@ -59,7 +60,7 @@ class GridSearchModelTrainer:
 
         # Configure grid search
         grid = GridSearchCV(
-            estimator=request.classifier,
+            estimator=cast(BaseEstimator, request.classifier),
             param_grid=self.get_params_for_classifier(
                 request.model_type,
                 request.technique,
@@ -80,7 +81,7 @@ class GridSearchModelTrainer:
         grid.fit(request.data.X_train, request.data.y_train)
 
         return TrainedModel(
-            model=grid.best_estimator_,
+            model=cast(Classifier, grid.best_estimator_),
             params=grid.best_params_,
             seed=request.seed,
         )
