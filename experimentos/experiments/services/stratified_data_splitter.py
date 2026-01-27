@@ -34,7 +34,7 @@ class StratifiedDataSplitter:
         self,
         data: TrainingData,
         seed: int,
-    ) -> SplitData | None:
+    ) -> SplitData:
         """Split data into train and test sets with validation.
 
         This method materializes the LazyFrames into Numpy arrays to perform
