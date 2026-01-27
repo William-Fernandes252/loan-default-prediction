@@ -196,3 +196,4 @@ cython_debug/
 
 # Not the project lib
 !experiments/lib/
+!tests/**/lib/
