@@ -18,10 +18,15 @@ import typer
 from typing_extensions import Annotated
 
 from experiments.containers import container
+from experiments.core.analysis.metrics import Metric
 from experiments.core.data import Dataset
 from experiments.core.modeling.classifiers import Technique
 from experiments.lib.pipelines.execution import PipelineExecutor
 from experiments.pipelines.analysis.factory import (
+    build_cs_vs_resampling_pipeline,
+    build_imbalance_impact_pipeline,
+    build_metrics_heatmap_pipeline,
+    build_stability_pipeline,
     build_summary_table_pipeline,
     build_tradeoff_plot_pipeline,
 )
@@ -40,6 +45,10 @@ class AnalysisType(enum.StrEnum):
 
     SUMMARY_TABLE = "summary_table"
     TRADEOFF_PLOT = "tradeoff_plot"
+    STABILITY_PLOT = "stability_plot"
+    IMBALANCE_IMPACT_PLOT = "imbalance_impact_plot"
+    CS_VS_RESAMPLING_PLOT = "cs_vs_resampling_plot"
+    METRICS_HEATMAP = "metrics_heatmap"
 
 
 # Type alias for typer dataset argument
@@ -60,6 +69,16 @@ _TechniqueOption = Annotated[
         "--technique",
         "-t",
         help="Filter results by a specific technique (e.g., smote, rus).",
+    ),
+]
+
+# Type alias for metric option
+_MetricOption = Annotated[
+    Metric,
+    typer.Option(
+        "--metric",
+        "-m",
+        help="Metric to visualize (e.g., accuracy_balanced, g_mean, f1_score).",
     ),
 ]
 
@@ -244,6 +263,212 @@ def generate_tradeoff_plot(
             )
 
 
+@app.command("stability")
+def generate_stability_plot(
+    dataset: _DatasetArgument = None,
+    metric: _MetricOption = Metric.BALANCED_ACCURACY,
+    force: _ForceOption = False,
+    gpu: _GpuOption = False,
+) -> None:
+    """Generate a stability boxplot showing variance across seeds.
+
+    Creates a boxplot visualization showing the distribution of a metric
+    across different random seeds for each technique and model type.
+    """
+    datasets = _resolve_datasets(dataset)
+    executor = PipelineExecutor(max_workers=1)
+
+    for ds in datasets:
+        analysis_name = f"stability_plot_{metric.value}"
+
+        logger.info(f"Generating stability plot for {ds.value} ({metric.value})...")
+
+        # Build pipeline from factory
+        pipeline = build_stability_pipeline(metric=metric)
+
+        # Append persistence step (CLI responsibility)
+        pipeline.add_step(
+            name="SaveFigureArtifact",
+            task=save_figure_artifact,  # type: ignore[arg-type]
+        )
+
+        # Create context with dependencies
+        context = _create_analysis_context(
+            dataset=ds,
+            analysis_name=analysis_name,
+            force_overwrite=force,
+            use_gpu=gpu,
+        )
+
+        # Execute pipeline
+        result = executor.execute(
+            pipeline=pipeline,
+            initial_state={},  # type: ignore[arg-type]
+            context=context,
+        )
+
+        if result.succeeded():
+            logger.success(f"Stability plot saved for {ds.value}")
+        else:
+            logger.error(
+                f"Failed to generate stability plot for {ds.value}: {result.last_error()}"
+            )
+
+
+@app.command("imbalance")
+def generate_imbalance_impact_plot(
+    dataset: _DatasetArgument = None,
+    metric: _MetricOption = Metric.BALANCED_ACCURACY,
+    force: _ForceOption = False,
+    gpu: _GpuOption = False,
+) -> None:
+    """Generate an imbalance impact scatter plot.
+
+    Creates a scatter plot showing how the imbalance ratio affects
+    model performance for the specified metric.
+    """
+    datasets = _resolve_datasets(dataset)
+    executor = PipelineExecutor(max_workers=1)
+
+    for ds in datasets:
+        analysis_name = f"imbalance_impact_{metric.value}"
+
+        logger.info(f"Generating imbalance impact plot for {ds.value}...")
+
+        # Build pipeline from factory
+        pipeline = build_imbalance_impact_pipeline(metric=metric)
+
+        # Append persistence step (CLI responsibility)
+        pipeline.add_step(
+            name="SaveFigureArtifact",
+            task=save_figure_artifact,  # type: ignore[arg-type]
+        )
+
+        # Create context with dependencies
+        context = _create_analysis_context(
+            dataset=ds,
+            analysis_name=analysis_name,
+            force_overwrite=force,
+            use_gpu=gpu,
+        )
+
+        # Execute pipeline
+        result = executor.execute(
+            pipeline=pipeline,
+            initial_state={},  # type: ignore[arg-type]
+            context=context,
+        )
+
+        if result.succeeded():
+            logger.success(f"Imbalance impact plot saved for {ds.value}")
+        else:
+            logger.error(
+                f"Failed to generate imbalance impact plot for {ds.value}: {result.last_error()}"
+            )
+
+
+@app.command("comparison")
+def generate_cs_vs_resampling_plot(
+    dataset: _DatasetArgument = None,
+    force: _ForceOption = False,
+    gpu: _GpuOption = False,
+) -> None:
+    """Generate a cost-sensitive vs resampling comparison plot.
+
+    Creates a grouped bar chart comparing balanced accuracy for cost-sensitive
+    methods (MetaCost, CS-SVM) vs resampling methods (SMOTE, RUS, SMOTE-Tomek).
+    """
+    datasets = _resolve_datasets(dataset)
+    executor = PipelineExecutor(max_workers=1)
+
+    for ds in datasets:
+        analysis_name = "cs_vs_resampling_plot"
+
+        logger.info(f"Generating CS vs resampling plot for {ds.value}...")
+
+        # Build pipeline from factory
+        pipeline = build_cs_vs_resampling_pipeline()
+
+        # Append persistence step (CLI responsibility)
+        pipeline.add_step(
+            name="SaveFigureArtifact",
+            task=save_figure_artifact,  # type: ignore[arg-type]
+        )
+
+        # Create context with dependencies
+        context = _create_analysis_context(
+            dataset=ds,
+            analysis_name=analysis_name,
+            force_overwrite=force,
+            use_gpu=gpu,
+        )
+
+        # Execute pipeline
+        result = executor.execute(
+            pipeline=pipeline,
+            initial_state={},  # type: ignore[arg-type]
+            context=context,
+        )
+
+        if result.succeeded():
+            logger.success(f"CS vs resampling plot saved for {ds.value}")
+        else:
+            logger.error(
+                f"Failed to generate CS vs resampling plot for {ds.value}: {result.last_error()}"
+            )
+
+
+@app.command("heatmap")
+def generate_metrics_heatmap(
+    dataset: _DatasetArgument = None,
+    force: _ForceOption = False,
+    gpu: _GpuOption = False,
+) -> None:
+    """Generate a metrics heatmap.
+
+    Creates a heatmap visualization showing all metrics across techniques
+    and model types, with alphabetically sorted rows and columns.
+    """
+    datasets = _resolve_datasets(dataset)
+    executor = PipelineExecutor(max_workers=1)
+
+    for ds in datasets:
+        analysis_name = "metrics_heatmap"
+
+        logger.info(f"Generating metrics heatmap for {ds.value}...")
+
+        # Build pipeline from factory
+        pipeline = build_metrics_heatmap_pipeline()
+
+        # Append persistence step (CLI responsibility)
+        pipeline.add_step(
+            name="SaveFigureArtifact",
+            task=save_figure_artifact,  # type: ignore[arg-type]
+        )
+
+        # Create context with dependencies
+        context = _create_analysis_context(
+            dataset=ds,
+            analysis_name=analysis_name,
+            force_overwrite=force,
+            use_gpu=gpu,
+        )
+
+        # Execute pipeline
+        result = executor.execute(
+            pipeline=pipeline,
+            initial_state={},  # type: ignore[arg-type]
+            context=context,
+        )
+
+        if result.succeeded():
+            logger.success(f"Metrics heatmap saved for {ds.value}")
+        else:
+            logger.error(
+                f"Failed to generate metrics heatmap for {ds.value}: {result.last_error()}"
+            )
+
+
 @app.command("all")
 def run_all_analyses(
     dataset: _DatasetArgument = None,
@@ -252,11 +477,17 @@ def run_all_analyses(
 ) -> None:
     """Run all analysis types sequentially.
 
-    Generates both summary tables and trade-off plots for the specified
-    dataset(s).
+    Generates all available analysis outputs (summary tables, plots, heatmaps)
+    for the specified dataset(s).
     """
     generate_summary_table(dataset=dataset, technique=None, force=force, gpu=gpu)
     generate_tradeoff_plot(dataset=dataset, force=force, gpu=gpu)
+    generate_stability_plot(dataset=dataset, metric=Metric.BALANCED_ACCURACY, force=force, gpu=gpu)
+    generate_imbalance_impact_plot(
+        dataset=dataset, metric=Metric.BALANCED_ACCURACY, force=force, gpu=gpu
+    )
+    generate_cs_vs_resampling_plot(dataset=dataset, force=force, gpu=gpu)
+    generate_metrics_heatmap(dataset=dataset, force=force, gpu=gpu)
 
 
 if __name__ == "__main__":

@@ -12,6 +12,7 @@ This follows the "Append Strategy" pattern where:
 import matplotlib.pyplot as plt
 import polars as pl
 
+from experiments.core.analysis.metrics import Metric
 from experiments.core.modeling.classifiers import Technique
 from experiments.lib.pipelines import Pipeline
 from experiments.pipelines.analysis.pipeline import (
@@ -21,10 +22,15 @@ from experiments.pipelines.analysis.pipeline import (
 )
 from experiments.pipelines.analysis.tasks.common import (
     compute_metrics,
+    compute_per_seed_metrics,
     load_experiment_results,
 )
 from experiments.pipelines.analysis.tasks.generation import (
+    create_imbalance_impact_task,
+    create_stability_plot_task,
     create_summary_table_task,
+    generate_cs_vs_resampling_plot,
+    generate_metrics_heatmap,
     generate_tradeoff_plot,
 )
 
@@ -129,7 +135,185 @@ def build_tradeoff_plot_pipeline() -> AnalysisPipeline[plt.Figure]:
     return pipeline
 
 
+def build_stability_pipeline(
+    metric: Metric = Metric.BALANCED_ACCURACY,
+) -> AnalysisPipeline[plt.Figure]:
+    """Build a pipeline for generating stability boxplots.
+
+    Creates a pipeline with the following steps:
+    1. LoadExperimentResults: Fetches predictions from repository
+    2. ComputePerSeedMetrics: Computes per-seed evaluation metrics (lazy)
+    3. GenerateStabilityPlot: Creates the boxplot visualization
+
+    Persistence steps should be appended by the caller using `pipeline.add_step()`.
+
+    Args:
+        metric: The metric to visualize in the boxplot. Defaults to balanced accuracy.
+
+    Returns:
+        AnalysisPipeline[plt.Figure]: A configured pipeline that produces
+        a matplotlib Figure in the `result_data` state key.
+    """
+    pipeline_name = f"StabilityPlot_{metric.value}"
+
+    pipeline: AnalysisPipeline[plt.Figure] = Pipeline[
+        AnalysisPipelineState[plt.Figure], AnalysisPipelineContext
+    ](name=pipeline_name)
+
+    # Step 1: Load experiment predictions
+    pipeline.add_step(
+        name="LoadExperimentResults",
+        task=load_experiment_results,
+    )
+
+    # Step 2: Compute per-seed metrics (kept as LazyFrame)
+    pipeline.add_step(
+        name="ComputePerSeedMetrics",
+        task=compute_per_seed_metrics,
+    )
+
+    # Step 3: Generate the stability plot
+    pipeline.add_step(
+        name="GenerateStabilityPlot",
+        task=create_stability_plot_task(metric=metric),  # type: ignore[arg-type]
+    )
+
+    return pipeline
+
+
+def build_imbalance_impact_pipeline(
+    metric: Metric = Metric.BALANCED_ACCURACY,
+) -> AnalysisPipeline[plt.Figure]:
+    """Build a pipeline for generating imbalance impact scatter plots.
+
+    Creates a pipeline with the following steps:
+    1. LoadExperimentResults: Fetches predictions from repository
+    2. ComputeMetrics: Computes aggregated evaluation metrics (lazy)
+    3. GenerateImbalanceImpactPlot: Creates the scatter plot visualization
+
+    Persistence steps should be appended by the caller using `pipeline.add_step()`.
+
+    Args:
+        metric: The metric to visualize. Defaults to balanced accuracy.
+
+    Returns:
+        AnalysisPipeline[plt.Figure]: A configured pipeline that produces
+        a matplotlib Figure in the `result_data` state key.
+    """
+    pipeline_name = f"ImbalanceImpactPlot_{metric.value}"
+
+    pipeline: AnalysisPipeline[plt.Figure] = Pipeline[
+        AnalysisPipelineState[plt.Figure], AnalysisPipelineContext
+    ](name=pipeline_name)
+
+    # Step 1: Load experiment predictions
+    pipeline.add_step(
+        name="LoadExperimentResults",
+        task=load_experiment_results,
+    )
+
+    # Step 2: Compute aggregated metrics (kept as LazyFrame)
+    pipeline.add_step(
+        name="ComputeMetrics",
+        task=compute_metrics,
+    )
+
+    # Step 3: Generate the imbalance impact plot
+    pipeline.add_step(
+        name="GenerateImbalanceImpactPlot",
+        task=create_imbalance_impact_task(metric=metric),  # type: ignore[arg-type]
+    )
+
+    return pipeline
+
+
+def build_cs_vs_resampling_pipeline() -> AnalysisPipeline[plt.Figure]:
+    """Build a pipeline for comparing cost-sensitive vs resampling techniques.
+
+    Creates a pipeline with the following steps:
+    1. LoadExperimentResults: Fetches predictions from repository
+    2. ComputePerSeedMetrics: Computes per-seed evaluation metrics (lazy)
+    3. GenerateCsVsResamplingPlot: Creates the bar plot visualization
+
+    Persistence steps should be appended by the caller using `pipeline.add_step()`.
+
+    Returns:
+        AnalysisPipeline[plt.Figure]: A configured pipeline that produces
+        a matplotlib Figure in the `result_data` state key.
+    """
+    pipeline_name = "CsVsResamplingPlot"
+
+    pipeline: AnalysisPipeline[plt.Figure] = Pipeline[
+        AnalysisPipelineState[plt.Figure], AnalysisPipelineContext
+    ](name=pipeline_name)
+
+    # Step 1: Load experiment predictions
+    pipeline.add_step(
+        name="LoadExperimentResults",
+        task=load_experiment_results,
+    )
+
+    # Step 2: Compute per-seed metrics (kept as LazyFrame)
+    pipeline.add_step(
+        name="ComputePerSeedMetrics",
+        task=compute_per_seed_metrics,
+    )
+
+    # Step 3: Generate the comparison plot
+    pipeline.add_step(
+        name="GenerateCsVsResamplingPlot",
+        task=generate_cs_vs_resampling_plot,  # type: ignore[arg-type]
+    )
+
+    return pipeline
+
+
+def build_metrics_heatmap_pipeline() -> AnalysisPipeline[plt.Figure]:
+    """Build a pipeline for generating metrics heatmaps.
+
+    Creates a pipeline with the following steps:
+    1. LoadExperimentResults: Fetches predictions from repository
+    2. ComputeMetrics: Computes aggregated evaluation metrics (lazy)
+    3. GenerateMetricsHeatmap: Creates the heatmap visualization
+
+    Persistence steps should be appended by the caller using `pipeline.add_step()`.
+
+    Returns:
+        AnalysisPipeline[plt.Figure]: A configured pipeline that produces
+        a matplotlib Figure in the `result_data` state key.
+    """
+    pipeline_name = "MetricsHeatmap"
+
+    pipeline: AnalysisPipeline[plt.Figure] = Pipeline[
+        AnalysisPipelineState[plt.Figure], AnalysisPipelineContext
+    ](name=pipeline_name)
+
+    # Step 1: Load experiment predictions
+    pipeline.add_step(
+        name="LoadExperimentResults",
+        task=load_experiment_results,
+    )
+
+    # Step 2: Compute aggregated metrics (kept as LazyFrame)
+    pipeline.add_step(
+        name="ComputeMetrics",
+        task=compute_metrics,
+    )
+
+    # Step 3: Generate the heatmap
+    pipeline.add_step(
+        name="GenerateMetricsHeatmap",
+        task=generate_metrics_heatmap,  # type: ignore[arg-type]
+    )
+
+    return pipeline
+
+
 __all__ = [
     "build_summary_table_pipeline",
     "build_tradeoff_plot_pipeline",
+    "build_stability_pipeline",
+    "build_imbalance_impact_pipeline",
+    "build_cs_vs_resampling_pipeline",
+    "build_metrics_heatmap_pipeline",
 ]

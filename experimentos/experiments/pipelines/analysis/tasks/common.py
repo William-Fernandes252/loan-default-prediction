@@ -54,11 +54,11 @@ def compute_metrics[T](
     state: AnalysisPipelineState[T],
     context: AnalysisPipelineContext,
 ) -> AnalysisPipelineTaskResult[T]:
-    """Compute evaluation metrics from loaded model predictions.
+    """Compute aggregated evaluation metrics from loaded model predictions.
 
     Uses the results evaluator from the context to compute metrics from
-    the predictions stored in the state. The result is kept as a LazyFrame
-    to defer computation until needed.
+    the predictions stored in the state. The result is aggregated by
+    model_type and technique with mean/std for each metric.
 
     Args:
         state: The current state containing model predictions.
@@ -83,7 +83,44 @@ def compute_metrics[T](
     return TaskResult(
         updated_state,
         TaskStatus.SUCCESS,
-        "Computed evaluation metrics (lazy).",
+        "Computed aggregated evaluation metrics (lazy).",
+    )
+
+
+def compute_per_seed_metrics[T](
+    state: AnalysisPipelineState[T],
+    context: AnalysisPipelineContext,
+) -> AnalysisPipelineTaskResult[T]:
+    """Compute per-seed evaluation metrics for stability analysis.
+
+    Uses the results evaluator to compute non-aggregated metrics for each
+    individual prediction (seed). This is useful for visualizations that
+    require the full distribution, such as boxplots.
+
+    Args:
+        state: The current state containing model predictions.
+        context: The context containing the results evaluator.
+
+    Returns:
+        AnalysisPipelineTaskResult: Updated state with per_seed_metrics
+        as a LazyFrame, or failure status if no predictions are available.
+    """
+    model_predictions = state.get("model_predictions")
+
+    if model_predictions is None:
+        return TaskResult(
+            state,
+            TaskStatus.FAILURE,
+            "No model predictions available to compute per-seed metrics.",
+        )
+
+    per_seed_metrics: pl.LazyFrame = context.results_evaluator.evaluate_per_seed(model_predictions)
+
+    updated_state: AnalysisPipelineState[T] = {**state, "per_seed_metrics": per_seed_metrics}
+    return TaskResult(
+        updated_state,
+        TaskStatus.SUCCESS,
+        "Computed per-seed evaluation metrics (lazy).",
     )
 
 
@@ -92,12 +129,17 @@ LoadExperimentResultsTask = load_experiment_results
 """Task to load experiment results from the predictions repository."""
 
 ComputeMetricsTask = compute_metrics
-"""Task to compute evaluation metrics from model predictions."""
+"""Task to compute aggregated evaluation metrics from model predictions."""
+
+ComputePerSeedMetricsTask = compute_per_seed_metrics
+"""Task to compute per-seed evaluation metrics for stability analysis."""
 
 
 __all__ = [
     "LoadExperimentResultsTask",
     "ComputeMetricsTask",
+    "ComputePerSeedMetricsTask",
     "load_experiment_results",
     "compute_metrics",
+    "compute_per_seed_metrics",
 ]

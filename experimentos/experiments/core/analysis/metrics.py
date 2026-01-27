@@ -22,7 +22,7 @@ Used to populate the `imbalance_ratio` column for cross-dataset analysis
 class Metric(enum.StrEnum):
     """Enumeration of metrics used to evaluate the models trained in the experiments."""
 
-    ACCURACY_BALANCED = "accuracy_balanced"
+    BALANCED_ACCURACY = "balanced_accuracy"
     G_MEAN = "g_mean"
     F1_SCORE = "f1_score"
     PRECISION = "precision"

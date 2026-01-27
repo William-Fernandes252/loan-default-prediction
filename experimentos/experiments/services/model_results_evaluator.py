@@ -14,8 +14,8 @@ class ModelResultsEvaluatorImpl:
     """Evaluates classification model results by computing metrics from predictions.
 
     This evaluator computes confusion matrix-based metrics for each model prediction
-    and aggregates them by model type and technique, providing mean and standard
-    deviation for each metric.
+    and can provide either aggregated metrics (mean/std) or per-seed metrics for
+    stability analysis.
     """
 
     def evaluate(
@@ -56,6 +56,31 @@ class ModelResultsEvaluatorImpl:
             .group_by("model_type", "technique")
             .agg(*self._build_aggregation_exprs(metric_ids))
         )
+
+    def evaluate_per_seed(
+        self,
+        predictions: ModelPredictionsResults,
+    ) -> pl.LazyFrame:
+        """Evaluates classification results without aggregation.
+
+        Computes per-seed metrics for each model/technique combination. This is
+        useful for stability analysis where the distribution across seeds needs
+        to be visualized (e.g., boxplots).
+
+        Args:
+            predictions: An iterator of model predictions.
+
+        Returns:
+            pl.LazyFrame: A LazyFrame containing computed metrics for each
+                individual prediction, with columns: model_type, technique,
+                seed, and all metric values.
+        """
+        metrics_list = [self._compute_metrics_for_prediction(p) for p in predictions]
+
+        if not metrics_list:
+            return pl.LazyFrame()
+
+        return reduce(lambda acc, lf: pl.concat([acc, lf]), metrics_list)
 
     def _compute_confusion_matrix(self, predictions_lf: pl.LazyFrame) -> pl.LazyFrame:
         """Computes the confusion matrix components from binary predictions.
@@ -128,7 +153,7 @@ class ModelResultsEvaluatorImpl:
             # Composite metrics (computed after base metrics are available)
             f1_expr.alias(Metric.F1_SCORE),
             g_mean_expr.alias(Metric.G_MEAN),
-            balanced_accuracy_expr.alias(Metric.ACCURACY_BALANCED),
+            balanced_accuracy_expr.alias(Metric.BALANCED_ACCURACY),
         )
 
     def _compute_metrics_for_prediction(

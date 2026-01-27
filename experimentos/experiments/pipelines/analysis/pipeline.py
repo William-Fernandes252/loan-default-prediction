@@ -8,6 +8,8 @@ from typing import (
     TypedDict,
 )
 
+import polars as pl
+
 from experiments.core.analysis.evaluation import (
     EvaluationMetrics,
     ModelPredictionsResults,
@@ -60,7 +62,12 @@ class AnalysisPipelineState[T](TypedDict, total=False):
     model_predictions: Annotated[
         ModelPredictionsResults | None, "The experiment results data loaded from the repository."
     ]
-    metrics: Annotated[EvaluationMetrics | None, "Computed analysis metrics."]
+    metrics: Annotated[
+        EvaluationMetrics | None, "Aggregated metrics (mean/std) by model/technique."
+    ]
+    per_seed_metrics: Annotated[
+        pl.LazyFrame | None, "Per-seed metrics for stability analysis (boxplots)."
+    ]
     already_exists: Annotated[bool, "Flag indicating if the analysis artifact already exists."]
     result_data: Annotated[T, "The output of the analysis pipeline. Can be an image, report, etc."]
     artifact: Annotated[BinaryIO, "The binary artifact generated from the analysis."]

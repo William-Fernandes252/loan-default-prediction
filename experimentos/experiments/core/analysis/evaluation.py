@@ -28,3 +28,23 @@ class ModelResultsEvaluator(Protocol):
                 and technique.
         """
         ...
+
+    def evaluate_per_seed(
+        self,
+        predictions: ModelPredictionsResults,
+    ) -> pl.LazyFrame:
+        """Evaluates classification results without aggregation.
+
+        Computes per-seed metrics for each model/technique combination. This is
+        useful for stability analysis where the distribution across seeds needs
+        to be visualized (e.g., boxplots).
+
+        Args:
+            predictions: An iterator of model predictions.
+
+        Returns:
+            pl.LazyFrame: A LazyFrame containing computed metrics for each
+                individual prediction, with columns: model_type, technique,
+                and all metric values.
+        """
+        ...
