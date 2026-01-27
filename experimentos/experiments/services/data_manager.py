@@ -5,12 +5,12 @@ from typing import Iterable, Sequence
 from experiments.config.settings import ResourceSettings
 from experiments.core.data import DataRepository, Dataset
 from experiments.lib.pipelines import PipelineExecutionResult, PipelineExecutor
-from experiments.pipelines.data.base import (
+from experiments.pipelines.data.factory import DataProcessingPipelineFactory
+from experiments.pipelines.data.pipeline import (
     DataProcessingPipeline,
     DataProcessingPipelineContext,
     DataProcessingPipelineState,
 )
-from experiments.pipelines.data.factory import DataProcessingPipelineFactory
 from experiments.services.resource_calculator import ResourceCalculator
 
 

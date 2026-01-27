@@ -1,7 +1,7 @@
 """Data loading tasks for data processing pipelines."""
 
 from experiments.lib.pipelines import TaskResult, TaskStatus
-from experiments.pipelines.data.base import (
+from experiments.pipelines.data.pipeline import (
     DataProcessingPipelineContext,
     DataProcessingPipelineState,
 )

@@ -6,16 +6,16 @@ from experiments.core.data import (
 )
 from experiments.core.modeling.features import FeatureExtractor
 from experiments.lib.pipelines import Pipeline, Task, TaskResult, TaskStatus
-from experiments.pipelines.data.base import (
-    DataProcessingPipeline,
-    DataProcessingPipelineContext,
-    DataProcessingPipelineState,
-)
 from experiments.pipelines.data.exporters import (
     export_final_features_as_parquet,
     export_processed_data_as_parquet,
 )
 from experiments.pipelines.data.loaders import load_raw_data_from_csv
+from experiments.pipelines.data.pipeline import (
+    DataProcessingPipeline,
+    DataProcessingPipelineContext,
+    DataProcessingPipelineState,
+)
 
 
 class DataProcessingPipelineSteps(Enum):
