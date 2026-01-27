@@ -18,6 +18,7 @@ from experiments.pipelines.data import (
 )
 from experiments.pipelines.predictions.factory import PredictionsPipelineFactory
 from experiments.pipelines.training.factory import TrainingPipelineFactory
+from experiments.services.analysis_artifacts_repository import AnalysisArtifactsRepository
 from experiments.services.data_manager import DataManager
 from experiments.services.data_repository import DataStorageLayout, StorageDataRepository
 from experiments.services.experiment_executor import ExperimentExecutor
@@ -280,6 +281,12 @@ class Container(containers.DeclarativeContainer):
         storage=_storage,
     )
     """Model predictions repository for storing and retrieving predictions."""
+
+    _analysis_artifacts_repository = providers.Singleton(
+        AnalysisArtifactsRepository,
+        storage=_storage,
+    )
+    """Analysis artifacts repository for storing and retrieving analysis outputs."""
 
     experiment_executor = providers.Singleton(
         ExperimentExecutor,
