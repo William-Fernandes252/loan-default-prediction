@@ -28,7 +28,7 @@ class DescribeUnbalancedLearnerFactoryInit:
 
         assert factory._use_gpu is False
 
-    def it_accepts_gpu_flag(self) -> None:
+    def it_accepts_gpu_flag_when_cuml_available(self) -> None:
         with patch("experiments.services.unbalanced_learner_factory.HAS_CUML", True):
             factory = UnbalancedLearnerFactory(use_gpu=True)
 
@@ -43,25 +43,17 @@ class DescribeUnbalancedLearnerFactoryInit:
 
 
 class DescribeCreateModelWithRandomForest:
-    @pytest.fixture
-    def factory(self) -> UnbalancedLearnerFactory:
-        return UnbalancedLearnerFactory(use_gpu=False)
-
-    def it_creates_random_forest_classifier(self, factory: UnbalancedLearnerFactory) -> None:
-        result = factory.create_model(
-            model_type=ModelType.RANDOM_FOREST,
-            technique=Technique.BASELINE,
-            seed=42,
+    def it_creates_random_forest_pipeline(self, learner_factory: UnbalancedLearnerFactory) -> None:
+        result = learner_factory.create_model(
+            model_type=ModelType.RANDOM_FOREST, technique=Technique.BASELINE, seed=42
         )
 
         assert isinstance(result, ImbPipeline)
         assert isinstance(result.named_steps["clf"], RandomForestClassifier)  # type: ignore[union-attr]
 
-    def it_uses_provided_seed(self, factory: UnbalancedLearnerFactory) -> None:
-        result = factory.create_model(
-            model_type=ModelType.RANDOM_FOREST,
-            technique=Technique.BASELINE,
-            seed=123,
+    def it_uses_provided_seed(self, learner_factory: UnbalancedLearnerFactory) -> None:
+        result = learner_factory.create_model(
+            model_type=ModelType.RANDOM_FOREST, technique=Technique.BASELINE, seed=123
         )
 
         clf = result.named_steps["clf"]  # type: ignore[union-attr]
@@ -69,25 +61,17 @@ class DescribeCreateModelWithRandomForest:
 
 
 class DescribeCreateModelWithSVM:
-    @pytest.fixture
-    def factory(self) -> UnbalancedLearnerFactory:
-        return UnbalancedLearnerFactory(use_gpu=False)
-
-    def it_creates_svm_classifier(self, factory: UnbalancedLearnerFactory) -> None:
-        result = factory.create_model(
-            model_type=ModelType.SVM,
-            technique=Technique.BASELINE,
-            seed=42,
+    def it_creates_svm_pipeline(self, learner_factory: UnbalancedLearnerFactory) -> None:
+        result = learner_factory.create_model(
+            model_type=ModelType.SVM, technique=Technique.BASELINE, seed=42
         )
 
         assert isinstance(result, ImbPipeline)
         assert isinstance(result.named_steps["clf"], SVC)  # type: ignore[union-attr]
 
-    def it_enables_probability_for_svm(self, factory: UnbalancedLearnerFactory) -> None:
-        result = factory.create_model(
-            model_type=ModelType.SVM,
-            technique=Technique.BASELINE,
-            seed=42,
+    def it_enables_probability_estimation(self, learner_factory: UnbalancedLearnerFactory) -> None:
+        result = learner_factory.create_model(
+            model_type=ModelType.SVM, technique=Technique.BASELINE, seed=42
         )
 
         clf = result.named_steps["clf"]  # type: ignore[union-attr]
@@ -95,25 +79,17 @@ class DescribeCreateModelWithSVM:
 
 
 class DescribeCreateModelWithXGBoost:
-    @pytest.fixture
-    def factory(self) -> UnbalancedLearnerFactory:
-        return UnbalancedLearnerFactory(use_gpu=False)
-
-    def it_creates_xgboost_classifier(self, factory: UnbalancedLearnerFactory) -> None:
-        result = factory.create_model(
-            model_type=ModelType.XGBOOST,
-            technique=Technique.BASELINE,
-            seed=42,
+    def it_creates_xgboost_pipeline(self, learner_factory: UnbalancedLearnerFactory) -> None:
+        result = learner_factory.create_model(
+            model_type=ModelType.XGBOOST, technique=Technique.BASELINE, seed=42
         )
 
         assert isinstance(result, ImbPipeline)
         assert isinstance(result.named_steps["clf"], XGBClassifier)  # type: ignore[union-attr]
 
-    def it_uses_cpu_device_by_default(self, factory: UnbalancedLearnerFactory) -> None:
-        result = factory.create_model(
-            model_type=ModelType.XGBOOST,
-            technique=Technique.BASELINE,
-            seed=42,
+    def it_defaults_to_cpu_device(self, learner_factory: UnbalancedLearnerFactory) -> None:
+        result = learner_factory.create_model(
+            model_type=ModelType.XGBOOST, technique=Technique.BASELINE, seed=42
         )
 
         clf = result.named_steps["clf"]  # type: ignore[union-attr]
@@ -121,15 +97,9 @@ class DescribeCreateModelWithXGBoost:
 
 
 class DescribeCreateModelWithMLP:
-    @pytest.fixture
-    def factory(self) -> UnbalancedLearnerFactory:
-        return UnbalancedLearnerFactory(use_gpu=False)
-
-    def it_creates_mlp_classifier(self, factory: UnbalancedLearnerFactory) -> None:
-        result = factory.create_model(
-            model_type=ModelType.MLP,
-            technique=Technique.BASELINE,
-            seed=42,
+    def it_creates_mlp_pipeline(self, learner_factory: UnbalancedLearnerFactory) -> None:
+        result = learner_factory.create_model(
+            model_type=ModelType.MLP, technique=Technique.BASELINE, seed=42
         )
 
         assert isinstance(result, ImbPipeline)
@@ -137,12 +107,8 @@ class DescribeCreateModelWithMLP:
 
 
 class DescribeCreateModelWithSamplingTechniques:
-    @pytest.fixture
-    def factory(self) -> UnbalancedLearnerFactory:
-        return UnbalancedLearnerFactory(use_gpu=False)
-
-    def it_adds_random_under_sampler(self, factory: UnbalancedLearnerFactory) -> None:
-        result = factory.create_model(
+    def it_adds_random_under_sampler(self, learner_factory: UnbalancedLearnerFactory) -> None:
+        result = learner_factory.create_model(
             model_type=ModelType.RANDOM_FOREST,
             technique=Technique.RANDOM_UNDER_SAMPLING,
             seed=42,
@@ -151,90 +117,65 @@ class DescribeCreateModelWithSamplingTechniques:
         assert "sampler" in result.named_steps  # type: ignore[operator]
         assert isinstance(result.named_steps["sampler"], RandomUnderSampler)  # type: ignore[union-attr]
 
-    def it_adds_smote_sampler(self, factory: UnbalancedLearnerFactory) -> None:
-        result = factory.create_model(
-            model_type=ModelType.RANDOM_FOREST,
-            technique=Technique.SMOTE,
-            seed=42,
+    def it_adds_smote_sampler(self, learner_factory: UnbalancedLearnerFactory) -> None:
+        result = learner_factory.create_model(
+            model_type=ModelType.RANDOM_FOREST, technique=Technique.SMOTE, seed=42
         )
 
         assert "sampler" in result.named_steps  # type: ignore[operator]
         assert isinstance(result.named_steps["sampler"], SMOTE)  # type: ignore[union-attr]
 
-    def it_adds_smote_tomek_sampler(self, factory: UnbalancedLearnerFactory) -> None:
-        result = factory.create_model(
-            model_type=ModelType.RANDOM_FOREST,
-            technique=Technique.SMOTE_TOMEK,
-            seed=42,
+    def it_adds_smote_tomek_sampler(self, learner_factory: UnbalancedLearnerFactory) -> None:
+        result = learner_factory.create_model(
+            model_type=ModelType.RANDOM_FOREST, technique=Technique.SMOTE_TOMEK, seed=42
         )
 
         assert "sampler" in result.named_steps  # type: ignore[operator]
         assert isinstance(result.named_steps["sampler"], SMOTETomek)  # type: ignore[union-attr]
 
-    def it_wraps_with_metacost_classifier(self, factory: UnbalancedLearnerFactory) -> None:
-        result = factory.create_model(
-            model_type=ModelType.RANDOM_FOREST,
-            technique=Technique.META_COST,
-            seed=42,
+    def it_wraps_with_metacost_classifier(self, learner_factory: UnbalancedLearnerFactory) -> None:
+        result = learner_factory.create_model(
+            model_type=ModelType.RANDOM_FOREST, technique=Technique.META_COST, seed=42
         )
 
         assert isinstance(result.named_steps["clf"], MetaCostClassifier)  # type: ignore[union-attr]
 
-    def it_does_not_add_sampler_for_baseline(self, factory: UnbalancedLearnerFactory) -> None:
-        result = factory.create_model(
-            model_type=ModelType.RANDOM_FOREST,
-            technique=Technique.BASELINE,
-            seed=42,
+    def it_omits_sampler_for_baseline(self, learner_factory: UnbalancedLearnerFactory) -> None:
+        result = learner_factory.create_model(
+            model_type=ModelType.RANDOM_FOREST, technique=Technique.BASELINE, seed=42
         )
 
         assert "sampler" not in result.named_steps  # type: ignore[operator]
 
 
 class DescribeCreateModelPipelineStructure:
-    @pytest.fixture
-    def factory(self) -> UnbalancedLearnerFactory:
-        return UnbalancedLearnerFactory(use_gpu=False)
-
-    def it_includes_imputer_as_first_step(self, factory: UnbalancedLearnerFactory) -> None:
-        result = factory.create_model(
-            model_type=ModelType.RANDOM_FOREST,
-            technique=Technique.BASELINE,
-            seed=42,
+    def it_starts_with_imputer(self, learner_factory: UnbalancedLearnerFactory) -> None:
+        result = learner_factory.create_model(
+            model_type=ModelType.RANDOM_FOREST, technique=Technique.BASELINE, seed=42
         )
 
-        first_step_name = result.steps[0][0]  # type: ignore[union-attr]
-        assert first_step_name == "imputer"
+        assert result.steps[0][0] == "imputer"  # type: ignore[union-attr]
         assert isinstance(result.named_steps["imputer"], SimpleImputer)  # type: ignore[union-attr]
 
-    def it_includes_scaler_as_second_step(self, factory: UnbalancedLearnerFactory) -> None:
-        result = factory.create_model(
-            model_type=ModelType.RANDOM_FOREST,
-            technique=Technique.BASELINE,
-            seed=42,
+    def it_has_scaler_as_second_step(self, learner_factory: UnbalancedLearnerFactory) -> None:
+        result = learner_factory.create_model(
+            model_type=ModelType.RANDOM_FOREST, technique=Technique.BASELINE, seed=42
         )
 
-        second_step_name = result.steps[1][0]  # type: ignore[union-attr]
-        assert second_step_name == "scaler"
+        assert result.steps[1][0] == "scaler"  # type: ignore[union-attr]
         assert isinstance(result.named_steps["scaler"], StandardScaler)  # type: ignore[union-attr]
 
-    def it_includes_classifier_as_last_step(self, factory: UnbalancedLearnerFactory) -> None:
-        result = factory.create_model(
-            model_type=ModelType.RANDOM_FOREST,
-            technique=Technique.BASELINE,
-            seed=42,
+    def it_ends_with_classifier(self, learner_factory: UnbalancedLearnerFactory) -> None:
+        result = learner_factory.create_model(
+            model_type=ModelType.RANDOM_FOREST, technique=Technique.BASELINE, seed=42
         )
 
-        last_step_name = result.steps[-1][0]  # type: ignore[union-attr]
-        assert last_step_name == "clf"
+        assert result.steps[-1][0] == "clf"  # type: ignore[union-attr]
 
 
 class DescribeCreateModelWithNJobs:
-    @pytest.fixture
-    def factory(self) -> UnbalancedLearnerFactory:
-        return UnbalancedLearnerFactory(use_gpu=False)
-
-    def it_passes_n_jobs_to_random_forest(self, factory: UnbalancedLearnerFactory) -> None:
-        result = factory.create_model(
+    def it_passes_n_jobs_to_random_forest(self, learner_factory: UnbalancedLearnerFactory) -> None:
+        result = learner_factory.create_model(
             model_type=ModelType.RANDOM_FOREST,
             technique=Technique.BASELINE,
             seed=42,
@@ -244,8 +185,8 @@ class DescribeCreateModelWithNJobs:
         clf = result.named_steps["clf"]  # type: ignore[union-attr]
         assert clf.n_jobs == 4
 
-    def it_passes_n_jobs_to_xgboost(self, factory: UnbalancedLearnerFactory) -> None:
-        result = factory.create_model(
+    def it_passes_n_jobs_to_xgboost(self, learner_factory: UnbalancedLearnerFactory) -> None:
+        result = learner_factory.create_model(
             model_type=ModelType.XGBOOST,
             technique=Technique.BASELINE,
             seed=42,

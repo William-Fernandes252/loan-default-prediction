@@ -3,7 +3,6 @@
 from unittest.mock import MagicMock
 
 import numpy as np
-import pytest
 
 from experiments.core.data.datasets import Dataset
 from experiments.core.modeling.classifiers import ModelType, Technique
@@ -14,24 +13,28 @@ from experiments.services.model_predictions_repository import (
 )
 from experiments.storage.interface import FileInfo
 
+# ============================================================================
+# ModelPredictionsStorageLayout Tests
+# ============================================================================
+
 
 class DescribeModelPredictionsStorageLayoutDefaults:
-    def it_has_default_predictions_key_template(self) -> None:
-        layout = ModelPredictionsStorageLayout()
+    def it_has_default_predictions_key_template(
+        self, predictions_layout: ModelPredictionsStorageLayout
+    ) -> None:
+        assert "predictions/{execution_id}" in predictions_layout.predictions_key_template
 
-        assert "predictions/{execution_id}" in layout.predictions_key_template
-
-    def it_has_default_predictions_prefix(self) -> None:
-        layout = ModelPredictionsStorageLayout()
-
-        assert layout.predictions_prefix == "predictions/"
+    def it_has_default_predictions_prefix(
+        self, predictions_layout: ModelPredictionsStorageLayout
+    ) -> None:
+        assert predictions_layout.predictions_prefix == "predictions/"
 
 
 class DescribeGetPredictionsKey:
-    def it_formats_key_with_all_components(self) -> None:
-        layout = ModelPredictionsStorageLayout()
-
-        key = layout.get_predictions_key(
+    def it_formats_key_with_all_components(
+        self, predictions_layout: ModelPredictionsStorageLayout
+    ) -> None:
+        key = predictions_layout.get_predictions_key(
             execution_id="exec-123",
             dataset="taiwan_credit",
             model_type="random_forest",
@@ -44,14 +47,10 @@ class DescribeGetPredictionsKey:
 
 
 class DescribeParsePredictionsKey:
-    @pytest.fixture
-    def layout(self) -> ModelPredictionsStorageLayout:
-        return ModelPredictionsStorageLayout()
-
-    def it_parses_valid_key(self, layout: ModelPredictionsStorageLayout) -> None:
+    def it_parses_valid_key(self, predictions_layout: ModelPredictionsStorageLayout) -> None:
         key = "predictions/exec-123/taiwan_credit/random_forest/smote/seed_42.parquet"
 
-        result = layout.parse_predictions_key(key)
+        result = predictions_layout.parse_predictions_key(key)
 
         assert result is not None
         assert result["execution_id"] == "exec-123"
@@ -60,75 +59,66 @@ class DescribeParsePredictionsKey:
         assert result["technique"] == "smote"
         assert result["seed"] == 42
 
-    def it_returns_none_for_invalid_key(self, layout: ModelPredictionsStorageLayout) -> None:
-        key = "invalid/path/file.txt"
-
-        result = layout.parse_predictions_key(key)
+    def it_returns_none_for_invalid_key(
+        self, predictions_layout: ModelPredictionsStorageLayout
+    ) -> None:
+        result = predictions_layout.parse_predictions_key("invalid/path/file.txt")
 
         assert result is None
 
-    def it_returns_none_for_wrong_extension(self, layout: ModelPredictionsStorageLayout) -> None:
+    def it_returns_none_for_wrong_extension(
+        self, predictions_layout: ModelPredictionsStorageLayout
+    ) -> None:
         key = "predictions/exec-123/dataset/model/technique/seed_42.csv"
 
-        result = layout.parse_predictions_key(key)
+        result = predictions_layout.parse_predictions_key(key)
 
         assert result is None
+
+
+# ============================================================================
+# ModelPredictionsStorageRepository Tests
+# ============================================================================
 
 
 class DescribeModelPredictionsStorageRepositoryInit:
-    def it_stores_storage_backend(self) -> None:
-        storage = MagicMock()
+    def it_stores_storage_backend(self, mock_storage: MagicMock) -> None:
+        repo = ModelPredictionsStorageRepository(storage=mock_storage)
 
-        repo = ModelPredictionsStorageRepository(storage=storage)
+        assert repo._storage is mock_storage
 
-        assert repo._storage is storage
-
-    def it_uses_default_layout_if_not_provided(self) -> None:
-        storage = MagicMock()
-
-        repo = ModelPredictionsStorageRepository(storage=storage)
+    def it_uses_default_layout_if_not_provided(self, mock_storage: MagicMock) -> None:
+        repo = ModelPredictionsStorageRepository(storage=mock_storage)
 
         assert isinstance(repo._layout, ModelPredictionsStorageLayout)
 
-    def it_uses_provided_layout(self) -> None:
-        storage = MagicMock()
+    def it_uses_provided_layout(self, mock_storage: MagicMock) -> None:
         layout = ModelPredictionsStorageLayout(predictions_prefix="custom/")
 
-        repo = ModelPredictionsStorageRepository(storage=storage, layout=layout)
+        repo = ModelPredictionsStorageRepository(storage=mock_storage, layout=layout)
 
         assert repo._layout is layout
 
 
 class DescribeGetCompletedCombinations:
-    @pytest.fixture
-    def storage(self) -> MagicMock:
-        return MagicMock()
-
-    @pytest.fixture
-    def repo(self, storage: MagicMock) -> ModelPredictionsStorageRepository:
-        return ModelPredictionsStorageRepository(storage=storage)
-
     def it_returns_empty_set_when_no_files(
-        self, storage: MagicMock, repo: ModelPredictionsStorageRepository
+        self, mock_storage: MagicMock, predictions_repository: ModelPredictionsStorageRepository
     ) -> None:
-        storage.list_files.return_value = []
+        mock_storage.list_files.return_value = []
 
-        result = repo.get_completed_combinations(execution_id="exec-123")
+        result = predictions_repository.get_completed_combinations(execution_id="exec-123")
 
         assert result == set()
 
     def it_returns_combinations_for_execution(
-        self, storage: MagicMock, repo: ModelPredictionsStorageRepository
+        self,
+        mock_storage: MagicMock,
+        predictions_repository: ModelPredictionsStorageRepository,
+        make_predictions_file_info,
     ) -> None:
-        storage.list_files.return_value = [
-            FileInfo(
-                key="predictions/exec-123/taiwan_credit/random_forest/baseline/seed_42.parquet",
-                size_bytes=1024,
-                last_modified=None,
-            ),
-        ]
+        mock_storage.list_files.return_value = [make_predictions_file_info()]
 
-        result = repo.get_completed_combinations(execution_id="exec-123")
+        result = predictions_repository.get_completed_combinations(execution_id="exec-123")
 
         assert len(result) == 1
         combo = next(iter(result))
@@ -138,9 +128,9 @@ class DescribeGetCompletedCombinations:
         assert combo.seed == 42
 
     def it_filters_by_execution_id(
-        self, storage: MagicMock, repo: ModelPredictionsStorageRepository
+        self, mock_storage: MagicMock, predictions_repository: ModelPredictionsStorageRepository
     ) -> None:
-        storage.list_files.return_value = [
+        mock_storage.list_files.return_value = [
             FileInfo(
                 key="predictions/exec-123/taiwan_credit/random_forest/baseline/seed_42.parquet",
                 size_bytes=1024,
@@ -153,14 +143,14 @@ class DescribeGetCompletedCombinations:
             ),
         ]
 
-        result = repo.get_completed_combinations(execution_id="exec-123")
+        result = predictions_repository.get_completed_combinations(execution_id="exec-123")
 
         assert len(result) == 1
 
     def it_skips_invalid_enum_values(
-        self, storage: MagicMock, repo: ModelPredictionsStorageRepository
+        self, mock_storage: MagicMock, predictions_repository: ModelPredictionsStorageRepository
     ) -> None:
-        storage.list_files.return_value = [
+        mock_storage.list_files.return_value = [
             FileInfo(
                 key="predictions/exec-123/taiwan_credit/random_forest/baseline/seed_42.parquet",
                 size_bytes=1024,
@@ -173,30 +163,21 @@ class DescribeGetCompletedCombinations:
             ),
         ]
 
-        result = repo.get_completed_combinations(execution_id="exec-123")
+        result = predictions_repository.get_completed_combinations(execution_id="exec-123")
 
-        # Only valid combination should be returned
         assert len(result) == 1
 
 
 class DescribeSavePredictions:
-    @pytest.fixture
-    def storage(self) -> MagicMock:
-        return MagicMock()
-
-    @pytest.fixture
-    def repo(self, storage: MagicMock) -> ModelPredictionsStorageRepository:
-        return ModelPredictionsStorageRepository(storage=storage)
-
     def it_writes_predictions_to_storage(
-        self, storage: MagicMock, repo: ModelPredictionsStorageRepository
+        self, mock_storage: MagicMock, predictions_repository: ModelPredictionsStorageRepository
     ) -> None:
         predictions = RawPredictions(
             target=np.array([0, 1, 0]),
             prediction=np.array([0, 1, 1]),
         )
 
-        repo.save_predictions(
+        predictions_repository.save_predictions(
             execution_id="exec-123",
             seed=42,
             dataset=Dataset.TAIWAN_CREDIT,
@@ -205,17 +186,17 @@ class DescribeSavePredictions:
             predictions=predictions,
         )
 
-        storage.sink_parquet.assert_called_once()
+        mock_storage.sink_parquet.assert_called_once()
 
     def it_uses_correct_storage_key(
-        self, storage: MagicMock, repo: ModelPredictionsStorageRepository
+        self, mock_storage: MagicMock, predictions_repository: ModelPredictionsStorageRepository
     ) -> None:
         predictions = RawPredictions(
             target=np.array([0, 1]),
             prediction=np.array([0, 1]),
         )
 
-        repo.save_predictions(
+        predictions_repository.save_predictions(
             execution_id="exec-456",
             seed=100,
             dataset=Dataset.LENDING_CLUB,
@@ -224,8 +205,7 @@ class DescribeSavePredictions:
             predictions=predictions,
         )
 
-        call_args = storage.sink_parquet.call_args
-        key = call_args[0][1]
+        key = mock_storage.sink_parquet.call_args[0][1]
         assert "exec-456" in key
         assert "lending_club" in key
         assert "svm" in key
@@ -234,27 +214,21 @@ class DescribeSavePredictions:
 
 
 class DescribeGetLatestPredictionsForExperiment:
-    @pytest.fixture
-    def storage(self) -> MagicMock:
-        return MagicMock()
-
-    @pytest.fixture
-    def repo(self, storage: MagicMock) -> ModelPredictionsStorageRepository:
-        return ModelPredictionsStorageRepository(storage=storage)
-
     def it_returns_none_when_no_files(
-        self, storage: MagicMock, repo: ModelPredictionsStorageRepository
+        self, mock_storage: MagicMock, predictions_repository: ModelPredictionsStorageRepository
     ) -> None:
-        storage.list_files.return_value = []
+        mock_storage.list_files.return_value = []
 
-        result = repo.get_latest_predictions_for_experiment(dataset=Dataset.TAIWAN_CREDIT)
+        result = predictions_repository.get_latest_predictions_for_experiment(
+            dataset=Dataset.TAIWAN_CREDIT
+        )
 
         assert result is None
 
     def it_returns_none_when_no_matching_dataset(
-        self, storage: MagicMock, repo: ModelPredictionsStorageRepository
+        self, mock_storage: MagicMock, predictions_repository: ModelPredictionsStorageRepository
     ) -> None:
-        storage.list_files.return_value = [
+        mock_storage.list_files.return_value = [
             FileInfo(
                 key="predictions/exec-123/lending_club/random_forest/baseline/seed_42.parquet",
                 size_bytes=1024,
@@ -262,15 +236,16 @@ class DescribeGetLatestPredictionsForExperiment:
             ),
         ]
 
-        result = repo.get_latest_predictions_for_experiment(dataset=Dataset.TAIWAN_CREDIT)
+        result = predictions_repository.get_latest_predictions_for_experiment(
+            dataset=Dataset.TAIWAN_CREDIT
+        )
 
         assert result is None
 
-    def it_returns_iterator_of_predictions_for_latest_execution(
-        self, storage: MagicMock, repo: ModelPredictionsStorageRepository
+    def it_returns_predictions_for_latest_execution(
+        self, mock_storage: MagicMock, predictions_repository: ModelPredictionsStorageRepository
     ) -> None:
-        mock_lazy_frame = MagicMock()
-        storage.list_files.return_value = [
+        mock_storage.list_files.return_value = [
             FileInfo(
                 key="predictions/exec-001/taiwan_credit/random_forest/baseline/seed_42.parquet",
                 size_bytes=1024,
@@ -282,22 +257,20 @@ class DescribeGetLatestPredictionsForExperiment:
                 last_modified=None,
             ),
         ]
-        storage.scan_parquet.return_value = mock_lazy_frame
+        mock_storage.scan_parquet.return_value = MagicMock()
 
-        result = repo.get_latest_predictions_for_experiment(dataset=Dataset.TAIWAN_CREDIT)
-
-        # Result should be an iterator, consume it
+        result = predictions_repository.get_latest_predictions_for_experiment(
+            dataset=Dataset.TAIWAN_CREDIT
+        )
         predictions_list = list(result) if result else []
 
-        # Should return only predictions from exec-002 (latest)
         assert len(predictions_list) == 1
         assert predictions_list[0].execution_id == "exec-002"
 
-    def it_uses_uuid7_sortable_execution_ids(
-        self, storage: MagicMock, repo: ModelPredictionsStorageRepository
+    def it_uses_sortable_execution_ids(
+        self, mock_storage: MagicMock, predictions_repository: ModelPredictionsStorageRepository
     ) -> None:
-        mock_lazy_frame = MagicMock()
-        storage.list_files.return_value = [
+        mock_storage.list_files.return_value = [
             FileInfo(
                 key="predictions/aaa-exec/taiwan_credit/random_forest/baseline/seed_1.parquet",
                 size_bytes=1024,
@@ -309,11 +282,12 @@ class DescribeGetLatestPredictionsForExperiment:
                 last_modified=None,
             ),
         ]
-        storage.scan_parquet.return_value = mock_lazy_frame
+        mock_storage.scan_parquet.return_value = MagicMock()
 
-        result = repo.get_latest_predictions_for_experiment(dataset=Dataset.TAIWAN_CREDIT)
+        result = predictions_repository.get_latest_predictions_for_experiment(
+            dataset=Dataset.TAIWAN_CREDIT
+        )
         predictions_list = list(result) if result else []
 
-        # Latest execution_id by sorting is "zzz-exec"
         assert len(predictions_list) == 1
         assert predictions_list[0].execution_id == "zzz-exec"
