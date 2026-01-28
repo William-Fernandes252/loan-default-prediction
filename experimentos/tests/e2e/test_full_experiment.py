@@ -1,3 +1,9 @@
+"""End-to-end tests for the full experiment pipeline.
+
+These tests use Docker Compose to orchestrate LocalStack S3 and the application
+container, validating the complete workflow from data processing to experiment execution.
+"""
+
 import os
 import subprocess
 import time
@@ -6,7 +12,7 @@ import boto3
 import pytest
 from types_boto3_s3 import S3Client
 
-# Config matching docker-compose
+# Config matching docker-compose.e2e.yaml
 ENDPOINT_URL = "http://localhost:4566"
 BUCKET_NAME = "test-experiments"
 AWS_CREDS = {
@@ -15,9 +21,16 @@ AWS_CREDS = {
     "region_name": "us-east-1",
 }
 
+# Storage paths matching DataStorageLayout and ModelPredictionsStorageLayout
+RAW_DATA_PREFIX = "data/raw/"
+INTERIM_DATA_PREFIX = "data/interim/"
+PROCESSED_DATA_PREFIX = "data/processed/"
+PREDICTIONS_PREFIX = "predictions/"
+MODELS_PREFIX = "models/"
+
 
 @pytest.fixture(scope="module")
-def s3_client():
+def s3_client() -> S3Client:
     """Returns a boto3 client connected to LocalStack."""
     return boto3.client("s3", endpoint_url=ENDPOINT_URL, **AWS_CREDS)
 
@@ -28,22 +41,17 @@ def set_environment_variables(num_seeds: int):
     os.environ["AWS_ACCESS_KEY_ID"] = AWS_CREDS["aws_access_key_id"]
     os.environ["AWS_SECRET_ACCESS_KEY"] = AWS_CREDS["aws_secret_access_key"]
     os.environ["AWS_DEFAULT_REGION"] = AWS_CREDS["region_name"]
-    os.environ["S3_ENDPOINT_URL"] = ENDPOINT_URL
-    os.environ["S3_BUCKET_NAME"] = BUCKET_NAME
     os.environ["LDP_NUM_SEEDS"] = str(num_seeds)
     yield
-    # Cleanup if necessary
     del os.environ["AWS_ACCESS_KEY_ID"]
     del os.environ["AWS_SECRET_ACCESS_KEY"]
     del os.environ["AWS_DEFAULT_REGION"]
-    del os.environ["S3_ENDPOINT_URL"]
-    del os.environ["S3_BUCKET_NAME"]
+    del os.environ["LDP_NUM_SEEDS"]
 
 
 @pytest.fixture(scope="module", autouse=True)
 def start_stack(s3_client: S3Client):
     """Starts the E2E stack and tears it down after tests."""
-    # Start containers
     subprocess.run(
         [
             "docker",
@@ -58,7 +66,6 @@ def start_stack(s3_client: S3Client):
     )
     print("Started stack.")
 
-    # Wait for LocalStack to be ready
     print("Waiting for LocalStack S3...")
     retries = 30
     for i in range(retries):
@@ -73,21 +80,24 @@ def start_stack(s3_client: S3Client):
 
     yield
 
-    # Cleanup
     subprocess.run(
-        ["docker", "compose", "-f", "docker-compose.e2e.yaml", "down", "-v"], check=True
+        ["docker", "compose", "-f", "docker-compose.e2e.yaml", "down", "-v"],
+        check=True,
     )
 
 
-def run_cli(args: list[str]) -> subprocess.CompletedProcess:
+def run_cli(*args: str) -> subprocess.CompletedProcess[str]:
     """Helper to run CLI commands inside the container.
 
     Args:
-        args: List of command line arguments to pass to the CLI.
+        *args: Command line arguments to pass to the CLI.
 
     Returns:
         CompletedProcess instance with command results.
     """
+    # Filter out empty strings from arguments
+    filtered_args = [arg for arg in args if arg]
+
     cmd = [
         "docker",
         "compose",
@@ -99,11 +109,33 @@ def run_cli(args: list[str]) -> subprocess.CompletedProcess:
         "python",
         "-m",
         "experiments.cli",
-        *args,
+        *filtered_args,
     ]
-    cmd.extend(args)
 
-    return subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"CLI command failed: {' '.join(cmd)}")
+        print(f"stdout: {result.stdout}")
+        print(f"stderr: {result.stderr}")
+    return result
+
+
+def check_gpu_available() -> bool:
+    """Check if GPU is available inside the container."""
+    check = subprocess.run(
+        [
+            "docker",
+            "compose",
+            "-f",
+            "docker-compose.e2e.yaml",
+            "exec",
+            "-T",
+            "app",
+            "nvidia-smi",
+        ],
+        capture_output=True,
+    )
+    return check.returncode == 0
 
 
 @pytest.fixture(scope="module")
@@ -112,7 +144,6 @@ def setup_test_data(s3_client: S3Client):
 
     This avoids repeating expensive setup for every parameterized test case.
     """
-    # Prepare S3
     s3_client.create_bucket(Bucket=BUCKET_NAME)
 
     raw_csv_path = "taiwan_credit.csv"
@@ -151,72 +182,256 @@ def setup_test_data(s3_client: S3Client):
         )
 
         # Upload to "Raw" zone in S3
-        s3_key = "data/raw/taiwan_credit.csv"
+        s3_key = f"{RAW_DATA_PREFIX}taiwan_credit.csv"
         with open(raw_csv_path, "rb") as f:
             s3_client.put_object(Bucket=BUCKET_NAME, Key=s3_key, Body=f)
 
         print(f"Uploaded raw data to s3://{BUCKET_NAME}/{s3_key}")
 
     finally:
-        # Cleanup local file
         if os.path.exists(raw_csv_path):
             os.remove(raw_csv_path)
 
 
-@pytest.mark.usefixtures("setup_test_data")
-@pytest.mark.parametrize(
-    "use_gpu",
-    [
-        False,
-        True,
-    ],
-)
-def test_full_pipeline_execution(s3_client: S3Client, use_gpu: bool):
-    """Runs the full pipeline with different configurations (CPU/GPU)."""
+class DescribeDataProcessing:
+    """Tests for the data processing CLI command."""
 
-    # Dynamic check: If GPU is requested, ensure the container sees it.
-    if use_gpu:
-        check = subprocess.run(
-            [
-                "docker",
-                "compose",
-                "-f",
-                "docker-compose.e2e.yaml",
-                "exec",
-                "-T",
-                "app",
-                "nvidia-smi",
-            ],
-            capture_output=True,
+    @pytest.mark.usefixtures("setup_test_data")
+    def it_processes_dataset_and_creates_interim_parquet(self, s3_client: S3Client):
+        """Validates that data processing creates interim parquet files."""
+        result = run_cli("data", "process", "taiwan_credit", "--jobs", "1")
+        assert result.returncode == 0, f"Data processing failed: {result.stderr}"
+
+        # Validation: Check if interim parquet exists
+        interim_objects = s3_client.list_objects_v2(
+            Bucket=BUCKET_NAME,
+            Prefix=f"{INTERIM_DATA_PREFIX}taiwan_credit.parquet",
         )
-        if check.returncode != 0:
+        assert "Contents" in interim_objects, "Interim parquet file not found in S3"
+
+        # Check that processed features are created (X and y files)
+        processed_objects = s3_client.list_objects_v2(
+            Bucket=BUCKET_NAME,
+            Prefix=PROCESSED_DATA_PREFIX,
+        )
+        assert "Contents" in processed_objects, "Processed data files not found in S3"
+
+        files = [obj["Key"] for obj in processed_objects["Contents"]]
+        assert any("taiwan_credit_X.parquet" in f for f in files), "Features file not found"
+        assert any("taiwan_credit_y.parquet" in f for f in files), "Target file not found"
+
+    @pytest.mark.usefixtures("setup_test_data")
+    def it_supports_gpu_processing_when_available(self, s3_client: S3Client):
+        """Validates GPU processing option when GPU is available."""
+        if not check_gpu_available():
             pytest.skip("Skipping GPU test: nvidia-smi not found inside container.")
 
-    # Run Data Processing CLI
-    print("Running data processing...")
-    run_cli(["data", "process", "taiwan_credit", "--jobs", "1", "--use-gpu" if use_gpu else ""])
+        result = run_cli("data", "process", "taiwan_credit", "--jobs", "1", "--use-gpu")
+        assert result.returncode == 0, f"GPU data processing failed: {result.stderr}"
 
-    # Validation: Check if interim parquet exists
-    interim_objects = s3_client.list_objects_v2(
-        Bucket=BUCKET_NAME, Prefix="data/interim/taiwan_credit.parquet"
-    )
-    assert "Contents" in interim_objects, "Interim parquet file not found in S3"
 
-    # Run Feature Engineering CLI
-    print("Running feature engineering...")
-    run_cli(["features", "prepare", "taiwan_credit", "--jobs", "1"])
+class DescribeExperimentExecution:
+    """Tests for the experiment execution CLI command."""
 
-    # Run Training Experiment CLI
-    print("Running training experiment...")
-    run_cli(
-        ["train", "experiment", "taiwan_credit", "--jobs", "1", "--use-gpu" if use_gpu else ""]
-    )
+    @pytest.mark.usefixtures("setup_test_data")
+    def it_runs_experiment_and_generates_predictions(self, s3_client: S3Client):
+        """Validates that experiment execution generates predictions."""
+        # First, ensure data is processed
+        process_result = run_cli("data", "process", "taiwan_credit", "--jobs", "1")
+        assert process_result.returncode == 0, f"Data processing failed: {process_result.stderr}"
 
-    # Validation: Check for results directory
-    results_objects = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix="results/taiwan_credit")
-    assert "Contents" in results_objects, "No results found in S3"
+        # Run experiment with only random_forest to speed up tests
+        experiment_result = run_cli(
+            "experiment",
+            "run",
+            "--only-dataset",
+            "taiwan_credit",
+            "--jobs",
+            "1",
+            "--models-jobs",
+            "1",
+            "--exclude-model",
+            "svm",
+            "--exclude-model",
+            "xgboost",
+            "--exclude-model",
+            "mlp",
+        )
+        assert experiment_result.returncode == 0, f"Experiment failed: {experiment_result.stderr}"
 
-    files = [obj["Key"] for obj in results_objects["Contents"]]
-    assert any("checkpoints" in f for f in files), "No checkpoints generated"
+        # Validation: Check for predictions in S3
+        predictions_objects = s3_client.list_objects_v2(
+            Bucket=BUCKET_NAME,
+            Prefix=PREDICTIONS_PREFIX,
+        )
+        assert "Contents" in predictions_objects, "No predictions found in S3"
 
-    print(f"Training results verified in S3 ({'GPU' if use_gpu else 'CPU'}).")
+        files = [obj["Key"] for obj in predictions_objects["Contents"]]
+        # Predictions are stored with execution_id/dataset/model_type/technique/seed_N.parquet
+        assert any("taiwan_credit" in f and ".parquet" in f for f in files), (
+            "No prediction parquet files generated"
+        )
+
+        print("Experiment completed successfully with predictions in S3.")
+
+    @pytest.mark.usefixtures("setup_test_data")
+    def it_supports_gpu_experiment_execution_when_available(self, s3_client: S3Client):
+        """Validates GPU experiment execution when GPU is available."""
+        if not check_gpu_available():
+            pytest.skip("Skipping GPU test: nvidia-smi not found inside container.")
+
+        # First, ensure data is processed
+        process_result = run_cli("data", "process", "taiwan_credit", "--jobs", "1", "--use-gpu")
+        assert process_result.returncode == 0, f"Data processing failed: {process_result.stderr}"
+
+        # Run experiment with GPU and only random_forest to speed up tests
+        experiment_result = run_cli(
+            "experiment",
+            "run",
+            "--only-dataset",
+            "taiwan_credit",
+            "--jobs",
+            "1",
+            "--use-gpu",
+            "--exclude-model",
+            "svm",
+            "--exclude-model",
+            "xgboost",
+            "--exclude-model",
+            "mlp",
+        )
+        assert experiment_result.returncode == 0, (
+            f"GPU experiment failed: {experiment_result.stderr}"
+        )
+
+
+class DescribeModelTraining:
+    """Tests for the model training CLI command."""
+
+    @pytest.mark.usefixtures("setup_test_data")
+    def it_trains_single_model_and_saves_to_storage(self, s3_client: S3Client):
+        """Validates that single model training saves the model to storage."""
+        # First, ensure data is processed
+        process_result = run_cli("data", "process", "taiwan_credit", "--jobs", "1")
+        assert process_result.returncode == 0, f"Data processing failed: {process_result.stderr}"
+
+        # Train a single model
+        train_result = run_cli(
+            "models",
+            "train",
+            "taiwan_credit",
+            "random_forest",
+            "none",
+            "--n-jobs",
+            "1",
+        )
+        assert train_result.returncode == 0, f"Model training failed: {train_result.stderr}"
+
+        # Validation: Check for model in S3
+        models_objects = s3_client.list_objects_v2(
+            Bucket=BUCKET_NAME,
+            Prefix=MODELS_PREFIX,
+        )
+        assert "Contents" in models_objects, "No models found in S3"
+
+        files = [obj["Key"] for obj in models_objects["Contents"]]
+        # Models are stored as models/{dataset}/{model_type}/{technique}/{model_id}.joblib
+        assert any(
+            "taiwan_credit" in f and "random_forest" in f and ".joblib" in f for f in files
+        ), "Trained model file not found"
+
+        print("Model training completed successfully with model saved in S3.")
+
+
+class DescribeFullPipeline:
+    """Tests for the full end-to-end pipeline execution."""
+
+    @pytest.mark.usefixtures("setup_test_data")
+    @pytest.mark.parametrize("use_gpu", [False, True])
+    def it_executes_full_pipeline_with_cpu_and_gpu(self, s3_client: S3Client, use_gpu: bool):
+        """Runs the full pipeline with different configurations (CPU/GPU)."""
+        if use_gpu and not check_gpu_available():
+            pytest.skip("Skipping GPU test: nvidia-smi not found inside container.")
+
+        gpu_flag = "--use-gpu" if use_gpu else ""
+
+        # Step 1: Data Processing
+        print(f"Running data processing ({'GPU' if use_gpu else 'CPU'})...")
+        process_result = run_cli("data", "process", "taiwan_credit", "--jobs", "1", gpu_flag)
+        assert process_result.returncode == 0, f"Data processing failed: {process_result.stderr}"
+
+        # Validate interim data
+        interim_objects = s3_client.list_objects_v2(
+            Bucket=BUCKET_NAME,
+            Prefix=f"{INTERIM_DATA_PREFIX}taiwan_credit.parquet",
+        )
+        assert "Contents" in interim_objects, "Interim parquet file not found in S3"
+
+        # Step 2: Experiment Execution (only random_forest to speed up tests)
+        print(f"Running experiment ({'GPU' if use_gpu else 'CPU'})...")
+        experiment_result = run_cli(
+            "experiment",
+            "run",
+            "--only-dataset",
+            "taiwan_credit",
+            "--jobs",
+            "1",
+            "--models-jobs",
+            "1",
+            "--exclude-model",
+            "svm",
+            "--exclude-model",
+            "xgboost",
+            "--exclude-model",
+            "mlp",
+            gpu_flag,
+        )
+        assert experiment_result.returncode == 0, f"Experiment failed: {experiment_result.stderr}"
+
+        # Validate predictions
+        predictions_objects = s3_client.list_objects_v2(
+            Bucket=BUCKET_NAME,
+            Prefix=PREDICTIONS_PREFIX,
+        )
+        assert "Contents" in predictions_objects, "No predictions found in S3"
+
+        files = [obj["Key"] for obj in predictions_objects["Contents"]]
+        assert any("taiwan_credit" in f for f in files), "No Taiwan Credit predictions generated"
+
+        print(f"Full pipeline completed successfully ({'GPU' if use_gpu else 'CPU'}).")
+
+
+class DescribeModelInference:
+    """Tests for model inference CLI command."""
+
+    @pytest.mark.usefixtures("setup_test_data")
+    def it_runs_inference_with_trained_model(self, s3_client: S3Client):
+        """Validates that inference can run using a trained model."""
+        # First, ensure data is processed
+        process_result = run_cli("data", "process", "taiwan_credit", "--jobs", "1")
+        assert process_result.returncode == 0, f"Data processing failed: {process_result.stderr}"
+
+        # Train a model
+        train_result = run_cli(
+            "models",
+            "train",
+            "taiwan_credit",
+            "random_forest",
+            "none",
+            "--n-jobs",
+            "1",
+        )
+        assert train_result.returncode == 0, f"Model training failed: {train_result.stderr}"
+
+        # Run inference (uses latest model by default)
+        predict_result = run_cli(
+            "models",
+            "predict",
+            "taiwan_credit",
+        )
+        assert predict_result.returncode == 0, f"Inference failed: {predict_result.stderr}"
+
+        # Check output contains predictions header
+        assert "prediction" in predict_result.stdout.lower(), "Predictions not in output"
+
+        print("Inference completed successfully.")
