@@ -321,7 +321,7 @@ class DescribeModelTraining:
             "train",
             "taiwan_credit",
             "random_forest",
-            "none",
+            "baseline",
             "--n-jobs",
             "1",
         )
@@ -417,17 +417,19 @@ class DescribeModelInference:
             "train",
             "taiwan_credit",
             "random_forest",
-            "none",
+            "baseline",
             "--n-jobs",
             "1",
         )
         assert train_result.returncode == 0, f"Model training failed: {train_result.stderr}"
 
-        # Run inference (uses latest model by default)
+        # Run inference (uses latest model by default, output to stdout)
         predict_result = run_cli(
             "models",
             "predict",
             "taiwan_credit",
+            "-o",
+            "/dev/stdout",
         )
         assert predict_result.returncode == 0, f"Inference failed: {predict_result.stderr}"
 
