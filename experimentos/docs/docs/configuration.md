@@ -66,6 +66,14 @@ Settings for controlling parallelism and resource usage.
 | `LDP_USE_GPU` | bool | `False` | Enable GPU acceleration (requires cuML) |
 | `LDP_DEBUG` | bool | `True` | Enable debug mode for verbose logging |
 
+## Internationalization Settings
+
+Settings for controlling the locale used in generated analysis artifacts.
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `LDP_LOCALE` | string | `pt_BR` | Default locale for analysis artifact generation (`en_US` or `pt_BR`) |
+
 ## GPU Acceleration
 
 The project supports GPU acceleration using [NVIDIA RAPIDS cuML](https://docs.rapids.ai/api/cuml/stable/), which provides GPU-accelerated implementations of machine learning algorithms compatible with scikit-learn.
@@ -133,6 +141,9 @@ LDP_N_JOBS=4
 LDP_MODELS_N_JOBS=2
 LDP_USE_GPU=false
 LDP_DEBUG=false
+
+# Internationalization
+LDP_LOCALE=pt_BR
 ```
 
 ## Example: S3 Configuration

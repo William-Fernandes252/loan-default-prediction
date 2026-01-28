@@ -215,3 +215,12 @@ class LdpSettings(BaseSettings):
     storage: StorageSettings = Field(default_factory=StorageSettings)
     debug: Annotated[bool, Field(default=True)]
     """Debug mode flag."""
+
+    locale: Annotated[
+        str,
+        Field(
+            default="pt_BR",
+            description="Default locale for analysis artifact generation (en_US or pt_BR)",
+        ),
+    ]
+    """Default locale for generating analysis artifacts."""

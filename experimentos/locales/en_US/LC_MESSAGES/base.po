@@ -104,3 +104,9 @@ msgstr "Balanced Accuracy"
 
 msgid "Effect of {param} on Balanced Accuracy - {dataset_name}"
 msgstr "Effect of {param} on Balanced Accuracy - {dataset_name}"
+
+msgid "Metrics Heatmap - {dataset_name}"
+msgstr "Metrics Heatmap - {dataset_name}"
+
+msgid "Metric"
+msgstr "Metric"

@@ -12,13 +12,20 @@ from experiments.core.analysis.metrics import (
     IMBALANCE_RATIOS,
     Metric,
 )
+from experiments.core.analysis.translator import (
+    Locale,
+    Translator,
+)
 
 __all__ = [
     # Types
     "EvaluationMetrics",
     # Protocols
     "ModelResultsEvaluator",
+    "Translator",
     # Metrics
     "Metric",
     "IMBALANCE_RATIOS",
+    # i18n
+    "Locale",
 ]

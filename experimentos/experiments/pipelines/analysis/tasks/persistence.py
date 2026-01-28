@@ -67,11 +67,15 @@ def save_table_artifact(
     # Determine artifact name
     artifact_name = f"{context.analysis_name}{artifact_suffix}"
 
+    # Get locale from translator if available
+    locale = context.translator.locale.value if context.translator else "en_US"
+
     # Save via repository
     context.analysis_artifacts_repository.save_analysis_artifact(
         context.dataset,
         artifact_name,
         artifact_bytes,
+        locale=locale,
     )
 
     # Store artifact in state for reference
@@ -132,11 +136,15 @@ def save_figure_artifact(
     # Determine artifact name
     artifact_name = f"{context.analysis_name}{artifact_suffix}"
 
+    # Get locale from translator if available
+    locale = context.translator.locale.value if context.translator else "en_US"
+
     # Save via repository
     context.analysis_artifacts_repository.save_analysis_artifact(
         context.dataset,
         artifact_name,
         artifact_bytes,
+        locale=locale,
     )
 
     # Store artifact in state for reference

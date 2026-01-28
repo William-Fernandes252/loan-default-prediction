@@ -10,24 +10,27 @@ from experiments.storage import Storage
 class AnalysisArtifactsStorageLayout:
     """Layout for storing analysis artifacts in the storage backend."""
 
-    artifacts_key_template: str = "reports/{dataset}/{analysis_name}"
+    artifacts_key_template: str = "reports/{locale}/{dataset}/{analysis_name}"
     artifacts_prefix: str = "reports/"
 
     def get_artifact_key(
         self,
         dataset: Dataset,
         analysis_name: str,
+        locale: str = "en_US",
     ) -> str:
         """Generate the storage key for an analysis artifact.
 
         Args:
             dataset: The dataset associated with the analysis.
             analysis_name: The name of the analysis artifact (e.g., 'summary_table.tex').
+            locale: The locale for the artifact (e.g., 'en_US', 'pt_BR').
 
         Returns:
             str: The storage key for the analysis artifact.
         """
         return self.artifacts_key_template.format(
+            locale=locale,
             dataset=dataset.value,
             analysis_name=analysis_name,
         )
@@ -64,6 +67,7 @@ class AnalysisArtifactsRepository:
         dataset: Dataset,
         analysis_name: str,
         artifact_data: bytes,
+        locale: str = "en_US",
     ) -> None:
         """Saves an analysis artifact for a given experiment.
 
@@ -74,17 +78,19 @@ class AnalysisArtifactsRepository:
             dataset: The dataset associated with the experiment.
             analysis_name: The name of the analysis artifact to be saved.
             artifact_data: The binary data of the artifact.
+            locale: The locale for the artifact (default: 'en_US').
 
         Raises:
             StorageError: If there is an error saving the artifact.
         """
-        key = self._layout.get_artifact_key(dataset, analysis_name)
+        key = self._layout.get_artifact_key(dataset, analysis_name, locale=locale)
         self._storage.write_bytes(artifact_data, key)
 
     def artifact_exists(
         self,
         dataset: Dataset,
         analysis_name: str,
+        locale: str = "en_US",
     ) -> bool:
         """Checks if an analysis artifact exists in the repository.
 
@@ -93,9 +99,10 @@ class AnalysisArtifactsRepository:
         Args:
             dataset: The dataset associated with the experiment.
             analysis_name: The name of the analysis artifact to check.
+            locale: The locale for the artifact (default: 'en_US').
 
         Returns:
             bool: True if the artifact exists, False otherwise.
         """
-        key = self._layout.get_artifact_key(dataset, analysis_name)
+        key = self._layout.get_artifact_key(dataset, analysis_name, locale=locale)
         return self._storage.exists(key)

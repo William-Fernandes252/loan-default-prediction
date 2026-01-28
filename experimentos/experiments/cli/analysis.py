@@ -18,6 +18,7 @@ import typer
 from typing_extensions import Annotated
 
 from experiments.containers import container
+from experiments.core.analysis import Locale
 from experiments.core.analysis.metrics import Metric
 from experiments.core.data import Dataset
 from experiments.core.modeling.classifiers import Technique
@@ -38,6 +39,7 @@ from experiments.pipelines.analysis.tasks.persistence import (
 from experiments.services.analysis_artifacts_repository import AnalysisArtifactsRepository
 from experiments.services.model_predictions_repository import ModelPredictionsStorageRepository
 from experiments.services.model_results_evaluator import ModelResultsEvaluatorImpl
+from experiments.services.translator import create_translator
 
 
 class AnalysisType(enum.StrEnum):
@@ -101,6 +103,16 @@ _GpuOption = Annotated[
     ),
 ]
 
+# Type alias for locale option
+_LocaleOption = Annotated[
+    Locale,
+    typer.Option(
+        "--locale",
+        "-l",
+        help="Locale for generated artifacts (en_US or pt_BR).",
+    ),
+]
+
 
 def _resolve_datasets(dataset: Dataset | None) -> list[Dataset]:
     """Resolve a single dataset to a list, defaulting to all datasets.
@@ -121,6 +133,7 @@ def _create_analysis_context(
     analysis_name: str,
     force_overwrite: bool = False,
     use_gpu: bool = False,
+    locale: Locale | None = None,
 ) -> AnalysisPipelineContext:
     """Create an analysis pipeline context with injected dependencies.
 
@@ -129,12 +142,20 @@ def _create_analysis_context(
         analysis_name: Name identifier for the analysis.
         force_overwrite: Whether to overwrite existing artifacts.
         use_gpu: Whether to use GPU acceleration.
+        locale: Locale for internationalization. If None, uses default from settings.
 
     Returns:
         Configured AnalysisPipelineContext.
     """
-    # Get storage from container
+    # Get storage and settings from container
     storage = container._storage()
+    settings = container.settings()
+
+    # Resolve locale: CLI option > settings default
+    resolved_locale = locale if locale is not None else Locale(settings.locale)
+
+    # Create translator
+    translator = create_translator(resolved_locale)
 
     # Create repositories and evaluator
     predictions_repository = ModelPredictionsStorageRepository(storage=storage)
@@ -149,6 +170,7 @@ def _create_analysis_context(
         analysis_artifacts_repository=analysis_artifacts_repository,
         use_gpu=use_gpu,
         force_overwrite=force_overwrite,
+        translator=translator,
     )
 
 
@@ -167,6 +189,7 @@ def generate_summary_table(
     technique: _TechniqueOption = None,
     force: _ForceOption = False,
     gpu: _GpuOption = False,
+    locale: _LocaleOption = Locale.PT_BR,
 ) -> None:
     """Generate a summary table of experiment results.
 
@@ -197,6 +220,7 @@ def generate_summary_table(
             analysis_name=analysis_name,
             force_overwrite=force,
             use_gpu=gpu,
+            locale=locale,
         )
 
         # Execute pipeline
@@ -217,6 +241,7 @@ def generate_tradeoff_plot(
     dataset: _DatasetArgument = None,
     force: _ForceOption = False,
     gpu: _GpuOption = False,
+    locale: _LocaleOption = Locale.PT_BR,
 ) -> None:
     """Generate a precision-sensitivity trade-off plot.
 
@@ -246,6 +271,7 @@ def generate_tradeoff_plot(
             analysis_name=analysis_name,
             force_overwrite=force,
             use_gpu=gpu,
+            locale=locale,
         )
 
         # Execute pipeline
@@ -269,6 +295,7 @@ def generate_stability_plot(
     metric: _MetricOption = Metric.BALANCED_ACCURACY,
     force: _ForceOption = False,
     gpu: _GpuOption = False,
+    locale: _LocaleOption = Locale.PT_BR,
 ) -> None:
     """Generate a stability boxplot showing variance across seeds.
 
@@ -298,6 +325,7 @@ def generate_stability_plot(
             analysis_name=analysis_name,
             force_overwrite=force,
             use_gpu=gpu,
+            locale=locale,
         )
 
         # Execute pipeline
@@ -321,6 +349,7 @@ def generate_imbalance_impact_plot(
     metric: _MetricOption = Metric.BALANCED_ACCURACY,
     force: _ForceOption = False,
     gpu: _GpuOption = False,
+    locale: _LocaleOption = Locale.PT_BR,
 ) -> None:
     """Generate an imbalance impact scatter plot.
 
@@ -350,6 +379,7 @@ def generate_imbalance_impact_plot(
             analysis_name=analysis_name,
             force_overwrite=force,
             use_gpu=gpu,
+            locale=locale,
         )
 
         # Execute pipeline
@@ -372,6 +402,7 @@ def generate_cs_vs_resampling_plot(
     dataset: _DatasetArgument = None,
     force: _ForceOption = False,
     gpu: _GpuOption = False,
+    locale: _LocaleOption = Locale.PT_BR,
 ) -> None:
     """Generate a cost-sensitive vs resampling comparison plot.
 
@@ -401,6 +432,7 @@ def generate_cs_vs_resampling_plot(
             analysis_name=analysis_name,
             force_overwrite=force,
             use_gpu=gpu,
+            locale=locale,
         )
 
         # Execute pipeline
@@ -423,6 +455,7 @@ def generate_metrics_heatmap(
     dataset: _DatasetArgument = None,
     force: _ForceOption = False,
     gpu: _GpuOption = False,
+    locale: _LocaleOption = Locale.PT_BR,
 ) -> None:
     """Generate a metrics heatmap.
 
@@ -452,6 +485,7 @@ def generate_metrics_heatmap(
             analysis_name=analysis_name,
             force_overwrite=force,
             use_gpu=gpu,
+            locale=locale,
         )
 
         # Execute pipeline
@@ -474,20 +508,23 @@ def run_all_analyses(
     dataset: _DatasetArgument = None,
     force: _ForceOption = False,
     gpu: _GpuOption = False,
+    locale: _LocaleOption = Locale.PT_BR,
 ) -> None:
     """Run all analysis types sequentially.
 
     Generates all available analysis outputs (summary tables, plots, heatmaps)
     for the specified dataset(s).
     """
-    generate_summary_table(dataset=dataset, technique=None, force=force, gpu=gpu)
-    generate_tradeoff_plot(dataset=dataset, force=force, gpu=gpu)
-    generate_stability_plot(dataset=dataset, metric=Metric.BALANCED_ACCURACY, force=force, gpu=gpu)
-    generate_imbalance_impact_plot(
-        dataset=dataset, metric=Metric.BALANCED_ACCURACY, force=force, gpu=gpu
+    generate_summary_table(dataset=dataset, technique=None, force=force, gpu=gpu, locale=locale)
+    generate_tradeoff_plot(dataset=dataset, force=force, gpu=gpu, locale=locale)
+    generate_stability_plot(
+        dataset=dataset, metric=Metric.BALANCED_ACCURACY, force=force, gpu=gpu, locale=locale
     )
-    generate_cs_vs_resampling_plot(dataset=dataset, force=force, gpu=gpu)
-    generate_metrics_heatmap(dataset=dataset, force=force, gpu=gpu)
+    generate_imbalance_impact_plot(
+        dataset=dataset, metric=Metric.BALANCED_ACCURACY, force=force, gpu=gpu, locale=locale
+    )
+    generate_cs_vs_resampling_plot(dataset=dataset, force=force, gpu=gpu, locale=locale)
+    generate_metrics_heatmap(dataset=dataset, force=force, gpu=gpu, locale=locale)
 
 
 if __name__ == "__main__":

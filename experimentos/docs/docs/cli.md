@@ -253,7 +253,9 @@ uv run ldp analyze heatmap [DATASET] [OPTIONS]
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `--output-dir`, `-o` | path | `reports/` | Output directory for reports |
+| `--force`, `-f` | flag | false | Force overwrite of existing artifacts |
+| `--gpu` | flag | false | Enable GPU acceleration if available |
+| `--locale`, `-l` | string | `pt_BR` | Locale for generated artifacts (`en_US` or `pt_BR`) |
 
 ---
 

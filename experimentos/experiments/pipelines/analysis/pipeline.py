@@ -1,7 +1,10 @@
 """ "Pipeline definitions for experiment results analysis."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import (
+    TYPE_CHECKING,
     Annotated,
     BinaryIO,
     Protocol,
@@ -9,6 +12,9 @@ from typing import (
 )
 
 import polars as pl
+
+if TYPE_CHECKING:
+    from experiments.core.analysis.translator import Translator
 
 from experiments.core.analysis.evaluation import (
     EvaluationMetrics,
@@ -26,6 +32,7 @@ class AnalysisArtifactRepository(Protocol):
         dataset: Dataset,
         analysis_name: str,
         artifact_data: bytes,
+        locale: str = "en_US",
     ) -> None:
         """Saves an analysis artifact for a given experiment.
 
@@ -33,6 +40,7 @@ class AnalysisArtifactRepository(Protocol):
             dataset (Dataset): The dataset associated with the experiment.
             analysis_name (str): The name of the analysis artifact to be saved.
             artifact_data (bytes): The binary data of the artifact.
+            locale (str): The locale for the artifact (default: 'en_US').
 
         Raises:
             Exception: If there is an error saving the artifact.
@@ -43,12 +51,14 @@ class AnalysisArtifactRepository(Protocol):
         self,
         dataset: Dataset,
         analysis_name: str,
+        locale: str = "en_US",
     ) -> bool:
         """Checks if an analysis artifact exists in the repository.
 
         Args:
             dataset (Dataset): The dataset associated with the experiment.
             analysis_name (str): The name of the analysis artifact to check.
+            locale (str): The locale for the artifact (default: 'en_US').
 
         Returns:
             bool: True if the artifact exists, False otherwise.
@@ -85,6 +95,7 @@ class AnalysisPipelineContext:
         analysis_artifacts_repository (AnalysisArtifactRepository): The repository for saving analysis artifacts.
         use_gpu (bool): Flag to indicate if GPU acceleration should be used.
         force_overwrite (bool): Flag to indicate if existing artifacts should be overwritten.
+        translator (Translator | None): Optional translator for internationalization.
     """
 
     dataset: Dataset
@@ -94,6 +105,7 @@ class AnalysisPipelineContext:
     analysis_artifacts_repository: AnalysisArtifactRepository
     use_gpu: bool
     force_overwrite: bool
+    translator: "Translator | None" = None
 
 
 type AnalysisPipelineTask[T] = Task[AnalysisPipelineState[T], AnalysisPipelineContext]
