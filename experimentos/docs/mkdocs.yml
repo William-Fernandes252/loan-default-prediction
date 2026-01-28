@@ -5,14 +5,14 @@ site_description: Documentation for the Loan Default Prediction experiments proj
 theme:
   name: material
   palette:
-    - media: "(prefers-color-scheme: light)"
+    - media: '(prefers-color-scheme: light)'
       scheme: default
       primary: indigo
       accent: indigo
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
-    - media: "(prefers-color-scheme: dark)"
+    - media: '(prefers-color-scheme: dark)'
       scheme: slate
       primary: indigo
       accent: indigo
@@ -32,6 +32,7 @@ nav:
   - Methodology: methodology.md
   - Getting Started: getting-started.md
   - Architecture: architecture.md
+  - Configuration: configuration.md
   - CLI Reference: cli.md
 
 markdown_extensions:

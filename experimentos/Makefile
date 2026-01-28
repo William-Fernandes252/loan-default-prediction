@@ -90,20 +90,10 @@ docs-serve:
 process-data:
 	uv run ldp data process
 
-## Prepare features
-.PHONY: prepare-features
-prepare-features:
-	uv run ldp features prepare
-
 ## Run training experiments
 .PHONY: train
 train:
-	uv run ldp train experiment
-
-## Consolidate training results
-.PHONY: consolidate-results
-consolidate-results:
-	uv run ldp train consolidate
+	uv run ldp experiment run
 
 ## Analyze results
 .PHONY: analyze

@@ -53,11 +53,11 @@ The following table maps the methodological steps to the corresponding CLI comma
 
 | Step | CLI Command | Core Module |
 |------|-------------|-------------|
-| **Data Preprocessing** | `make data` | `experiments.core.data` |
-| **Model Training** | `make train` | `experiments.core.training` |
-| **Single Experiment** | `python -m experiments.cli.train run ...` | `experiments.core.experiment` |
-| **Results Analysis** | `make analysis` | `experiments.core.analysis` |
-| **Feature Engineering** | `python -m experiments.cli.features ...` | `experiments.core.features` |
+| **Data Preprocessing** | `uv run ldp data process` | `experiments.core.data` |
+| **Experiment Execution** | `uv run ldp experiment run` | `experiments.core.training` |
+| **Single Model Training** | `uv run ldp models train` | `experiments.core.modeling` |
+| **Model Predictions** | `uv run ldp models predict` | `experiments.core.predictions` |
+| **Results Analysis** | `uv run ldp analyze all` | `experiments.core.analysis` |
 
 ## Results and Reports
 

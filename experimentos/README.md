@@ -27,34 +27,45 @@ The experiments evaluate these techniques across three distinct datasets (Lendin
 ├── docs               <- Documentation files (MkDocs). See [docs/README.md](docs/README.md) for details.
 ├── experiments        <- Source code for use in this project.
 │   ├── __init__.py
-│   ├── settings.py    <- Application settings using Pydantic Settings
+│   ├── config.py      <- Application configuration
 │   ├── containers.py  <- Dependency injection container (dependency-injector)
 │   ├── cli            <- Command Line Interface entry points
-│   │   ├── analysis.py
-│   │   ├── data.py
-│   │   ├── features.py
-│   │   ├── predict.py
-│   │   └── train.py
+│   │   ├── analysis.py    <- Results analysis commands
+│   │   ├── data.py        <- Data processing commands
+│   │   ├── experiment.py  <- Experiment execution commands
+│   │   └── models.py      <- Model training and inference commands
+│   ├── config         <- Configuration modules
+│   │   ├── logging.py     <- Logging configuration
+│   │   └── settings.py    <- Pydantic Settings
 │   ├── core           <- Core domain logic (pipeline architecture)
-│   │   ├── analysis   <- Results analysis pipeline (load → transform → export)
+│   │   ├── analysis   <- Results analysis (metrics, evaluation)
 │   │   ├── data       <- Data loading and dataset definitions
-│   │   ├── experiment <- Single experiment pipeline (split → train → evaluate → persist)
-│   │   ├── modeling   <- Model factories, estimators, and metrics
-│   │   └── training   <- Training orchestration pipeline (generate → execute → consolidate)
+│   │   ├── modeling   <- Model factories, estimators, and scorers
+│   │   ├── predictions <- Prediction generation and storage
+│   │   └── training   <- Training orchestration (splitters, trainers)
+│   ├── lib            <- Reusable library components
+│   │   └── pipelines  <- Pipeline execution framework
+│   ├── pipelines      <- Pipeline implementations
+│   │   ├── analysis   <- Analysis pipeline and tasks
+│   │   ├── data       <- Data processing pipeline
+│   │   ├── predictions <- Predictions pipeline
+│   │   └── training   <- Training pipeline
 │   ├── services       <- Application services
-│   │   ├── data_manager.py      <- Dataset artifact management
-│   │   ├── path_manager.py      <- Centralized path resolution
-│   │   ├── resource_calculator.py <- RAM-based parallelization
-│   │   ├── model_versioning.py  <- Model versioning, persistence and loading
-│   │   ├── storage_manager.py   <- High-level storage operations
-│   │   └── storage              <- Storage abstraction layer
-│   │       ├── __init__.py
-│   │       ├── base.py          <- StorageService abstract base class
-│   │       ├── errors.py        <- StorageError and FileDoesNotExistError
-│   │       ├── local.py         <- LocalStorageService (filesystem)
-│   │       ├── s3.py            <- S3StorageService (AWS S3, boto3)
-│   │       └── gcs.py           <- GCSStorageService (Google Cloud Storage)
-│   └── utils          <- Utility functions
+│   │   ├── data_manager.py           <- Dataset processing management
+│   │   ├── data_repository.py        <- Data access layer
+│   │   ├── experiment_executor.py    <- Experiment orchestration
+│   │   ├── grid_search_trainer.py    <- Hyperparameter optimization
+│   │   ├── inference_service.py      <- Model inference
+│   │   ├── model_repository.py       <- Model persistence
+│   │   ├── model_versioning.py       <- Model versioning
+│   │   ├── resource_calculator.py    <- RAM-based parallelization
+│   │   ├── training_executor.py      <- Training execution
+│   │   └── ...                        <- Additional services
+│   └── storage        <- Storage abstraction layer
+│       ├── interface.py   <- StorageService protocol
+│       ├── local.py       <- LocalStorageService (filesystem)
+│       ├── s3.py          <- S3StorageService (AWS S3, boto3)
+│       └── gcs.py         <- GCSStorageService (Google Cloud Storage)
 ├── models             <- Trained and serialized models
 ├── notebooks          <- Jupyter notebooks
 ├── pyproject.toml     <- Project configuration file
@@ -74,12 +85,13 @@ The application uses `dependency-injector` with a centralized `Container` class 
 | Service | Responsibility |
 |---------|----------------|
 | **ExperimentsSettings** | Configuration from environment variables / `.env` files (Pydantic Settings) |
-| **PathManager** | Centralized path resolution for data, models, and results |
 | **ResourceCalculator** | RAM-based calculation of safe parallel job counts |
-| **ModelVersioningServiceFactory** | Factory for model versioning services |
-| **ExperimentDataManager** | Dataset artifact management and consolidation |
+| **DataManager** | Dataset processing and management |
+| **TrainingExecutor** | Training pipeline execution |
+| **ExperimentExecutor** | Full experiment orchestration |
+| **ModelVersioningService** | Model versioning, persistence and loading |
+| **InferenceService** | Model inference and predictions |
 | **StorageService** | Unified file I/O abstraction (local, S3, GCS) |
-| **StorageManager** | High-level storage operations for data and checkpoints |
 
 CLI commands resolve dependencies directly from the container at runtime.
 
@@ -105,8 +117,9 @@ The `StorageManager` provides high-level operations for reading/writing datasets
 
 | Pipeline | Purpose | Stages |
 |----------|---------|--------|
-| **Training** | Orchestrates batch model training | Generate tasks → Load data → Execute → Consolidate |
-| **Experiment** | Runs a single model experiment | Split data → Train model → Evaluate → Persist results |
+| **Data** | Processes raw datasets | Load raw → Transform → Validate → Export |
+| **Training** | Orchestrates batch model training | Generate tasks → Load data → Train models → Persist |
+| **Predictions** | Runs model inference | Load model → Load data → Generate predictions → Persist |
 | **Analysis** | Generates reports from results | Load results → Transform data → Export reports |
 
 --------
@@ -117,43 +130,69 @@ The project uses a CLI application to manage the entire machine learning pipelin
 
 ### 1. Data Processing
 
-Convert raw data into interim format.
+Process raw datasets into the format required for experiments.
 
 ```bash
-python -m experiments.cli data [DATASET_NAME]
+# Process all datasets
+uv run ldp data process
+
+# Process a specific dataset
+uv run ldp data process taiwan_credit
 ```
 
-### 2. Feature Extraction
+### 2. Run Experiments
 
-Extract features and targets from interim data.
+Execute training experiments across datasets and model configurations.
 
 ```bash
-python -m experiments.cli features [DATASET_NAME]
+# Run all experiments
+uv run ldp experiment run
+
+# Run experiments on a specific dataset
+uv run ldp experiment run --dataset taiwan_credit
+
+# Run only Random Forest experiments with SMOTE
+uv run ldp experiment run --model random_forest --technique smote
+
+# Resume an interrupted experiment
+uv run ldp experiment run --resume
 ```
 
-### 3. Model Training
+### 3. Analysis
 
-Train models on the processed datasets.
-
-```bash
-# Train all datasets
-python -m experiments.cli train
-
-# Train a specific dataset with parallel jobs
-python -m experiments.cli train [DATASET_NAME] --jobs 4
-```
-
-### 4. Analysis
-
-Analyze results and generate reports.
+Generate analysis reports and visualizations.
 
 ```bash
-python -m experiments.cli analyze
+# Run all analysis types
+uv run ldp analyze all
+
+# Generate specific analysis
+uv run ldp analyze summary
+uv run ldp analyze stability
+uv run ldp analyze comparison
 ```
 
 **Datasets:** `corporate_credit_rating`, `lending_club`, `taiwan_credit`.
 
-Make sure to run the steps in order: `data` -> `features` -> `train`.
+### GPU Acceleration
+
+The project supports GPU acceleration using [NVIDIA RAPIDS cuML](https://docs.rapids.ai/api/cuml/stable/). To enable GPU support:
+
+1. Install GPU dependencies:
+   ```bash
+   uv sync --group gpu
+   ```
+
+2. Run commands with the `--use-gpu` flag:
+   ```bash
+   uv run ldp data process --use-gpu
+   uv run ldp experiment run --use-gpu
+   ```
+
+**Requirements:**
+- NVIDIA GPU with compute capability 7.0+ (Volta or newer)
+- CUDA Toolkit 11.2+
+- Linux OS
 
 ## Development & Code Quality
 

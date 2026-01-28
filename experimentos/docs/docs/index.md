@@ -18,10 +18,11 @@ The project is documented in the following chapters (available in the root direc
 
 ### Key Features
 
-- **Pipeline Architecture**: Modular pipelines for data processing, feature extraction, training, and analysis.
+- **Pipeline Architecture**: Modular pipelines for data processing, training, and analysis.
 - **Dependency Injection**: Uses `dependency-injector` for flexible service management.
 - **Unified Storage**: Abstracted storage layer supporting local filesystem, AWS S3, and Google Cloud Storage.
 - **CLI Driven**: Comprehensive command-line interface for managing the entire lifecycle.
+- **GPU Acceleration**: Optional GPU support via NVIDIA RAPIDS cuML for faster training.
 - **Reproducibility**: Versioned models and datasets with fixed seeds for 30-run iterations.
 
 ## Getting Started

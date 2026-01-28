@@ -41,47 +41,64 @@ The project uses a CLI tool named `ldp`. You can run it using `uv run ldp` or by
 
 ### 1. Data Processing
 
-Process the raw datasets into an intermediate format:
+Process the raw datasets into the format required for experiments:
+
 ```bash
 make process-data
 # or
 uv run ldp data process
 ```
 
-### 2. Feature Preparation
+This processes all datasets by default. To process a specific dataset:
 
-Prepare features for modeling:
 ```bash
-make prepare-features
-# or
-uv run ldp features prepare
+uv run ldp data process taiwan_credit
 ```
 
-### 3. Run Training
+### 2. Run Experiments
 
-Execute the training experiments:
+Execute the training experiments across all datasets and model configurations:
+
 ```bash
 make train
 # or
-uv run ldp train experiment
+uv run ldp experiment run
 ```
 
-### 4. Consolidate Results
+You can filter experiments by dataset, model, or technique:
 
-Consolidate the results from different experiments:
 ```bash
-make consolidate-results
-# or
-uv run ldp train consolidate
+# Run only on Taiwan Credit dataset
+uv run ldp experiment run --dataset taiwan_credit
+
+# Run only Random Forest experiments
+uv run ldp experiment run --model random_forest
+
+# Resume an interrupted experiment
+uv run ldp experiment run --resume
 ```
 
-### 5. Analyze Results
+### 3. Analyze Results
 
-Generate analysis reports:
+Generate analysis reports and visualizations:
+
 ```bash
 make analyze
 # or
 uv run ldp analyze all
+```
+
+You can also generate specific analysis types:
+
+```bash
+# Generate summary tables
+uv run ldp analyze summary
+
+# Generate stability boxplots
+uv run ldp analyze stability
+
+# Generate comparison plots
+uv run ldp analyze comparison
 ```
 
 ## Development

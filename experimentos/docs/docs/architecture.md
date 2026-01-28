@@ -11,12 +11,48 @@ The application uses `dependency-injector` with a centralized `Container` class 
 | Service | Responsibility |
 |---------|----------------|
 | **ExperimentsSettings** | Configuration from environment variables / `.env` files (Pydantic Settings) |
-| **PathManager** | Centralized path resolution for data, models, and results |
 | **ResourceCalculator** | RAM-based calculation of safe parallel job counts |
-| **ModelVersioningServiceFactory** | Factory for model versioning services |
-| **ExperimentDataManager** | Dataset artifact management and consolidation |
 | **StorageService** | Unified file I/O abstraction (local, S3, GCS) |
-| **StorageManager** | High-level storage operations for data and checkpoints |
+
+### Data Services
+
+| Service | Responsibility |
+|---------|----------------|
+| **DataRepository** | Low-level data access for datasets |
+| **DataManager** | High-level dataset processing using pipelines |
+| **StratifiedDataSplitter** | Stratified train/test splitting preserving class proportions |
+| **FeatureExtractor** | Feature extraction and transformation |
+
+### Training Services
+
+| Service | Responsibility |
+|---------|----------------|
+| **TrainingExecutor** | Executes model training with pipeline orchestration |
+| **GridSearchTrainer** | Hyperparameter optimization via grid search |
+| **UnbalancedLearnerFactory** | Creates classifiers with imbalance handling techniques |
+| **SeedGenerator** | Generates reproducible random seeds |
+
+### Model Services
+
+| Service | Responsibility |
+|---------|----------------|
+| **ModelRepository** | Model persistence and retrieval |
+| **ModelVersioningService** | Model versioning, checkpointing, and loading |
+| **ModelResultsEvaluator** | Calculates evaluation metrics from predictions |
+
+### Experiment Services
+
+| Service | Responsibility |
+|---------|----------------|
+| **ExperimentExecutor** | Coordinates full experiment runs across datasets/models |
+| **InferenceService** | Runs predictions using trained models |
+| **ModelPredictionsRepository** | Stores and retrieves prediction results |
+
+### Analysis Services
+
+| Service | Responsibility |
+|---------|----------------|
+| **AnalysisArtifactsRepository** | Manages analysis outputs (figures, tables) |
 
 ## Storage Layer
 
@@ -30,18 +66,49 @@ The storage layer provides a unified interface for file operations across differ
 
 Cloud storage services use **composition-based dependency injection** — the boto3/GCS clients are created by the DI container and injected into the storage services.
 
-## Core Pipelines
+For detailed configuration options, see the [Configuration](configuration.md) page.
 
-The project is organized around three main pipelines:
+## Pipeline Architecture
 
-### 1. Training Pipeline
+All major operations are implemented as composable pipelines using the `Pipeline` and `PipelineExecutor` classes in `experiments.lib.pipelines`.
+
+### Pipeline Components
+
+| Component | Description |
+|-----------|-------------|
+| **Pipeline** | Ordered collection of tasks to execute |
+| **PipelineExecutor** | Executes pipelines with lifecycle hooks |
+| **Task** | Unit of work within a pipeline |
+| **Step** | Individual operation within a task |
+
+### Core Pipelines
+
+#### Data Pipeline
+Processes raw datasets into the format required for experiments.
+
+- **Stages**: Load raw data → Transform → Validate → Export
+
+#### Training Pipeline
 Orchestrates batch model training across multiple datasets and configurations.
-- **Stages**: Generate tasks → Load data → Execute → Consolidate
 
-### 2. Experiment Pipeline
-Runs a single model experiment, including data splitting, training, and evaluation.
-- **Stages**: Split data → Train model → Evaluate → Persist results
+- **Stages**: Generate tasks → Load data → Train models → Persist results
 
-### 3. Analysis Pipeline
+#### Predictions Pipeline
+Runs inference using trained models.
+
+- **Stages**: Load model → Load data → Generate predictions → Persist
+
+#### Analysis Pipeline
 Generates reports and visualizations from experiment results.
-- **Stages**: Load results → Transform data → Export reports
+
+- **Stages**: Load results → Transform data → Generate visualizations → Export reports
+
+## GPU Acceleration
+
+The project supports GPU acceleration using NVIDIA RAPIDS cuML for compatible algorithms. When enabled:
+
+1. **Data Processing**: Polars uses the GPU engine for DataFrame operations
+2. **Model Training**: cuML implementations replace scikit-learn where available
+3. **Automatic Fallback**: CPU implementations are used when GPU versions are unavailable
+
+For requirements and configuration, see the [Configuration](configuration.md#gpu-acceleration) page.
