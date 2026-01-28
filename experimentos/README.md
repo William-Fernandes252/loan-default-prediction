@@ -84,14 +84,14 @@ The application uses `dependency-injector` with a centralized `Container` class 
 
 | Service | Responsibility |
 |---------|----------------|
-| **ExperimentsSettings** | Configuration from environment variables / `.env` files (Pydantic Settings) |
+| **LdpSettings** | Configuration from environment variables / `.env` files (Pydantic Settings) |
 | **ResourceCalculator** | RAM-based calculation of safe parallel job counts |
 | **DataManager** | Dataset processing and management |
 | **TrainingExecutor** | Training pipeline execution |
 | **ExperimentExecutor** | Full experiment orchestration |
-| **ModelVersioningService** | Model versioning, persistence and loading |
+| **ModelVersioner** | Model versioning and persistence |
 | **InferenceService** | Model inference and predictions |
-| **StorageService** | Unified file I/O abstraction (local, S3, GCS) |
+| **Storage** | Unified file I/O abstraction (local, S3, GCS) |
 
 CLI commands resolve dependencies directly from the container at runtime.
 
@@ -99,11 +99,11 @@ CLI commands resolve dependencies directly from the container at runtime.
 
 The storage layer provides a unified interface for file operations across different backends:
 
-| Backend | Implementation | URI Scheme |
-|---------|----------------|------------|
-| **Local Filesystem** | `LocalStorageService` | `file://` |
-| **AWS S3** | `S3StorageService` | `s3://` |
-| **Google Cloud Storage** | `GCSStorageService` | `gs://` |
+| Backend | Implementation |
+|---------|----------------|
+| **Local Filesystem** | `LocalStorage` |
+| **AWS S3** | `S3Storage` |
+| **Google Cloud Storage** | `GCSStorage` |
 
 Cloud storage services use **composition-based dependency injection** — the boto3/GCS clients are created by the DI container and injected into the storage services. This enables:
 
@@ -111,7 +111,7 @@ Cloud storage services use **composition-based dependency injection** — the bo
 - Centralized credential management
 - Swappable storage backends via configuration
 
-The `StorageManager` provides high-level operations for reading/writing datasets, checkpoints, and model artifacts through URI-based addressing.
+The `Storage` protocol provides a unified interface for reading/writing datasets, checkpoints, and model artifacts across all storage backends.
 
 ### Core Pipelines
 
