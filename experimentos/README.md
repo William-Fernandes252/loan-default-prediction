@@ -62,10 +62,10 @@ The experiments evaluate these techniques across three distinct datasets (Lendin
 │   │   ├── training_executor.py      <- Training execution
 │   │   └── ...                        <- Additional services
 │   └── storage        <- Storage abstraction layer
-│       ├── interface.py   <- StorageService protocol
-│       ├── local.py       <- LocalStorageService (filesystem)
-│       ├── s3.py          <- S3StorageService (AWS S3, boto3)
-│       └── gcs.py         <- GCSStorageService (Google Cloud Storage)
+│       ├── interface.py   <- Storage protocol
+│       ├── local.py       <- LocalStorage (filesystem)
+│       ├── s3.py          <- S3Storage (AWS S3, boto3)
+│       └── gcs.py         <- GCSStorage (Google Cloud Storage)
 ├── models             <- Trained and serialized models
 ├── notebooks          <- Jupyter notebooks
 ├── pyproject.toml     <- Project configuration file
@@ -149,13 +149,13 @@ Execute training experiments across datasets and model configurations.
 uv run ldp experiment run
 
 # Run experiments on a specific dataset
-uv run ldp experiment run --dataset taiwan_credit
+uv run ldp experiment run --only-dataset taiwan_credit
 
-# Run only Random Forest experiments with SMOTE
-uv run ldp experiment run --model random_forest --technique smote
+# Exclude SVM models (slow to train)
+uv run ldp experiment run --exclude-model svm
 
-# Resume an interrupted experiment
-uv run ldp experiment run --resume
+# Continue an interrupted experiment using its execution ID
+uv run ldp experiment run --execution-id <execution-id>
 ```
 
 ### 3. Analysis
@@ -170,6 +170,7 @@ uv run ldp analyze all
 uv run ldp analyze summary
 uv run ldp analyze stability
 uv run ldp analyze comparison
+uv run ldp analyze heatmap
 ```
 
 **Datasets:** `corporate_credit_rating`, `lending_club`, `taiwan_credit`.

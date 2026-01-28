@@ -43,7 +43,8 @@ uv run ldp data process [DATASET] [OPTIONS]
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `--n-jobs`, `-j` | int | 1 | Number of parallel jobs |
+| `--jobs`, `-j` | int | auto | Number of parallel workers. Defaults to available CPU count. |
+| `--force`, `-f` | flag | false | Overwrite existing processed files without prompting |
 | `--use-gpu`, `-g` | flag | false | Enable GPU acceleration |
 
 **Examples:**
@@ -54,6 +55,9 @@ uv run ldp data process
 
 # Process a specific dataset
 uv run ldp data process taiwan_credit
+
+# Force overwrite existing files
+uv run ldp data process --force
 
 # Process with GPU acceleration
 uv run ldp data process --use-gpu
@@ -77,13 +81,12 @@ uv run ldp experiment run [OPTIONS]
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `--dataset`, `-d` | string | all | Dataset to run experiments on |
-| `--model`, `-m` | string | all | Model type to train |
-| `--technique`, `-t` | string | all | Imbalance handling technique |
+| `--only-dataset` | string | all | Dataset to run experiments on |
 | `--exclude-model`, `-x` | string (multiple) | none | Model types to exclude |
-| `--n-jobs`, `-j` | int | 1 | Number of parallel jobs |
+| `--jobs`, `-j` | int | auto | Number of parallel jobs (based on RAM) |
+| `--models-jobs`, `-m` | int | auto | Number of parallel jobs for model training |
 | `--use-gpu`, `-g` | flag | false | Enable GPU acceleration |
-| `--resume`, `-r` | flag | false | Resume from last checkpoint |
+| `--execution-id`, `-e` | string | none | Continue a previous experiment by its execution ID |
 
 **Examples:**
 
@@ -92,16 +95,16 @@ uv run ldp experiment run [OPTIONS]
 uv run ldp experiment run
 
 # Run experiments on a specific dataset
-uv run ldp experiment run --dataset taiwan_credit
-
-# Run only Random Forest with SMOTE
-uv run ldp experiment run --model random_forest --technique smote
+uv run ldp experiment run --only-dataset taiwan_credit
 
 # Exclude SVM models (slow to train)
 uv run ldp experiment run --exclude-model svm
 
-# Resume interrupted experiment
-uv run ldp experiment run --resume
+# Continue an interrupted experiment
+uv run ldp experiment run --execution-id <execution-id>
+
+# Run with GPU acceleration
+uv run ldp experiment run --use-gpu
 ```
 
 ---
@@ -162,6 +165,7 @@ uv run ldp models predict DATASET [OPTIONS]
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `--model-id`, `-m` | string | latest | Model ID or version to use |
+| `--output`, `-o` | file | stdout | Output file for predictions |
 
 **Examples:**
 
@@ -199,7 +203,6 @@ uv run ldp analyze summary [DATASET] [OPTIONS]
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `--metric` | string | `g_mean` | Metric to summarize |
 | `--technique`, `-t` | string | all | Filter by technique |
 
 ### `analyze tradeoff`
@@ -222,8 +225,7 @@ uv run ldp analyze stability [DATASET] [OPTIONS]
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `--metric` | string | `g_mean` | Metric to analyze |
-| `--technique`, `-t` | string | all | Filter by technique |
+| `--metric`, `-m` | string | `balanced_accuracy` | Metric to analyze |
 
 ### `analyze imbalance`
 
