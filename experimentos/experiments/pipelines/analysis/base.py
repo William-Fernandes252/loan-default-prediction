@@ -65,6 +65,9 @@ def load_results_from_parquet(
 ) -> AnalysisPipelineTaskResult:
     """Load processed results from a Parquet file.
 
+    If an execution_id is provided in the context, fetches predictions for
+    that specific execution; otherwise, fetches the latest predictions.
+
     Args:
         state: The current state of the data pipeline.
         context: The context of the data pipeline.
@@ -72,9 +75,16 @@ def load_results_from_parquet(
     Returns:
         The updated state with loaded results.
     """
-    state["model_predictions"] = (
-        context.predictions_repository.get_latest_predictions_for_experiment(context.dataset)
-    )
+    if context.execution_id is not None:
+        predictions = context.predictions_repository.get_predictions_for_execution(
+            context.dataset, context.execution_id
+        )
+    else:
+        predictions = context.predictions_repository.get_latest_predictions_for_experiment(
+            context.dataset
+        )
+
+    state["model_predictions"] = predictions
     return TaskResult(
         state,
         TaskStatus.SUCCESS,

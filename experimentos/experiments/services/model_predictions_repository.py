@@ -18,6 +18,19 @@ from experiments.storage import Storage
 from experiments.storage.interface import FileInfo
 
 
+class ExecutionNotFoundError(Exception):
+    """Raised when a specified execution ID does not exist."""
+
+    def __init__(self, execution_id: str, dataset: str | None = None):
+        self.execution_id = execution_id
+        self.dataset = dataset
+        if dataset:
+            message = f"Execution '{execution_id}' not found for dataset '{dataset}'"
+        else:
+            message = f"Execution '{execution_id}' not found"
+        super().__init__(message)
+
+
 class _ParsedPredictionsKey(TypedDict):
     """Parsed components from a predictions storage key."""
 
@@ -194,6 +207,37 @@ class ModelPredictionsStorageRepository:
         files = dataset_files[latest_execution_id]
 
         return self._iter_predictions(latest_execution_id, dataset, files)
+
+    def get_predictions_for_execution(
+        self, dataset: Dataset, execution_id: str
+    ) -> ModelPredictionsResults | None:
+        """Fetches experiment results for a specific execution ID.
+
+        Args:
+            dataset: The dataset for which to fetch results.
+            execution_id: The specific execution ID to retrieve predictions for.
+
+        Returns:
+            ModelPredictionsResults: An iterator of model predictions,
+            or None if no results exist for the given execution.
+
+        Raises:
+            ExecutionNotFoundError: If the execution ID does not exist.
+        """
+        # Build prefix for the specific execution and dataset
+        prefix = f"{self._layout.predictions_prefix}{execution_id}/{dataset.value}/"
+        files = list(self._storage.list_files(prefix, "*.parquet"))
+
+        if not files:
+            # Check if the execution exists at all (for any dataset)
+            execution_prefix = f"{self._layout.predictions_prefix}{execution_id}/"
+            any_files = list(self._storage.list_files(execution_prefix, "*.parquet"))
+            if not any_files:
+                raise ExecutionNotFoundError(execution_id)
+            # Execution exists but no predictions for this dataset
+            return None
+
+        return self._iter_predictions(execution_id, dataset, files)
 
     def _iter_predictions(
         self, execution_id: str, dataset: Dataset, files: list[FileInfo]

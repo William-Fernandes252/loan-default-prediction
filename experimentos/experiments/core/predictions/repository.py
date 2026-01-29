@@ -91,6 +91,25 @@ class ModelPredictionsRepository(Protocol):
         """
         ...
 
+    def get_predictions_for_execution(
+        self, dataset: Dataset, execution_id: str
+    ) -> ModelPredictionsResults | None:
+        """Fetches experiment results for a specific execution ID.
+
+        Args:
+            dataset (Dataset): The dataset for which to fetch results.
+            execution_id (str): The specific execution ID to retrieve predictions for.
+
+        Returns:
+            ModelPredictionsResults | None: The results as an iterator of model predictions,
+            or `None` if no results exist for the given execution.
+
+        Raises:
+            ExecutionNotFoundError: If the execution ID does not exist.
+            Exception: If there is an error retrieving the results.
+        """
+        ...
+
     def save_predictions(
         self,
         *,

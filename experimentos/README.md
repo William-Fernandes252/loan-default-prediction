@@ -163,7 +163,7 @@ uv run ldp experiment run --execution-id <execution-id>
 Generate analysis reports and visualizations.
 
 ```bash
-# Run all analysis types
+# Run all analysis types (uses latest execution)
 uv run ldp analyze all
 
 # Generate specific analysis
@@ -171,6 +171,9 @@ uv run ldp analyze summary
 uv run ldp analyze stability
 uv run ldp analyze comparison
 uv run ldp analyze heatmap
+
+# Analyze a specific experiment execution by ID
+uv run ldp analyze all taiwan_credit --execution-id <execution-id>
 ```
 
 **Datasets:** `corporate_credit_rating`, `lending_club`, `taiwan_credit`.

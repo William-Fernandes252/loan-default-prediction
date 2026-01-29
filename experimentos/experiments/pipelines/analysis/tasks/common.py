@@ -20,8 +20,9 @@ def load_experiment_results[T](
 ) -> AnalysisPipelineTaskResult[T]:
     """Load experiment results (predictions) from the repository.
 
-    Fetches the latest model predictions for the dataset specified in the
-    context and stores them in the pipeline state.
+    Fetches model predictions for the dataset specified in the context.
+    If an execution_id is provided in the context, fetches predictions for
+    that specific execution; otherwise, fetches the latest predictions.
 
     Args:
         state: The current state of the analysis pipeline.
@@ -31,9 +32,14 @@ def load_experiment_results[T](
         AnalysisPipelineTaskResult: Updated state with loaded predictions,
         or failure status if no predictions are found.
     """
-    predictions = context.predictions_repository.get_latest_predictions_for_experiment(
-        context.dataset
-    )
+    if context.execution_id is not None:
+        predictions = context.predictions_repository.get_predictions_for_execution(
+            context.dataset, context.execution_id
+        )
+    else:
+        predictions = context.predictions_repository.get_latest_predictions_for_experiment(
+            context.dataset
+        )
 
     if predictions is None:
         return TaskResult(

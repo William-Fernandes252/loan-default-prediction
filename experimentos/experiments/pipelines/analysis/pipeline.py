@@ -106,6 +106,7 @@ class AnalysisPipelineContext:
     use_gpu: bool
     force_overwrite: bool
     translator: "Translator | None" = None
+    execution_id: str | None = None
 
 
 type AnalysisPipelineTask[T] = Task[AnalysisPipelineState[T], AnalysisPipelineContext]

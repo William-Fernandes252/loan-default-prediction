@@ -3,11 +3,13 @@
 from unittest.mock import MagicMock
 
 import numpy as np
+import pytest
 
 from experiments.core.data.datasets import Dataset
 from experiments.core.modeling.classifiers import ModelType, Technique
 from experiments.core.predictions.repository import RawPredictions
 from experiments.services.model_predictions_repository import (
+    ExecutionNotFoundError,
     ModelPredictionsStorageLayout,
     ModelPredictionsStorageRepository,
 )
@@ -291,3 +293,142 @@ class DescribeGetLatestPredictionsForExperiment:
 
         assert len(predictions_list) == 1
         assert predictions_list[0].execution_id == "zzz-exec"
+
+
+# ============================================================================
+# ExecutionNotFoundError Tests
+# ============================================================================
+
+
+class DescribeExecutionNotFoundError:
+    def it_stores_execution_id(self) -> None:
+        error = ExecutionNotFoundError("exec-123")
+
+        assert error.execution_id == "exec-123"
+
+    def it_stores_dataset_when_provided(self) -> None:
+        error = ExecutionNotFoundError("exec-123", dataset="taiwan_credit")
+
+        assert error.dataset == "taiwan_credit"
+
+    def it_has_dataset_none_by_default(self) -> None:
+        error = ExecutionNotFoundError("exec-123")
+
+        assert error.dataset is None
+
+    def it_formats_message_without_dataset(self) -> None:
+        error = ExecutionNotFoundError("exec-123")
+
+        assert str(error) == "Execution 'exec-123' not found"
+
+    def it_formats_message_with_dataset(self) -> None:
+        error = ExecutionNotFoundError("exec-123", dataset="taiwan_credit")
+
+        assert str(error) == "Execution 'exec-123' not found for dataset 'taiwan_credit'"
+
+
+# ============================================================================
+# Get Predictions For Execution Tests
+# ============================================================================
+
+
+class DescribeGetPredictionsForExecution:
+    def it_returns_predictions_for_specific_execution(
+        self, mock_storage: MagicMock, predictions_repository: ModelPredictionsStorageRepository
+    ) -> None:
+        mock_storage.list_files.return_value = [
+            FileInfo(
+                key="predictions/exec-123/taiwan_credit/random_forest/baseline/seed_42.parquet",
+                size_bytes=1024,
+                last_modified=None,
+            ),
+        ]
+        mock_storage.scan_parquet.return_value = MagicMock()
+
+        result = predictions_repository.get_predictions_for_execution(
+            dataset=Dataset.TAIWAN_CREDIT, execution_id="exec-123"
+        )
+        predictions_list = list(result) if result else []
+
+        assert len(predictions_list) == 1
+        assert predictions_list[0].execution_id == "exec-123"
+
+    def it_returns_none_when_no_predictions_for_dataset(
+        self, mock_storage: MagicMock, predictions_repository: ModelPredictionsStorageRepository
+    ) -> None:
+        # First call: no files for the specific dataset
+        # Second call: files exist for other datasets (execution exists)
+        mock_storage.list_files.side_effect = [
+            [],  # No files for taiwan_credit
+            [
+                FileInfo(
+                    key="predictions/exec-123/lending_club/random_forest/baseline/seed_1.parquet",
+                    size_bytes=1024,
+                    last_modified=None,
+                ),
+            ],  # Execution exists with other dataset
+        ]
+
+        result = predictions_repository.get_predictions_for_execution(
+            dataset=Dataset.TAIWAN_CREDIT, execution_id="exec-123"
+        )
+
+        assert result is None
+
+    def it_raises_error_when_execution_does_not_exist(
+        self, mock_storage: MagicMock, predictions_repository: ModelPredictionsStorageRepository
+    ) -> None:
+        # Both calls return empty (execution doesn't exist at all)
+        mock_storage.list_files.return_value = []
+
+        with pytest.raises(ExecutionNotFoundError) as exc_info:
+            predictions_repository.get_predictions_for_execution(
+                dataset=Dataset.TAIWAN_CREDIT, execution_id="nonexistent-exec"
+            )
+
+        assert exc_info.value.execution_id == "nonexistent-exec"
+
+    def it_returns_all_predictions_for_execution_and_dataset(
+        self, mock_storage: MagicMock, predictions_repository: ModelPredictionsStorageRepository
+    ) -> None:
+        mock_storage.list_files.return_value = [
+            FileInfo(
+                key="predictions/exec-123/taiwan_credit/random_forest/baseline/seed_1.parquet",
+                size_bytes=1024,
+                last_modified=None,
+            ),
+            FileInfo(
+                key="predictions/exec-123/taiwan_credit/svm/smote/seed_2.parquet",
+                size_bytes=1024,
+                last_modified=None,
+            ),
+        ]
+        mock_storage.scan_parquet.return_value = MagicMock()
+
+        result = predictions_repository.get_predictions_for_execution(
+            dataset=Dataset.TAIWAN_CREDIT, execution_id="exec-123"
+        )
+        predictions_list = list(result) if result else []
+
+        assert len(predictions_list) == 2
+        assert all(p.execution_id == "exec-123" for p in predictions_list)
+
+    def it_uses_correct_prefix_for_execution_and_dataset(
+        self, mock_storage: MagicMock, predictions_repository: ModelPredictionsStorageRepository
+    ) -> None:
+        mock_storage.list_files.return_value = [
+            FileInfo(
+                key="predictions/my-exec-id/lending_club/random_forest/baseline/seed_1.parquet",
+                size_bytes=1024,
+                last_modified=None,
+            ),
+        ]
+        mock_storage.scan_parquet.return_value = MagicMock()
+
+        predictions_repository.get_predictions_for_execution(
+            dataset=Dataset.LENDING_CLUB, execution_id="my-exec-id"
+        )
+
+        # First call should be for specific execution/dataset prefix
+        first_call_args = mock_storage.list_files.call_args_list[0]
+        assert first_call_args[0][0] == "predictions/my-exec-id/lending_club/"

@@ -255,9 +255,26 @@ uv run ldp analyze heatmap [DATASET] [OPTIONS]
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
+| `--execution-id`, `-e` | string | latest | Specific execution ID to analyze. If omitted, uses the latest execution. |
 | `--force`, `-f` | flag | false | Force overwrite of existing artifacts |
 | `--gpu` | flag | false | Enable GPU acceleration if available |
 | `--locale`, `-l` | string | `pt_BR` | Locale for generated artifacts (`en_US` or `pt_BR`) |
+
+**Examples:**
+
+```bash
+# Run all analyses for a dataset (uses latest execution)
+uv run ldp analyze all taiwan_credit
+
+# Generate summary table for a specific execution
+uv run ldp analyze summary taiwan_credit -e 0697506b-8d35-7c70-8000-7f1036bf22ca
+
+# Generate all analyses for a specific execution in English
+uv run ldp analyze all taiwan_credit --execution-id 0697506b-8d35-7c70-8000-7f1036bf22ca -l en_US
+
+# Force regenerate heatmap
+uv run ldp analyze heatmap --force
+```
 
 ---
 

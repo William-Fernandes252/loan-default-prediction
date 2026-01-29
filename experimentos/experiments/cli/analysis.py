@@ -113,6 +113,16 @@ _LocaleOption = Annotated[
     ),
 ]
 
+# Type alias for execution ID option
+_ExecutionIdOption = Annotated[
+    Optional[str],
+    typer.Option(
+        "--execution-id",
+        "-e",
+        help="Specific execution ID to analyze. If omitted, uses the latest execution.",
+    ),
+]
+
 
 def _resolve_datasets(dataset: Dataset | None) -> list[Dataset]:
     """Resolve a single dataset to a list, defaulting to all datasets.
@@ -134,6 +144,7 @@ def _create_analysis_context(
     force_overwrite: bool = False,
     use_gpu: bool = False,
     locale: Locale | None = None,
+    execution_id: str | None = None,
 ) -> AnalysisPipelineContext:
     """Create an analysis pipeline context with injected dependencies.
 
@@ -143,6 +154,7 @@ def _create_analysis_context(
         force_overwrite: Whether to overwrite existing artifacts.
         use_gpu: Whether to use GPU acceleration.
         locale: Locale for internationalization. If None, uses default from settings.
+        execution_id: Specific execution ID to analyze. If None, uses the latest.
 
     Returns:
         Configured AnalysisPipelineContext.
@@ -171,6 +183,7 @@ def _create_analysis_context(
         use_gpu=use_gpu,
         force_overwrite=force_overwrite,
         translator=translator,
+        execution_id=execution_id,
     )
 
 
@@ -190,6 +203,7 @@ def generate_summary_table(
     force: _ForceOption = False,
     gpu: _GpuOption = False,
     locale: _LocaleOption = Locale.PT_BR,
+    execution_id: _ExecutionIdOption = None,
 ) -> None:
     """Generate a summary table of experiment results.
 
@@ -221,6 +235,7 @@ def generate_summary_table(
             force_overwrite=force,
             use_gpu=gpu,
             locale=locale,
+            execution_id=execution_id,
         )
 
         # Execute pipeline
@@ -242,6 +257,7 @@ def generate_tradeoff_plot(
     force: _ForceOption = False,
     gpu: _GpuOption = False,
     locale: _LocaleOption = Locale.PT_BR,
+    execution_id: _ExecutionIdOption = None,
 ) -> None:
     """Generate a precision-sensitivity trade-off plot.
 
@@ -272,6 +288,7 @@ def generate_tradeoff_plot(
             force_overwrite=force,
             use_gpu=gpu,
             locale=locale,
+            execution_id=execution_id,
         )
 
         # Execute pipeline
@@ -296,6 +313,7 @@ def generate_stability_plot(
     force: _ForceOption = False,
     gpu: _GpuOption = False,
     locale: _LocaleOption = Locale.PT_BR,
+    execution_id: _ExecutionIdOption = None,
 ) -> None:
     """Generate a stability boxplot showing variance across seeds.
 
@@ -326,6 +344,7 @@ def generate_stability_plot(
             force_overwrite=force,
             use_gpu=gpu,
             locale=locale,
+            execution_id=execution_id,
         )
 
         # Execute pipeline
@@ -350,6 +369,7 @@ def generate_imbalance_impact_plot(
     force: _ForceOption = False,
     gpu: _GpuOption = False,
     locale: _LocaleOption = Locale.PT_BR,
+    execution_id: _ExecutionIdOption = None,
 ) -> None:
     """Generate an imbalance impact scatter plot.
 
@@ -380,6 +400,7 @@ def generate_imbalance_impact_plot(
             force_overwrite=force,
             use_gpu=gpu,
             locale=locale,
+            execution_id=execution_id,
         )
 
         # Execute pipeline
@@ -403,6 +424,7 @@ def generate_cs_vs_resampling_plot(
     force: _ForceOption = False,
     gpu: _GpuOption = False,
     locale: _LocaleOption = Locale.PT_BR,
+    execution_id: _ExecutionIdOption = None,
 ) -> None:
     """Generate a cost-sensitive vs resampling comparison plot.
 
@@ -433,6 +455,7 @@ def generate_cs_vs_resampling_plot(
             force_overwrite=force,
             use_gpu=gpu,
             locale=locale,
+            execution_id=execution_id,
         )
 
         # Execute pipeline
@@ -456,6 +479,7 @@ def generate_metrics_heatmap(
     force: _ForceOption = False,
     gpu: _GpuOption = False,
     locale: _LocaleOption = Locale.PT_BR,
+    execution_id: _ExecutionIdOption = None,
 ) -> None:
     """Generate a metrics heatmap.
 
@@ -486,6 +510,7 @@ def generate_metrics_heatmap(
             force_overwrite=force,
             use_gpu=gpu,
             locale=locale,
+            execution_id=execution_id,
         )
 
         # Execute pipeline
@@ -509,22 +534,46 @@ def run_all_analyses(
     force: _ForceOption = False,
     gpu: _GpuOption = False,
     locale: _LocaleOption = Locale.PT_BR,
+    execution_id: _ExecutionIdOption = None,
 ) -> None:
     """Run all analysis types sequentially.
 
     Generates all available analysis outputs (summary tables, plots, heatmaps)
     for the specified dataset(s).
     """
-    generate_summary_table(dataset=dataset, technique=None, force=force, gpu=gpu, locale=locale)
-    generate_tradeoff_plot(dataset=dataset, force=force, gpu=gpu, locale=locale)
+    generate_summary_table(
+        dataset=dataset,
+        technique=None,
+        force=force,
+        gpu=gpu,
+        locale=locale,
+        execution_id=execution_id,
+    )
+    generate_tradeoff_plot(
+        dataset=dataset, force=force, gpu=gpu, locale=locale, execution_id=execution_id
+    )
     generate_stability_plot(
-        dataset=dataset, metric=Metric.BALANCED_ACCURACY, force=force, gpu=gpu, locale=locale
+        dataset=dataset,
+        metric=Metric.BALANCED_ACCURACY,
+        force=force,
+        gpu=gpu,
+        locale=locale,
+        execution_id=execution_id,
     )
     generate_imbalance_impact_plot(
-        dataset=dataset, metric=Metric.BALANCED_ACCURACY, force=force, gpu=gpu, locale=locale
+        dataset=dataset,
+        metric=Metric.BALANCED_ACCURACY,
+        force=force,
+        gpu=gpu,
+        locale=locale,
+        execution_id=execution_id,
     )
-    generate_cs_vs_resampling_plot(dataset=dataset, force=force, gpu=gpu, locale=locale)
-    generate_metrics_heatmap(dataset=dataset, force=force, gpu=gpu, locale=locale)
+    generate_cs_vs_resampling_plot(
+        dataset=dataset, force=force, gpu=gpu, locale=locale, execution_id=execution_id
+    )
+    generate_metrics_heatmap(
+        dataset=dataset, force=force, gpu=gpu, locale=locale, execution_id=execution_id
+    )
 
 
 if __name__ == "__main__":

@@ -151,6 +151,78 @@ class DescribeSummaryCommand:
         assert result.exit_code == 0
         mock_build_pipeline.assert_called_with(technique=Technique.RANDOM_UNDER_SAMPLING)
 
+    @patch("experiments.cli.analysis.PipelineExecutor")
+    @patch("experiments.cli.analysis.build_summary_table_pipeline")
+    def it_passes_execution_id_to_context(
+        self,
+        mock_build_pipeline: MagicMock,
+        mock_executor_class: MagicMock,
+        runner: CliRunner,
+        analysis_app,
+    ) -> None:
+        mock_pipeline = MagicMock()
+        mock_build_pipeline.return_value = mock_pipeline
+        mock_executor = MagicMock()
+        mock_result = MagicMock()
+        mock_result.succeeded.return_value = True
+        mock_executor.execute.return_value = mock_result
+        mock_executor_class.return_value = mock_executor
+
+        result = runner.invoke(analysis_app, ["summary", "taiwan_credit", "-e", "exec-123"])
+
+        assert result.exit_code == 0
+        # Verify execution_id was passed to the context
+        context = mock_executor.execute.call_args.kwargs["context"]
+        assert context.execution_id == "exec-123"
+
+    @patch("experiments.cli.analysis.PipelineExecutor")
+    @patch("experiments.cli.analysis.build_summary_table_pipeline")
+    def it_uses_long_execution_id_option(
+        self,
+        mock_build_pipeline: MagicMock,
+        mock_executor_class: MagicMock,
+        runner: CliRunner,
+        analysis_app,
+    ) -> None:
+        mock_pipeline = MagicMock()
+        mock_build_pipeline.return_value = mock_pipeline
+        mock_executor = MagicMock()
+        mock_result = MagicMock()
+        mock_result.succeeded.return_value = True
+        mock_executor.execute.return_value = mock_result
+        mock_executor_class.return_value = mock_executor
+
+        result = runner.invoke(
+            analysis_app, ["summary", "taiwan_credit", "--execution-id", "my-exec-456"]
+        )
+
+        assert result.exit_code == 0
+        context = mock_executor.execute.call_args.kwargs["context"]
+        assert context.execution_id == "my-exec-456"
+
+    @patch("experiments.cli.analysis.PipelineExecutor")
+    @patch("experiments.cli.analysis.build_summary_table_pipeline")
+    def it_defaults_to_none_execution_id(
+        self,
+        mock_build_pipeline: MagicMock,
+        mock_executor_class: MagicMock,
+        runner: CliRunner,
+        analysis_app,
+    ) -> None:
+        mock_pipeline = MagicMock()
+        mock_build_pipeline.return_value = mock_pipeline
+        mock_executor = MagicMock()
+        mock_result = MagicMock()
+        mock_result.succeeded.return_value = True
+        mock_executor.execute.return_value = mock_result
+        mock_executor_class.return_value = mock_executor
+
+        result = runner.invoke(analysis_app, ["summary", "taiwan_credit"])
+
+        assert result.exit_code == 0
+        context = mock_executor.execute.call_args.kwargs["context"]
+        assert context.execution_id is None
+
 
 # ============================================================================
 # Tests for tradeoff command
@@ -460,3 +532,67 @@ class DescribeAllCommand:
             call_kwargs = mock_fn.call_args.kwargs
             assert call_kwargs["force"] is True
             assert call_kwargs["gpu"] is True
+
+    @patch("experiments.cli.analysis.generate_metrics_heatmap")
+    @patch("experiments.cli.analysis.generate_cs_vs_resampling_plot")
+    @patch("experiments.cli.analysis.generate_imbalance_impact_plot")
+    @patch("experiments.cli.analysis.generate_stability_plot")
+    @patch("experiments.cli.analysis.generate_tradeoff_plot")
+    @patch("experiments.cli.analysis.generate_summary_table")
+    def it_passes_execution_id_to_all_analyses(
+        self,
+        mock_summary: MagicMock,
+        mock_tradeoff: MagicMock,
+        mock_stability: MagicMock,
+        mock_imbalance: MagicMock,
+        mock_comparison: MagicMock,
+        mock_heatmap: MagicMock,
+        runner: CliRunner,
+        analysis_app,
+    ) -> None:
+        result = runner.invoke(analysis_app, ["all", "taiwan_credit", "-e", "my-execution-id"])
+
+        assert result.exit_code == 0
+        # Check that execution_id was passed to each analysis
+        for mock_fn in [
+            mock_summary,
+            mock_tradeoff,
+            mock_stability,
+            mock_imbalance,
+            mock_comparison,
+            mock_heatmap,
+        ]:
+            call_kwargs = mock_fn.call_args.kwargs
+            assert call_kwargs["execution_id"] == "my-execution-id"
+
+    @patch("experiments.cli.analysis.generate_metrics_heatmap")
+    @patch("experiments.cli.analysis.generate_cs_vs_resampling_plot")
+    @patch("experiments.cli.analysis.generate_imbalance_impact_plot")
+    @patch("experiments.cli.analysis.generate_stability_plot")
+    @patch("experiments.cli.analysis.generate_tradeoff_plot")
+    @patch("experiments.cli.analysis.generate_summary_table")
+    def it_defaults_execution_id_to_none(
+        self,
+        mock_summary: MagicMock,
+        mock_tradeoff: MagicMock,
+        mock_stability: MagicMock,
+        mock_imbalance: MagicMock,
+        mock_comparison: MagicMock,
+        mock_heatmap: MagicMock,
+        runner: CliRunner,
+        analysis_app,
+    ) -> None:
+        result = runner.invoke(analysis_app, ["all", "taiwan_credit"])
+
+        assert result.exit_code == 0
+        # Check that execution_id defaults to None
+        for mock_fn in [
+            mock_summary,
+            mock_tradeoff,
+            mock_stability,
+            mock_imbalance,
+            mock_comparison,
+            mock_heatmap,
+        ]:
+            call_kwargs = mock_fn.call_args.kwargs
+            assert call_kwargs["execution_id"] is None
