@@ -86,16 +86,19 @@ class DescribeSummaryCommand:
     """Tests for the `analyze summary` command."""
 
     @patch("experiments.cli.analysis.PipelineExecutor")
-    @patch("experiments.cli.analysis.build_summary_table_pipeline")
+    @patch("experiments.cli.analysis.SummaryTablePipelineFactory")
     def it_generates_summary_table(
         self,
-        mock_build_pipeline: MagicMock,
+        mock_factory_class: MagicMock,
         mock_executor_class: MagicMock,
         runner: CliRunner,
         analysis_app,
     ) -> None:
+        mock_factory = MagicMock()
         mock_pipeline = MagicMock()
-        mock_build_pipeline.return_value = mock_pipeline
+        mock_factory.create_pipeline.return_value = mock_pipeline
+        mock_factory.get_pipeline_name.return_value = "SummaryTable[dataset=taiwan_credit]"
+        mock_factory_class.return_value = mock_factory
         mock_executor = MagicMock()
         mock_result = MagicMock()
         mock_result.succeeded.return_value = True
@@ -105,19 +108,25 @@ class DescribeSummaryCommand:
         result = runner.invoke(analysis_app, ["summary", "taiwan_credit"])
 
         assert result.exit_code == 0
-        mock_build_pipeline.assert_called_once_with(technique=None)
+        mock_factory_class.assert_called_once()
+        # Verify technique_filter was passed to the factory
+        call_kwargs = mock_factory_class.call_args.kwargs
+        assert call_kwargs["technique_filter"] is None
 
     @patch("experiments.cli.analysis.PipelineExecutor")
-    @patch("experiments.cli.analysis.build_summary_table_pipeline")
+    @patch("experiments.cli.analysis.SummaryTablePipelineFactory")
     def it_filters_by_technique(
         self,
-        mock_build_pipeline: MagicMock,
+        mock_factory_class: MagicMock,
         mock_executor_class: MagicMock,
         runner: CliRunner,
         analysis_app,
     ) -> None:
+        mock_factory = MagicMock()
         mock_pipeline = MagicMock()
-        mock_build_pipeline.return_value = mock_pipeline
+        mock_factory.create_pipeline.return_value = mock_pipeline
+        mock_factory.get_pipeline_name.return_value = "SummaryTable"
+        mock_factory_class.return_value = mock_factory
         mock_executor = MagicMock()
         mock_result = MagicMock()
         mock_result.succeeded.return_value = True
@@ -127,19 +136,23 @@ class DescribeSummaryCommand:
         result = runner.invoke(analysis_app, ["summary", "--technique", "smote"])
 
         assert result.exit_code == 0
-        mock_build_pipeline.assert_called_with(technique=Technique.SMOTE)
+        call_kwargs = mock_factory_class.call_args.kwargs
+        assert call_kwargs["technique_filter"] == Technique.SMOTE
 
     @patch("experiments.cli.analysis.PipelineExecutor")
-    @patch("experiments.cli.analysis.build_summary_table_pipeline")
+    @patch("experiments.cli.analysis.SummaryTablePipelineFactory")
     def it_uses_short_technique_option(
         self,
-        mock_build_pipeline: MagicMock,
+        mock_factory_class: MagicMock,
         mock_executor_class: MagicMock,
         runner: CliRunner,
         analysis_app,
     ) -> None:
+        mock_factory = MagicMock()
         mock_pipeline = MagicMock()
-        mock_build_pipeline.return_value = mock_pipeline
+        mock_factory.create_pipeline.return_value = mock_pipeline
+        mock_factory.get_pipeline_name.return_value = "SummaryTable"
+        mock_factory_class.return_value = mock_factory
         mock_executor = MagicMock()
         mock_result = MagicMock()
         mock_result.succeeded.return_value = True
@@ -149,19 +162,23 @@ class DescribeSummaryCommand:
         result = runner.invoke(analysis_app, ["summary", "-t", "random_under_sampling"])
 
         assert result.exit_code == 0
-        mock_build_pipeline.assert_called_with(technique=Technique.RANDOM_UNDER_SAMPLING)
+        call_kwargs = mock_factory_class.call_args.kwargs
+        assert call_kwargs["technique_filter"] == Technique.RANDOM_UNDER_SAMPLING
 
     @patch("experiments.cli.analysis.PipelineExecutor")
-    @patch("experiments.cli.analysis.build_summary_table_pipeline")
+    @patch("experiments.cli.analysis.SummaryTablePipelineFactory")
     def it_passes_execution_id_to_context(
         self,
-        mock_build_pipeline: MagicMock,
+        mock_factory_class: MagicMock,
         mock_executor_class: MagicMock,
         runner: CliRunner,
         analysis_app,
     ) -> None:
+        mock_factory = MagicMock()
         mock_pipeline = MagicMock()
-        mock_build_pipeline.return_value = mock_pipeline
+        mock_factory.create_pipeline.return_value = mock_pipeline
+        mock_factory.get_pipeline_name.return_value = "SummaryTable"
+        mock_factory_class.return_value = mock_factory
         mock_executor = MagicMock()
         mock_result = MagicMock()
         mock_result.succeeded.return_value = True
@@ -176,16 +193,19 @@ class DescribeSummaryCommand:
         assert context.execution_id == "exec-123"
 
     @patch("experiments.cli.analysis.PipelineExecutor")
-    @patch("experiments.cli.analysis.build_summary_table_pipeline")
+    @patch("experiments.cli.analysis.SummaryTablePipelineFactory")
     def it_uses_long_execution_id_option(
         self,
-        mock_build_pipeline: MagicMock,
+        mock_factory_class: MagicMock,
         mock_executor_class: MagicMock,
         runner: CliRunner,
         analysis_app,
     ) -> None:
+        mock_factory = MagicMock()
         mock_pipeline = MagicMock()
-        mock_build_pipeline.return_value = mock_pipeline
+        mock_factory.create_pipeline.return_value = mock_pipeline
+        mock_factory.get_pipeline_name.return_value = "SummaryTable"
+        mock_factory_class.return_value = mock_factory
         mock_executor = MagicMock()
         mock_result = MagicMock()
         mock_result.succeeded.return_value = True
@@ -201,16 +221,19 @@ class DescribeSummaryCommand:
         assert context.execution_id == "my-exec-456"
 
     @patch("experiments.cli.analysis.PipelineExecutor")
-    @patch("experiments.cli.analysis.build_summary_table_pipeline")
+    @patch("experiments.cli.analysis.SummaryTablePipelineFactory")
     def it_defaults_to_none_execution_id(
         self,
-        mock_build_pipeline: MagicMock,
+        mock_factory_class: MagicMock,
         mock_executor_class: MagicMock,
         runner: CliRunner,
         analysis_app,
     ) -> None:
+        mock_factory = MagicMock()
         mock_pipeline = MagicMock()
-        mock_build_pipeline.return_value = mock_pipeline
+        mock_factory.create_pipeline.return_value = mock_pipeline
+        mock_factory.get_pipeline_name.return_value = "SummaryTable"
+        mock_factory_class.return_value = mock_factory
         mock_executor = MagicMock()
         mock_result = MagicMock()
         mock_result.succeeded.return_value = True
@@ -233,16 +256,19 @@ class DescribeTradeoffCommand:
     """Tests for the `analyze tradeoff` command."""
 
     @patch("experiments.cli.analysis.PipelineExecutor")
-    @patch("experiments.cli.analysis.build_tradeoff_plot_pipeline")
+    @patch("experiments.cli.analysis.TradeoffPlotPipelineFactory")
     def it_generates_tradeoff_plot(
         self,
-        mock_build_pipeline: MagicMock,
+        mock_factory_class: MagicMock,
         mock_executor_class: MagicMock,
         runner: CliRunner,
         analysis_app,
     ) -> None:
+        mock_factory = MagicMock()
         mock_pipeline = MagicMock()
-        mock_build_pipeline.return_value = mock_pipeline
+        mock_factory.create_pipeline.return_value = mock_pipeline
+        mock_factory.get_pipeline_name.return_value = "TradeoffPlot"
+        mock_factory_class.return_value = mock_factory
         mock_executor = MagicMock()
         mock_result = MagicMock()
         mock_result.succeeded.return_value = True
@@ -252,19 +278,22 @@ class DescribeTradeoffCommand:
         result = runner.invoke(analysis_app, ["tradeoff", "taiwan_credit"])
 
         assert result.exit_code == 0
-        mock_build_pipeline.assert_called_once()
+        mock_factory_class.assert_called_once()
 
     @patch("experiments.cli.analysis.PipelineExecutor")
-    @patch("experiments.cli.analysis.build_tradeoff_plot_pipeline")
+    @patch("experiments.cli.analysis.TradeoffPlotPipelineFactory")
     def it_passes_force_flag(
         self,
-        mock_build_pipeline: MagicMock,
+        mock_factory_class: MagicMock,
         mock_executor_class: MagicMock,
         runner: CliRunner,
         analysis_app,
     ) -> None:
+        mock_factory = MagicMock()
         mock_pipeline = MagicMock()
-        mock_build_pipeline.return_value = mock_pipeline
+        mock_factory.create_pipeline.return_value = mock_pipeline
+        mock_factory.get_pipeline_name.return_value = "TradeoffPlot"
+        mock_factory_class.return_value = mock_factory
         mock_executor = MagicMock()
         mock_result = MagicMock()
         mock_result.succeeded.return_value = True
@@ -285,16 +314,19 @@ class DescribeStabilityCommand:
     """Tests for the `analyze stability` command."""
 
     @patch("experiments.cli.analysis.PipelineExecutor")
-    @patch("experiments.cli.analysis.build_stability_pipeline")
+    @patch("experiments.cli.analysis.StabilityAnalysisPipelineFactory")
     def it_generates_stability_plot(
         self,
-        mock_build_pipeline: MagicMock,
+        mock_factory_class: MagicMock,
         mock_executor_class: MagicMock,
         runner: CliRunner,
         analysis_app,
     ) -> None:
+        mock_factory = MagicMock()
         mock_pipeline = MagicMock()
-        mock_build_pipeline.return_value = mock_pipeline
+        mock_factory.create_pipeline.return_value = mock_pipeline
+        mock_factory.get_pipeline_name.return_value = "StabilityAnalysis"
+        mock_factory_class.return_value = mock_factory
         mock_executor = MagicMock()
         mock_result = MagicMock()
         mock_result.succeeded.return_value = True
@@ -304,19 +336,23 @@ class DescribeStabilityCommand:
         result = runner.invoke(analysis_app, ["stability", "taiwan_credit"])
 
         assert result.exit_code == 0
-        mock_build_pipeline.assert_called_once_with(metric=Metric.BALANCED_ACCURACY)
+        call_kwargs = mock_factory_class.call_args.kwargs
+        assert call_kwargs["metric"] == Metric.BALANCED_ACCURACY
 
     @patch("experiments.cli.analysis.PipelineExecutor")
-    @patch("experiments.cli.analysis.build_stability_pipeline")
+    @patch("experiments.cli.analysis.StabilityAnalysisPipelineFactory")
     def it_accepts_custom_metric(
         self,
-        mock_build_pipeline: MagicMock,
+        mock_factory_class: MagicMock,
         mock_executor_class: MagicMock,
         runner: CliRunner,
         analysis_app,
     ) -> None:
+        mock_factory = MagicMock()
         mock_pipeline = MagicMock()
-        mock_build_pipeline.return_value = mock_pipeline
+        mock_factory.create_pipeline.return_value = mock_pipeline
+        mock_factory.get_pipeline_name.return_value = "StabilityAnalysis"
+        mock_factory_class.return_value = mock_factory
         mock_executor = MagicMock()
         mock_result = MagicMock()
         mock_result.succeeded.return_value = True
@@ -326,19 +362,23 @@ class DescribeStabilityCommand:
         result = runner.invoke(analysis_app, ["stability", "--metric", "g_mean"])
 
         assert result.exit_code == 0
-        mock_build_pipeline.assert_called_with(metric=Metric.G_MEAN)
+        call_kwargs = mock_factory_class.call_args.kwargs
+        assert call_kwargs["metric"] == Metric.G_MEAN
 
     @patch("experiments.cli.analysis.PipelineExecutor")
-    @patch("experiments.cli.analysis.build_stability_pipeline")
+    @patch("experiments.cli.analysis.StabilityAnalysisPipelineFactory")
     def it_uses_short_metric_option(
         self,
-        mock_build_pipeline: MagicMock,
+        mock_factory_class: MagicMock,
         mock_executor_class: MagicMock,
         runner: CliRunner,
         analysis_app,
     ) -> None:
+        mock_factory = MagicMock()
         mock_pipeline = MagicMock()
-        mock_build_pipeline.return_value = mock_pipeline
+        mock_factory.create_pipeline.return_value = mock_pipeline
+        mock_factory.get_pipeline_name.return_value = "StabilityAnalysis"
+        mock_factory_class.return_value = mock_factory
         mock_executor = MagicMock()
         mock_result = MagicMock()
         mock_result.succeeded.return_value = True
@@ -348,7 +388,8 @@ class DescribeStabilityCommand:
         result = runner.invoke(analysis_app, ["stability", "-m", "f1_score"])
 
         assert result.exit_code == 0
-        mock_build_pipeline.assert_called_with(metric=Metric.F1_SCORE)
+        call_kwargs = mock_factory_class.call_args.kwargs
+        assert call_kwargs["metric"] == Metric.F1_SCORE
 
 
 # ============================================================================
@@ -360,16 +401,19 @@ class DescribeImbalanceCommand:
     """Tests for the `analyze imbalance` command."""
 
     @patch("experiments.cli.analysis.PipelineExecutor")
-    @patch("experiments.cli.analysis.build_imbalance_impact_pipeline")
+    @patch("experiments.cli.analysis.ImbalanceImpactAnalysisPipelineFactory")
     def it_generates_imbalance_plot(
         self,
-        mock_build_pipeline: MagicMock,
+        mock_factory_class: MagicMock,
         mock_executor_class: MagicMock,
         runner: CliRunner,
         analysis_app,
     ) -> None:
+        mock_factory = MagicMock()
         mock_pipeline = MagicMock()
-        mock_build_pipeline.return_value = mock_pipeline
+        mock_factory.create_pipeline.return_value = mock_pipeline
+        mock_factory.get_pipeline_name.return_value = "ImbalanceImpactAnalysis"
+        mock_factory_class.return_value = mock_factory
         mock_executor = MagicMock()
         mock_result = MagicMock()
         mock_result.succeeded.return_value = True
@@ -379,7 +423,8 @@ class DescribeImbalanceCommand:
         result = runner.invoke(analysis_app, ["imbalance", "taiwan_credit"])
 
         assert result.exit_code == 0
-        mock_build_pipeline.assert_called_once_with(metric=Metric.BALANCED_ACCURACY)
+        call_kwargs = mock_factory_class.call_args.kwargs
+        assert call_kwargs["metric"] == Metric.BALANCED_ACCURACY
 
 
 # ============================================================================
@@ -391,16 +436,19 @@ class DescribeComparisonCommand:
     """Tests for the `analyze comparison` command."""
 
     @patch("experiments.cli.analysis.PipelineExecutor")
-    @patch("experiments.cli.analysis.build_cs_vs_resampling_pipeline")
+    @patch("experiments.cli.analysis.CostSensitiveVsResamplingComparisonPipelineFactory")
     def it_generates_comparison_plot(
         self,
-        mock_build_pipeline: MagicMock,
+        mock_factory_class: MagicMock,
         mock_executor_class: MagicMock,
         runner: CliRunner,
         analysis_app,
     ) -> None:
+        mock_factory = MagicMock()
         mock_pipeline = MagicMock()
-        mock_build_pipeline.return_value = mock_pipeline
+        mock_factory.create_pipeline.return_value = mock_pipeline
+        mock_factory.get_pipeline_name.return_value = "CostSensitiveVsResamplingComparison"
+        mock_factory_class.return_value = mock_factory
         mock_executor = MagicMock()
         mock_result = MagicMock()
         mock_result.succeeded.return_value = True
@@ -410,7 +458,7 @@ class DescribeComparisonCommand:
         result = runner.invoke(analysis_app, ["comparison", "taiwan_credit"])
 
         assert result.exit_code == 0
-        mock_build_pipeline.assert_called_once()
+        mock_factory_class.assert_called_once()
 
 
 # ============================================================================
@@ -422,16 +470,19 @@ class DescribeHeatmapCommand:
     """Tests for the `analyze heatmap` command."""
 
     @patch("experiments.cli.analysis.PipelineExecutor")
-    @patch("experiments.cli.analysis.build_metrics_heatmap_pipeline")
+    @patch("experiments.cli.analysis.MetricsHeatmapPipelineFactory")
     def it_generates_heatmap(
         self,
-        mock_build_pipeline: MagicMock,
+        mock_factory_class: MagicMock,
         mock_executor_class: MagicMock,
         runner: CliRunner,
         analysis_app,
     ) -> None:
+        mock_factory = MagicMock()
         mock_pipeline = MagicMock()
-        mock_build_pipeline.return_value = mock_pipeline
+        mock_factory.create_pipeline.return_value = mock_pipeline
+        mock_factory.get_pipeline_name.return_value = "MetricsHeatmap"
+        mock_factory_class.return_value = mock_factory
         mock_executor = MagicMock()
         mock_result = MagicMock()
         mock_result.succeeded.return_value = True
@@ -441,19 +492,22 @@ class DescribeHeatmapCommand:
         result = runner.invoke(analysis_app, ["heatmap", "taiwan_credit"])
 
         assert result.exit_code == 0
-        mock_build_pipeline.assert_called_once()
+        mock_factory_class.assert_called_once()
 
     @patch("experiments.cli.analysis.PipelineExecutor")
-    @patch("experiments.cli.analysis.build_metrics_heatmap_pipeline")
+    @patch("experiments.cli.analysis.MetricsHeatmapPipelineFactory")
     def it_passes_gpu_flag(
         self,
-        mock_build_pipeline: MagicMock,
+        mock_factory_class: MagicMock,
         mock_executor_class: MagicMock,
         runner: CliRunner,
         analysis_app,
     ) -> None:
+        mock_factory = MagicMock()
         mock_pipeline = MagicMock()
-        mock_build_pipeline.return_value = mock_pipeline
+        mock_factory.create_pipeline.return_value = mock_pipeline
+        mock_factory.get_pipeline_name.return_value = "MetricsHeatmap"
+        mock_factory_class.return_value = mock_factory
         mock_executor = MagicMock()
         mock_result = MagicMock()
         mock_result.succeeded.return_value = True

@@ -17,6 +17,7 @@ from experiments.pipelines.analysis.pipeline import (
     AnalysisPipelineTask,
     AnalysisPipelineTaskResult,
 )
+from experiments.pipelines.analysis.tasks.common import load_experiment_results
 
 
 class AnalysisArtifactRepository(Protocol):
@@ -57,57 +58,6 @@ class AnalysisArtifactRepository(Protocol):
 
 type ArtifactGenerator[T] = Callable[[T, AnalysisPipelineContext], BinaryIO]
 """Callable that generates an artifact from the analysis result and context."""
-
-
-def load_results_from_parquet(
-    state: AnalysisPipelineState,
-    context: AnalysisPipelineContext,
-) -> AnalysisPipelineTaskResult:
-    """Load processed results from a Parquet file.
-
-    If an execution_id is provided in the context, fetches predictions for
-    that specific execution; otherwise, fetches the latest predictions.
-
-    Args:
-        state: The current state of the data pipeline.
-        context: The context of the data pipeline.
-
-    Returns:
-        The updated state with loaded results.
-    """
-    if context.execution_id is not None:
-        predictions = context.predictions_repository.get_predictions_for_execution(
-            context.dataset, context.execution_id
-        )
-    else:
-        predictions = context.predictions_repository.get_latest_predictions_for_experiment(
-            context.dataset
-        )
-
-    state["model_predictions"] = predictions
-    return TaskResult(
-        state,
-        TaskStatus.SUCCESS,
-        f"Loaded results for experiment on dataset {context.dataset.name}.",
-    )
-
-
-def compute_analysis_metrics[T](
-    state: AnalysisPipelineState[T], context: AnalysisPipelineContext
-) -> AnalysisPipelineTaskResult[T]:
-    """Compute analysis metrics from loaded results."""
-    if not state.get("model_predictions"):
-        return TaskResult(
-            state,
-            TaskStatus.FAILURE,
-            "No model predictions available to compute metrics.",
-        )
-
-    return TaskResult(
-        {**state, "metrics": context.results_evaluator.evaluate(state["model_predictions"])},
-        TaskStatus.SUCCESS,
-        "Computed analysis metrics.",
-    )
 
 
 def export_analysis_artifact(
@@ -192,7 +142,7 @@ class AnalysisPipelineFactory[T](ABC):
         )
         pipeline.add_conditional_step(
             name="LoadResults",
-            task=load_results_from_parquet,
+            task=load_experiment_results,
             condition=run_if_artifact_not_exists,
         )
         self._add_analysis_steps(pipeline)

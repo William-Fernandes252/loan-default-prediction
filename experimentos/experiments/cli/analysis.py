@@ -4,16 +4,19 @@ This module provides commands for various analysis types on the resultant models
 from the experiments. Each command generates visualizations and reports to help
 understand model performance, stability, and the effects of different techniques.
 
-The CLI follows the "Append Strategy" pattern:
-- Pipeline factories build the core business logic (data -> metrics -> visualization)
-- The CLI appends persistence tasks at runtime based on the analysis type
+The CLI uses the abstract factory pattern:
+- Pipeline factories build complete pipelines with analysis steps and artifact generation
+- Artifact generators are injected at runtime based on the analysis type
 """
 
 import enum
+from io import BytesIO
 import sys
 from typing import Optional
 
 from loguru import logger
+import matplotlib.pyplot as plt
+import polars as pl
 import typer
 from typing_extensions import Annotated
 
@@ -23,23 +26,71 @@ from experiments.core.analysis.metrics import Metric
 from experiments.core.data import Dataset
 from experiments.core.modeling.classifiers import Technique
 from experiments.lib.pipelines.execution import PipelineExecutor
-from experiments.pipelines.analysis.factory import (
-    build_cs_vs_resampling_pipeline,
-    build_imbalance_impact_pipeline,
-    build_metrics_heatmap_pipeline,
-    build_stability_pipeline,
-    build_summary_table_pipeline,
-    build_tradeoff_plot_pipeline,
+from experiments.pipelines.analysis.cost_sensitive_vs_resampling import (
+    CostSensitiveVsResamplingComparisonPipelineFactory,
 )
+from experiments.pipelines.analysis.imbalance_impact import ImbalanceImpactAnalysisPipelineFactory
+from experiments.pipelines.analysis.metrics_heatmap import MetricsHeatmapPipelineFactory
 from experiments.pipelines.analysis.pipeline import AnalysisPipelineContext
-from experiments.pipelines.analysis.tasks.persistence import (
-    save_figure_artifact,
-    save_table_artifact,
-)
+from experiments.pipelines.analysis.stability import StabilityAnalysisPipelineFactory
+from experiments.pipelines.analysis.summary_table import SummaryTablePipelineFactory
+from experiments.pipelines.analysis.tradeoff_plot import TradeoffPlotPipelineFactory
 from experiments.services.analysis_artifacts_repository import AnalysisArtifactsRepository
 from experiments.services.model_predictions_repository import ModelPredictionsStorageRepository
 from experiments.services.model_results_evaluator import ModelResultsEvaluatorImpl
 from experiments.services.translator import create_translator
+
+
+def _generate_summary_table_artifact(
+    result_data: pl.DataFrame, context: AnalysisPipelineContext
+) -> BytesIO:
+    """Generate a LaTeX table artifact from a DataFrame.
+
+    Args:
+        result_data: The summary table DataFrame.
+        context: The analysis pipeline context.
+
+    Returns:
+        BytesIO containing the LaTeX table bytes.
+    """
+    # Convert Polars DataFrame to pandas for to_latex() support
+    pdf = result_data.to_pandas()
+
+    # Generate LaTeX table string
+    latex_str = pdf.to_latex(
+        index=False,
+        float_format="%.4f",
+        escape=False,
+        caption=f"Results for {context.dataset.value}",
+        label=f"tab:{context.analysis_name}",
+    )
+
+    # Convert to bytes
+    artifact_bytes = latex_str.encode("utf-8")
+    return BytesIO(artifact_bytes)
+
+
+def _generate_figure_artifact(
+    result_data: plt.Figure, context: AnalysisPipelineContext
+) -> BytesIO:
+    """Generate a PNG figure artifact from a matplotlib Figure.
+
+    Args:
+        result_data: The matplotlib Figure.
+        context: The analysis pipeline context.
+
+    Returns:
+        BytesIO containing the PNG figure bytes.
+    """
+    # Render figure to bytes
+    buffer = BytesIO()
+    result_data.savefig(buffer, format="png", dpi=150, bbox_inches="tight")
+    buffer.seek(0)
+
+    # Close the figure to free memory
+    plt.close(result_data)
+
+    return buffer
 
 
 class AnalysisType(enum.StrEnum):
@@ -213,19 +264,28 @@ def generate_summary_table(
     datasets = _resolve_datasets(dataset)
     executor = PipelineExecutor(max_workers=1)
 
+    # Get storage and settings from container
+    storage = container._storage()
+
+    # Create repositories
+    analysis_artifacts_repository = AnalysisArtifactsRepository(storage=storage)
+
     for ds in datasets:
         # Determine analysis name
         analysis_name = f"summary_table_{technique.value}" if technique else "summary_table"
 
         logger.info(f"Generating summary table for {ds.value}...")
 
-        # Build pipeline from factory
-        pipeline = build_summary_table_pipeline(technique=technique)
+        # Create factory with dependencies and configuration
+        factory = SummaryTablePipelineFactory(
+            analysis_artifacts_repository=analysis_artifacts_repository,
+            technique_filter=technique,
+        )
 
-        # Append persistence step (CLI responsibility)
-        pipeline.add_step(
-            name="SaveTableArtifact",
-            task=save_table_artifact,  # type: ignore[arg-type]
+        # Build pipeline with artifact generator injected
+        pipeline = factory.create_pipeline(
+            name=factory.get_pipeline_name({"dataset": ds.value}),
+            artifact_generator=_generate_summary_table_artifact,  # type: ignore[arg-type]
         )
 
         # Create context with dependencies
@@ -267,18 +327,26 @@ def generate_tradeoff_plot(
     datasets = _resolve_datasets(dataset)
     executor = PipelineExecutor(max_workers=1)
 
+    # Get storage from container
+    storage = container._storage()
+
+    # Create repositories
+    analysis_artifacts_repository = AnalysisArtifactsRepository(storage=storage)
+
     for ds in datasets:
         analysis_name = "tradeoff_plot"
 
         logger.info(f"Generating trade-off plot for {ds.value}...")
 
-        # Build pipeline from factory
-        pipeline = build_tradeoff_plot_pipeline()
+        # Create factory with dependencies
+        factory = TradeoffPlotPipelineFactory(
+            analysis_artifacts_repository=analysis_artifacts_repository,
+        )
 
-        # Append persistence step (CLI responsibility)
-        pipeline.add_step(
-            name="SaveFigureArtifact",
-            task=save_figure_artifact,  # type: ignore[arg-type]
+        # Build pipeline with artifact generator injected
+        pipeline = factory.create_pipeline(
+            name=factory.get_pipeline_name({"dataset": ds.value}),
+            artifact_generator=_generate_figure_artifact,  # type: ignore[arg-type]
         )
 
         # Create context with dependencies
@@ -323,18 +391,27 @@ def generate_stability_plot(
     datasets = _resolve_datasets(dataset)
     executor = PipelineExecutor(max_workers=1)
 
+    # Get storage from container
+    storage = container._storage()
+
+    # Create repositories
+    analysis_artifacts_repository = AnalysisArtifactsRepository(storage=storage)
+
     for ds in datasets:
         analysis_name = f"stability_plot_{metric.value}"
 
         logger.info(f"Generating stability plot for {ds.value} ({metric.value})...")
 
-        # Build pipeline from factory
-        pipeline = build_stability_pipeline(metric=metric)
+        # Create factory with dependencies and configuration
+        factory = StabilityAnalysisPipelineFactory(
+            analysis_artifacts_repository=analysis_artifacts_repository,
+            metric=metric,
+        )
 
-        # Append persistence step (CLI responsibility)
-        pipeline.add_step(
-            name="SaveFigureArtifact",
-            task=save_figure_artifact,  # type: ignore[arg-type]
+        # Build pipeline with artifact generator injected
+        pipeline = factory.create_pipeline(
+            name=factory.get_pipeline_name({"dataset": ds.value, "metric": metric.value}),
+            artifact_generator=_generate_figure_artifact,  # type: ignore[arg-type]
         )
 
         # Create context with dependencies
@@ -379,18 +456,27 @@ def generate_imbalance_impact_plot(
     datasets = _resolve_datasets(dataset)
     executor = PipelineExecutor(max_workers=1)
 
+    # Get storage from container
+    storage = container._storage()
+
+    # Create repositories
+    analysis_artifacts_repository = AnalysisArtifactsRepository(storage=storage)
+
     for ds in datasets:
         analysis_name = f"imbalance_impact_{metric.value}"
 
         logger.info(f"Generating imbalance impact plot for {ds.value}...")
 
-        # Build pipeline from factory
-        pipeline = build_imbalance_impact_pipeline(metric=metric)
+        # Create factory with dependencies and configuration
+        factory = ImbalanceImpactAnalysisPipelineFactory(
+            analysis_artifacts_repository=analysis_artifacts_repository,
+            metric=metric,
+        )
 
-        # Append persistence step (CLI responsibility)
-        pipeline.add_step(
-            name="SaveFigureArtifact",
-            task=save_figure_artifact,  # type: ignore[arg-type]
+        # Build pipeline with artifact generator injected
+        pipeline = factory.create_pipeline(
+            name=factory.get_pipeline_name({"dataset": ds.value, "metric": metric.value}),
+            artifact_generator=_generate_figure_artifact,  # type: ignore[arg-type]
         )
 
         # Create context with dependencies
@@ -434,18 +520,26 @@ def generate_cs_vs_resampling_plot(
     datasets = _resolve_datasets(dataset)
     executor = PipelineExecutor(max_workers=1)
 
+    # Get storage from container
+    storage = container._storage()
+
+    # Create repositories
+    analysis_artifacts_repository = AnalysisArtifactsRepository(storage=storage)
+
     for ds in datasets:
         analysis_name = "cs_vs_resampling_plot"
 
         logger.info(f"Generating CS vs resampling plot for {ds.value}...")
 
-        # Build pipeline from factory
-        pipeline = build_cs_vs_resampling_pipeline()
+        # Create factory with dependencies
+        factory = CostSensitiveVsResamplingComparisonPipelineFactory(
+            analysis_artifacts_repository=analysis_artifacts_repository,
+        )
 
-        # Append persistence step (CLI responsibility)
-        pipeline.add_step(
-            name="SaveFigureArtifact",
-            task=save_figure_artifact,  # type: ignore[arg-type]
+        # Build pipeline with artifact generator injected
+        pipeline = factory.create_pipeline(
+            name=factory.get_pipeline_name({"dataset": ds.value}),
+            artifact_generator=_generate_figure_artifact,  # type: ignore[arg-type]
         )
 
         # Create context with dependencies
@@ -489,18 +583,26 @@ def generate_metrics_heatmap(
     datasets = _resolve_datasets(dataset)
     executor = PipelineExecutor(max_workers=1)
 
+    # Get storage from container
+    storage = container._storage()
+
+    # Create repositories
+    analysis_artifacts_repository = AnalysisArtifactsRepository(storage=storage)
+
     for ds in datasets:
         analysis_name = "metrics_heatmap"
 
         logger.info(f"Generating metrics heatmap for {ds.value}...")
 
-        # Build pipeline from factory
-        pipeline = build_metrics_heatmap_pipeline()
+        # Create factory with dependencies
+        factory = MetricsHeatmapPipelineFactory(
+            analysis_artifacts_repository=analysis_artifacts_repository,
+        )
 
-        # Append persistence step (CLI responsibility)
-        pipeline.add_step(
-            name="SaveFigureArtifact",
-            task=save_figure_artifact,  # type: ignore[arg-type]
+        # Build pipeline with artifact generator injected
+        pipeline = factory.create_pipeline(
+            name=factory.get_pipeline_name({"dataset": ds.value}),
+            artifact_generator=_generate_figure_artifact,  # type: ignore[arg-type]
         )
 
         # Create context with dependencies

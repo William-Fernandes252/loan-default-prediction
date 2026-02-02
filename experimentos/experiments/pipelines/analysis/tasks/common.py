@@ -130,21 +130,7 @@ def compute_per_seed_metrics[T](
     )
 
 
-# Task aliases for explicit naming in pipelines
-LoadExperimentResultsTask = load_experiment_results
-"""Task to load experiment results from the predictions repository."""
-
-ComputeMetricsTask = compute_metrics
-"""Task to compute aggregated evaluation metrics from model predictions."""
-
-ComputePerSeedMetricsTask = compute_per_seed_metrics
-"""Task to compute per-seed evaluation metrics for stability analysis."""
-
-
 __all__ = [
-    "LoadExperimentResultsTask",
-    "ComputeMetricsTask",
-    "ComputePerSeedMetricsTask",
     "load_experiment_results",
     "compute_metrics",
     "compute_per_seed_metrics",

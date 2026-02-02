@@ -6,11 +6,11 @@ import pytest
 
 from experiments.core.data import Dataset
 from experiments.lib.pipelines.tasks import TaskStatus
-from experiments.pipelines.analysis.base import (
-    compute_analysis_metrics,
-    load_results_from_parquet,
-)
 from experiments.pipelines.analysis.pipeline import AnalysisPipelineContext, AnalysisPipelineState
+from experiments.pipelines.analysis.tasks.common import (
+    compute_metrics,
+    load_experiment_results,
+)
 from experiments.services.model_predictions_repository import ExecutionNotFoundError
 
 
@@ -52,8 +52,8 @@ def _make_context(
     )
 
 
-class DescribeLoadResultsFromParquet:
-    """Tests for the load_results_from_parquet task."""
+class DescribeLoadExperimentResults:
+    """Tests for the load_experiment_results task."""
 
     def it_uses_latest_when_no_execution_id(
         self,
@@ -73,7 +73,7 @@ class DescribeLoadResultsFromParquet:
             execution_id=None,
         )
 
-        result = load_results_from_parquet({}, context)
+        result = load_experiment_results({}, context)
 
         mock_predictions_repository.get_latest_predictions_for_experiment.assert_called_once_with(
             Dataset.TAIWAN_CREDIT
@@ -98,7 +98,7 @@ class DescribeLoadResultsFromParquet:
             execution_id="exec-789",
         )
 
-        result = load_results_from_parquet({}, context)
+        result = load_experiment_results({}, context)
 
         mock_predictions_repository.get_predictions_for_execution.assert_called_once_with(
             Dataset.TAIWAN_CREDIT, "exec-789"
@@ -125,13 +125,13 @@ class DescribeLoadResultsFromParquet:
         )
 
         with pytest.raises(ExecutionNotFoundError) as exc_info:
-            load_results_from_parquet({}, context)
+            load_experiment_results({}, context)
 
         assert exc_info.value.execution_id == "nonexistent"
 
 
-class DescribeComputeAnalysisMetrics:
-    """Tests for the compute_analysis_metrics task."""
+class DescribeComputeMetrics:
+    """Tests for the compute_metrics task."""
 
     def it_computes_metrics_from_predictions(
         self,
@@ -148,9 +148,9 @@ class DescribeComputeAnalysisMetrics:
             mock_results_evaluator,
             mock_artifacts_repository,
         )
-        state = {"model_predictions": mock_predictions}
+        state: AnalysisPipelineState = {"model_predictions": mock_predictions}
 
-        result = compute_analysis_metrics(state, context)
+        result = compute_metrics(state, context)
 
         mock_results_evaluator.evaluate.assert_called_once_with(mock_predictions)
         assert result.status == TaskStatus.SUCCESS
@@ -169,7 +169,7 @@ class DescribeComputeAnalysisMetrics:
         )
         state: AnalysisPipelineState = {}
 
-        result = compute_analysis_metrics(state, context)
+        result = compute_metrics(state, context)
 
         assert result.status == TaskStatus.FAILURE
         assert result.message == "No model predictions available to compute metrics."
