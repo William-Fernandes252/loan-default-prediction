@@ -52,6 +52,7 @@ The application uses `dependency-injector` with a centralized `Container` class 
 
 | Service | Responsibility |
 |---------|----------------|
+| **PredictionsAnalyzer** | Orchestrates analysis pipelines and generates reports/visualizations |
 | **AnalysisArtifactsRepository** | Manages analysis outputs (figures, tables) |
 
 ## Storage Layer
@@ -99,9 +100,16 @@ Runs inference using trained models.
 - **Stages**: Load model → Load data → Generate predictions → Persist
 
 #### Analysis Pipeline
-Generates reports and visualizations from experiment results.
+Generates reports and visualizations from experiment results. The `PredictionsAnalyzer` service orchestrates different analysis types:
 
-- **Stages**: Load results → Transform data → Generate visualizations → Export reports
+- **Summary Table**: LaTeX table with aggregated metrics per technique
+- **Tradeoff Plot**: Precision vs sensitivity trade-off visualization
+- **Stability Plot**: Boxplot showing variance across seeds
+- **Imbalance Impact Plot**: Scatter plot showing metric vs imbalance ratio
+- **Cost-Sensitive vs Resampling**: Comparison of cost-sensitive and resampling techniques
+- **Metrics Heatmap**: Heatmap of metrics across models and techniques
+
+- **Stages**: Load predictions → Compute metrics → Generate artifacts → Export to storage
 
 ## GPU Acceleration
 
