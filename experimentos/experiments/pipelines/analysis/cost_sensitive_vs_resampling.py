@@ -11,7 +11,7 @@ from experiments.pipelines.analysis.base import (
     AnalysisPipelineState,
     AnalysisPipelineTaskResult,
 )
-from experiments.pipelines.analysis.tasks.common import compute_metrics
+from experiments.pipelines.analysis.tasks.common import compute_per_seed_metrics
 from experiments.pipelines.analysis.tasks.generation import generate_cs_vs_resampling_plot
 
 # The result is a Figure comparing cost-sensitive vs resampling methods
@@ -24,25 +24,25 @@ def perform_cost_sensitive_vs_resampling_comparison(
 ) -> AnalysisPipelineTaskResult:
     """Performs cost-sensitive vs resampling comparison on the model predictions.
 
-    This task filters the computed metrics to isolate Cost-Sensitive techniques
+    This task filters the computed per-seed metrics to isolate Cost-Sensitive techniques
     (MetaCost, Cost-Sensitive SVM) and Resampling techniques (SMOTE, RUS,
-    SMOTE-Tomek), then selects the best performing technique from each group
-    per model type for comparison.
+    SMOTE-Tomek), then aggregates and selects the best performing technique from
+    each group per model type for comparison.
 
     Args:
-        state: The current state containing "metrics" (pl.LazyFrame).
+        state: The current state containing "per_seed_metrics" (pl.LazyFrame).
         context: The context of the analysis pipeline.
 
     Returns:
         AnalysisPipelineTaskResult: Updated state with "result_data" containing
         the comparison DataFrame.
     """
-    metrics_lf: pl.LazyFrame | None = state.get("metrics")
-    if metrics_lf is None:
+    per_seed_metrics: pl.LazyFrame | None = state.get("per_seed_metrics")
+    if per_seed_metrics is None:
         return TaskResult(
             state,
             TaskStatus.FAILURE,
-            "Metrics not found in state. Ensure compute_analysis_metrics was run.",
+            "Per-seed metrics not found in state. Ensure compute_per_seed_metrics was run.",
         )
 
     # 1. Define Groups
@@ -53,19 +53,19 @@ def perform_cost_sensitive_vs_resampling_comparison(
         Technique.SMOTE_TOMEK,
     ]
 
-    # 2. Filter Metrics for relevant techniques
-    # We focus on G-Mean as the primary metric for imbalance, as stated in the thesis
-    comparison_lf = metrics_lf.filter(
-        pl.col("technique").is_in(cs_techniques + resampling_techniques)
-    ).select(
-        pl.col("model_type"),
-        pl.col("technique"),
-        pl.col(f"{Metric.G_MEAN}_mean").alias("g_mean"),
-        pl.col(f"{Metric.F1_SCORE}_mean").alias("f1_score"),
-        pl.col(f"{Metric.BALANCED_ACCURACY}_mean").alias("balanced_accuracy"),
+    # 2. Aggregate per-seed metrics by model_type and technique (mean)
+    aggregated_lf = per_seed_metrics.group_by("model_type", "technique").agg(
+        pl.col(Metric.G_MEAN).mean().alias("g_mean"),
+        pl.col(Metric.F1_SCORE).mean().alias("f1_score"),
+        pl.col(Metric.BALANCED_ACCURACY).mean().alias("balanced_accuracy"),
     )
 
-    # 3. Categorize into Groups (Cost-Sensitive vs Resampling)
+    # 3. Filter Metrics for relevant techniques
+    comparison_lf = aggregated_lf.filter(
+        pl.col("technique").is_in(cs_techniques + resampling_techniques)
+    )
+
+    # 4. Categorize into Groups (Cost-Sensitive vs Resampling)
     # We create a new column 'approach' to group the techniques
     grouped_lf = comparison_lf.with_columns(
         pl.when(pl.col("technique").is_in(cs_techniques))
@@ -74,7 +74,7 @@ def perform_cost_sensitive_vs_resampling_comparison(
         .alias("approach")
     )
 
-    # 4. Find the Best Performing Technique per Group and Model
+    # 5. Find the Best Performing Technique per Group and Model
     # For a fair comparison, we take the best technique within each group for each model.
     # e.g., for Random Forest, we compare (Best of SMOTE/RUS) vs (MetaCost)
     best_per_group_lf = (
@@ -84,7 +84,7 @@ def perform_cost_sensitive_vs_resampling_comparison(
         .sort("model_type", "approach")
     )
 
-    # 5. Collect results
+    # 6. Collect results
     # The result_data will be a DataFrame suitable for generating the LaTeX table
     result_df = best_per_group_lf.collect()
 
@@ -106,13 +106,13 @@ class CostSensitiveVsResamplingComparisonPipelineFactory(
         self,
         pipeline: AnalysisPipeline[CostSensitiveVsResamplingPlot],
     ) -> None:
-        # Step 1: Compute the raw metrics (G-Mean, F1, etc.) from the predictions
+        # Step 1: Compute per-seed metrics (needed for both comparison and plot)
         pipeline.add_step(
-            name="ComputeMetrics",
-            task=compute_metrics,
+            name="ComputePerSeedMetrics",
+            task=compute_per_seed_metrics,
         )
 
-        # Step 2: Perform the specific comparison logic
+        # Step 2: Perform the specific comparison logic (aggregates per-seed metrics)
         pipeline.add_step(
             name="PerformCostSensitiveVsResamplingComparison",
             task=perform_cost_sensitive_vs_resampling_comparison,

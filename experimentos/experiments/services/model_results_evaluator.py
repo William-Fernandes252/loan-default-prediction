@@ -166,7 +166,7 @@ class ModelResultsEvaluatorImpl:
             model_prediction: The model prediction containing predictions LazyFrame.
 
         Returns:
-            A LazyFrame with computed metrics and model/technique identifiers.
+            A LazyFrame with computed metrics and model/technique/seed identifiers.
         """
         return (
             model_prediction.predictions.pipe(self._compute_confusion_matrix)
@@ -174,6 +174,7 @@ class ModelResultsEvaluatorImpl:
             .with_columns(
                 pl.lit(model_prediction.model_type).cast(pl.Enum(ModelType)).alias("model_type"),
                 pl.lit(model_prediction.technique).cast(pl.Enum(Technique)).alias("technique"),
+                pl.lit(model_prediction.seed).alias("seed"),
             )
         )
 
