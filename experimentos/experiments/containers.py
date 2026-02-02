@@ -27,7 +27,9 @@ from experiments.services.grid_search_trainer import GridSearchModelTrainer
 from experiments.services.inference_service import InferenceService
 from experiments.services.model_predictions_repository import ModelPredictionsStorageRepository
 from experiments.services.model_repository import ModelStorageRepository
+from experiments.services.model_results_evaluator import ModelResultsEvaluatorImpl
 from experiments.services.model_versioning import ModelVersioner, TrainedModelLoaderImpl
+from experiments.services.predictions_analyzer import PredictionsAnalyzer
 from experiments.services.resource_calculator import ResourceCalculator
 from experiments.services.seed_generator import generate_seed
 from experiments.services.stratified_data_splitter import StratifiedDataSplitter
@@ -300,6 +302,18 @@ class Container(containers.DeclarativeContainer):
         experiment_settings=settings.provided.experiment,
         resource_settings=settings.provided.resources,
     )
+
+    _results_evaluator = providers.Singleton(ModelResultsEvaluatorImpl)
+    """Results evaluator for computing analysis metrics."""
+
+    predictions_analyzer = providers.Singleton(
+        PredictionsAnalyzer,
+        analysis_artifacts_repository=_analysis_artifacts_repository,
+        predictions_repository=_model_predictions_repository,
+        results_evaluator=_results_evaluator,
+        settings=settings,
+    )
+    """Predictions analyzer for running analysis pipelines."""
 
     def init_resources(self, *args, **kwargs) -> Any:
         super().init_resources(*args, **kwargs)
