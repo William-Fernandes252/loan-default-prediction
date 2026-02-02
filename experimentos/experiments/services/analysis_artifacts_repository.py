@@ -1,6 +1,7 @@
 """Implementation of the analysis artifacts repository using a storage backend."""
 
 from dataclasses import dataclass
+from typing import BinaryIO
 
 from experiments.core.data.datasets import Dataset
 from experiments.storage import Storage
@@ -66,7 +67,7 @@ class AnalysisArtifactsRepository:
         self,
         dataset: Dataset,
         analysis_name: str,
-        artifact_data: bytes,
+        artifact_data: BinaryIO,
         locale: str = "en_US",
     ) -> None:
         """Saves an analysis artifact for a given experiment.
@@ -84,7 +85,7 @@ class AnalysisArtifactsRepository:
             StorageError: If there is an error saving the artifact.
         """
         key = self._layout.get_artifact_key(dataset, analysis_name, locale=locale)
-        self._storage.write_bytes(artifact_data, key)
+        self._storage.write_bytes(artifact_data.read(), key)
 
     def artifact_exists(
         self,

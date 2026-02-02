@@ -16,6 +16,7 @@ import polars as pl
 if TYPE_CHECKING:
     from experiments.core.analysis.translator import Translator
 
+from experiments.core.analysis import Locale
 from experiments.core.analysis.evaluation import (
     EvaluationMetrics,
     ModelPredictionsResults,
@@ -31,7 +32,7 @@ class AnalysisArtifactRepository(Protocol):
         self,
         dataset: Dataset,
         analysis_name: str,
-        artifact_data: bytes,
+        artifact_data: BinaryIO,
         locale: str = "en_US",
     ) -> None:
         """Saves an analysis artifact for a given experiment.
@@ -105,6 +106,7 @@ class AnalysisPipelineContext:
     analysis_artifacts_repository: AnalysisArtifactRepository
     use_gpu: bool
     force_overwrite: bool
+    locale: Locale = Locale.EN_US
     translator: "Translator | None" = None
     execution_id: str | None = None
 

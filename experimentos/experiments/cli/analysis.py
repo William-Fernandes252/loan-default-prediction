@@ -233,6 +233,7 @@ def _create_analysis_context(
         analysis_artifacts_repository=analysis_artifacts_repository,
         use_gpu=use_gpu,
         force_overwrite=force_overwrite,
+        locale=resolved_locale,
         translator=translator,
         execution_id=execution_id,
     )
@@ -272,7 +273,9 @@ def generate_summary_table(
 
     for ds in datasets:
         # Determine analysis name
-        analysis_name = f"summary_table_{technique.value}" if technique else "summary_table"
+        analysis_name = (
+            f"summary_table_{technique.value}.tex" if technique else "summary_table.tex"
+        )
 
         logger.info(f"Generating summary table for {ds.value}...")
 
@@ -334,7 +337,7 @@ def generate_tradeoff_plot(
     analysis_artifacts_repository = AnalysisArtifactsRepository(storage=storage)
 
     for ds in datasets:
-        analysis_name = "tradeoff_plot"
+        analysis_name = "tradeoff_plot.png"
 
         logger.info(f"Generating trade-off plot for {ds.value}...")
 
@@ -398,7 +401,7 @@ def generate_stability_plot(
     analysis_artifacts_repository = AnalysisArtifactsRepository(storage=storage)
 
     for ds in datasets:
-        analysis_name = f"stability_plot_{metric.value}"
+        analysis_name = f"stability_plot_{metric.value}.png"
 
         logger.info(f"Generating stability plot for {ds.value} ({metric.value})...")
 
@@ -463,7 +466,7 @@ def generate_imbalance_impact_plot(
     analysis_artifacts_repository = AnalysisArtifactsRepository(storage=storage)
 
     for ds in datasets:
-        analysis_name = f"imbalance_impact_{metric.value}"
+        analysis_name = f"imbalance_impact_{metric.value}.png"
 
         logger.info(f"Generating imbalance impact plot for {ds.value}...")
 
@@ -527,7 +530,7 @@ def generate_cs_vs_resampling_plot(
     analysis_artifacts_repository = AnalysisArtifactsRepository(storage=storage)
 
     for ds in datasets:
-        analysis_name = "cs_vs_resampling_plot"
+        analysis_name = "cs_vs_resampling_plot.png"
 
         logger.info(f"Generating CS vs resampling plot for {ds.value}...")
 
@@ -590,7 +593,7 @@ def generate_metrics_heatmap(
     analysis_artifacts_repository = AnalysisArtifactsRepository(storage=storage)
 
     for ds in datasets:
-        analysis_name = "metrics_heatmap"
+        analysis_name = "metrics_heatmap.png"
 
         logger.info(f"Generating metrics heatmap for {ds.value}...")
 

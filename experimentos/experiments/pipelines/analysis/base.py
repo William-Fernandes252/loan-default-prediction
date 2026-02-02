@@ -25,14 +25,16 @@ class AnalysisArtifactRepository(Protocol):
         self,
         dataset: Dataset,
         analysis_name: str,
-        artifact_data: bytes,
+        artifact_data: BinaryIO,
+        locale: str = "en_US",
     ) -> None:
         """Saves an analysis artifact for a given experiment.
 
         Args:
             dataset (Dataset): The dataset associated with the experiment.
             analysis_name (str): The name of the analysis artifact to be saved.
-            artifact_data (bytes): The binary data of the artifact.
+            artifact_data (BinaryIO): The binary data of the artifact.
+            locale (str): The locale for the artifact (default: 'en_US').
 
         Raises:
             Exception: If there is an error saving the artifact.
@@ -43,6 +45,7 @@ class AnalysisArtifactRepository(Protocol):
         self,
         dataset: Dataset,
         analysis_name: str,
+        locale: str = "en_US",
     ) -> bool:
         """Checks if an analysis artifact exists in the repository.
 
@@ -64,13 +67,15 @@ def export_analysis_artifact(
     state: AnalysisPipelineState, context: AnalysisPipelineContext
 ) -> AnalysisPipelineTaskResult:
     """Export analysis artifact to the results repository."""
-    if "result_data" not in state or "output" not in state:
-        return TaskResult(state, TaskStatus.FAILURE, "No result data or output key to export.")
+    if "artifact" not in state:
+        return TaskResult(state, TaskStatus.FAILURE, "No artifact to export.")
 
+    artifact = state["artifact"]
     context.analysis_artifacts_repository.save_analysis_artifact(
         context.dataset,
         context.analysis_name,
-        state["result_data"],
+        artifact,
+        locale=context.locale.value,
     )
     return TaskResult(state, TaskStatus.SUCCESS, "Exported artifact.")
 
