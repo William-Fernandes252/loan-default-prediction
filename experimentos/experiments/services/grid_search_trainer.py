@@ -123,10 +123,12 @@ class GridSearchModelTrainer:
             },
             ModelType.XGBOOST: {
                 "clf__n_estimators": [100, 200],
-                "clf__learning_rate": [0.01, 0.1, 0.3],  # 'eta' in XGBoost terminology
-                "clf__max_depth": [3, 6, 10],  # Important for controlling complexity
-                "clf__subsample": [0.8, 1.0],  # Helps to avoid over-fitting
-                "clf__colsample_bytree": [0.8, 1.0],  # Fraction of features per tree
+                "clf__learning_rate": [0.01, 0.1],  # Removed 0.3 to save time
+                "clf__max_depth": [3, 6, 10],
+                "clf__subsample": [0.8, 1.0],
+                "clf__colsample_bytree": [0.8, 1.0],
+                "clf__reg_alpha": [0, 0.1],  # Test: None vs. Sparse (L1)
+                "clf__reg_lambda": [1.0, 10.0],  # Test: Default vs. Strong (L2)
             },
             ModelType.MLP: {
                 "clf__hidden_layer_sizes": [(50,), (100,), (50, 50)],
