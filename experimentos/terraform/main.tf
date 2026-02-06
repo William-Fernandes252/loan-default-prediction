@@ -14,7 +14,7 @@ terraform {
   # Run `cd terraform/bootstrap && terraform init && terraform apply` first,
   # then paste the output values here.
   backend "s3" {
-    bucket         = "loan-default-prediction-terraform-state-ACCOUNT_ID" # TODO: replace ACCOUNT_ID after bootstrap
+    bucket         = "loan-default-prediction-terraform-state-264981922234"
     key            = "loan-default-prediction/terraform.tfstate"
     region         = "us-east-1"
     dynamodb_table = "loan-default-prediction-terraform-locks"
