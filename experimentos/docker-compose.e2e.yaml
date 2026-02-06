@@ -13,7 +13,10 @@ services:
       retries: 5
 
   app:
-    build: .
+    build:
+      context: .
+      args:
+        - GPU=${GPU:-1}
     environment:
       - LDP_STORAGE_PROVIDER=s3
       - LDP_STORAGE_S3_ENDPOINT_URL=http://localstack:4566
