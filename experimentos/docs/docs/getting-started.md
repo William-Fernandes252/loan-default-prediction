@@ -122,3 +122,30 @@ make test-e2e
 make lint
 make format
 ```
+
+## Running on AWS
+
+The project can also run experiments at scale on AWS Batch with GPU or CPU instances. See the [Infrastructure](infrastructure.md) guide for the full deployment walkthrough, or use the quick start below:
+
+```bash
+# 1. Bootstrap Terraform state (once)
+make tf-bootstrap
+
+# 2. Deploy infrastructure
+make tf-init
+make tf-apply
+
+# 3. Build and push Docker image
+make docker-build
+make docker-push
+
+# 4. Submit training jobs (one per dataset)
+make submit-jobs
+```
+
+To enable GPU mode, pass `GPU=true` and `use_gpu=true`:
+
+```bash
+make docker-build GPU=true
+cd terraform && terraform apply -var="use_gpu=true"
+```

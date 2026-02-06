@@ -183,20 +183,68 @@ uv run ldp analyze all taiwan_credit --execution-id <execution-id>
 The project supports GPU acceleration using [NVIDIA RAPIDS cuML](https://docs.rapids.ai/api/cuml/stable/). To enable GPU support:
 
 1. Install GPU dependencies:
+
    ```bash
    uv sync --group gpu
    ```
 
 2. Run commands with the `--use-gpu` flag:
+
    ```bash
    uv run ldp data process --use-gpu
    uv run ldp experiment run --use-gpu
    ```
 
 **Requirements:**
+
 - NVIDIA GPU with compute capability 7.0+ (Volta or newer)
 - CUDA Toolkit 11.2+
 - Linux OS
+
+## AWS Infrastructure
+
+The project includes Terraform-managed infrastructure for running experiments at scale on **AWS Batch**, with support for both GPU and CPU-only modes.
+
+### Quick Start
+
+```bash
+# 1. Bootstrap Terraform remote state (once)
+make tf-bootstrap
+
+# 2. Deploy infrastructure (CPU-only by default)
+make tf-init
+make tf-apply
+
+# 3. Build and push the Docker image
+make docker-build
+make docker-push
+
+# 4. Submit all training jobs (one per dataset, run in parallel)
+make submit-jobs
+```
+
+### GPU Mode
+
+To provision GPU instances (`g4dn`) and build with CUDA support:
+
+```bash
+make docker-build GPU=true
+cd terraform && terraform apply -var="use_gpu=true"
+make docker-push
+make submit-jobs
+```
+
+### Infrastructure Resources
+
+| Resource | Purpose |
+|----------|--------|
+| **AWS Batch** | Managed compute (Spot + On-Demand fallback) |
+| **ECR** | Docker image registry |
+| **S3** | Experiment data, models, and results |
+| **CloudWatch** | Job logging (30-day retention) |
+| **VPC Endpoint** | Private S3 traffic (no egress costs) |
+
+Cost is near-zero when idle — both compute environments scale to zero. See the [full infrastructure documentation](docs/docs/infrastructure.md) for details on variables, security, monitoring, and teardown.
 
 ## Development & Code Quality
 

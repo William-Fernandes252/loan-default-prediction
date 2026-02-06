@@ -67,7 +67,7 @@ The storage layer provides a unified interface for file operations across differ
 
 Cloud storage services use **composition-based dependency injection** — the boto3/GCS clients are created by the DI container and injected into the storage services.
 
-For detailed configuration options, see the [Configuration](configuration.md) page.
+For detailed configuration options, see the [Configuration](configuration.md) page. For deploying with S3 on AWS, see the [Infrastructure](infrastructure.md) guide.
 
 ## Pipeline Architecture
 

@@ -160,3 +160,20 @@ LDP_STORAGE_S3_ENDPOINT_URL=http://localhost:9000
 LDP_STORAGE_S3_ACCESS_KEY_ID=minioadmin
 LDP_STORAGE_S3_SECRET_ACCESS_KEY=minioadmin
 ```
+
+## Example: AWS Batch Deployment
+
+When running on AWS Batch, environment variables are set automatically by the Terraform infrastructure. The job definitions configure:
+
+```bash
+LDP_STORAGE_PROVIDER=s3
+LDP_STORAGE_S3_BUCKET=<auto-created bucket>
+LDP_STORAGE_S3_REGION=us-east-1
+LDP_USE_GPU=false  # or true, based on use_gpu Terraform variable
+LDP_N_JOBS=4       # or 1 for GPU mode
+LDP_MODELS_N_JOBS=2
+LDP_DEBUG=false
+LDP_LOCALE=en_US
+```
+
+S3 authentication uses the IAM job role attached to the Batch job definition — no explicit credentials are needed. See the [Infrastructure](infrastructure.md) guide for the full setup.

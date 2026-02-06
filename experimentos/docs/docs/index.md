@@ -40,3 +40,7 @@ For a detailed look at the project's architecture, see the [Architecture](archit
 ## CLI Reference
 
 Detailed information about the available CLI commands can be found in the [CLI Reference](cli.md).
+
+## AWS Infrastructure
+
+For deploying experiments at scale on AWS Batch, see the [Infrastructure](infrastructure.md) guide.
