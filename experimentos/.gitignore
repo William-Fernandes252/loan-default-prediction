@@ -197,3 +197,12 @@ cython_debug/
 # Not the project lib
 !experiments/lib/
 !tests/**/lib/
+
+# Terraform files
+terraform/**/.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+*.tfvars.json
+.terraformrc
+terraform.rc
