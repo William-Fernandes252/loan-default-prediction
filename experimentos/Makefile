@@ -108,10 +108,11 @@ analyze:
 # INFRASTRUCTURE                                                                #
 #################################################################################
 
-## Build GPU Docker image
+## Build Docker image (set GPU=true for GPU support)
+GPU ?= false
 .PHONY: docker-build
 docker-build:
-	docker build --build-arg GPU=1 -t $(PROJECT_NAME):$(IMAGE_TAG) .
+	docker build --build-arg GPU=$(if $(filter true,$(GPU)),1,0) -t $(PROJECT_NAME):$(IMAGE_TAG) .
 
 ## Tag and push Docker image to ECR
 .PHONY: docker-push

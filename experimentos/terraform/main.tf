@@ -48,6 +48,12 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
+variable "use_gpu" {
+  description = "Whether to provision GPU instances (true) or CPU-only instances (false)."
+  type        = bool
+  default     = false
+}
+
 variable "spot_max_vcpus" {
   description = "Maximum vCPUs for the Spot compute environment."
   type        = number
@@ -73,7 +79,7 @@ variable "job_memory_mib" {
 }
 
 variable "root_volume_size_gb" {
-  description = "Root EBS volume size in GB for GPU instances (needs space for CUDA + Docker images)."
+  description = "Root EBS volume size in GB (GPU needs ~100 for CUDA + Docker images, CPU can use ~50)."
   type        = number
   default     = 100
 }
@@ -96,13 +102,31 @@ locals {
     ManagedBy   = "terraform"
   }
 
+  # Instance types: GPU-accelerated vs CPU-optimized.
+  instance_types = var.use_gpu ? ["g4dn.xlarge", "g4dn.2xlarge"] : ["c5.xlarge", "c5.2xlarge", "m5.xlarge", "m5.2xlarge"]
+
+  # EBS volume: GPU needs extra space for CUDA libraries + Docker images.
+  volume_size = var.use_gpu ? var.root_volume_size_gb : 50
+
+  # Resource requirements: include GPU only when enabled.
+  resource_requirements = concat(
+    [
+      { type = "VCPU", value = var.job_vcpus },
+      { type = "MEMORY", value = var.job_memory_mib },
+    ],
+    var.use_gpu ? [{ type = "GPU", value = "1" }] : []
+  )
+
+  # Job command: append --use-gpu flag only when GPU is enabled.
+  job_command_prefix = var.use_gpu ? ["experiment", "run", "--use-gpu", "--only-dataset"] : ["experiment", "run", "--only-dataset"]
+
   # Environment variables shared by every job definition.
   common_env_vars = [
     { name = "LDP_STORAGE_PROVIDER", value = "s3" },
     { name = "LDP_STORAGE_S3_BUCKET", value = aws_s3_bucket.experiments_data.id },
     { name = "LDP_STORAGE_S3_REGION", value = var.aws_region },
-    { name = "LDP_USE_GPU", value = "true" },
-    { name = "LDP_N_JOBS", value = "1" },
+    { name = "LDP_USE_GPU", value = tostring(var.use_gpu) },
+    { name = "LDP_N_JOBS", value = var.use_gpu ? "1" : var.job_vcpus },
     { name = "LDP_MODELS_N_JOBS", value = "2" },
     { name = "LDP_DEBUG", value = "false" },
     { name = "LDP_LOCALE", value = "en_US" },
@@ -130,9 +154,15 @@ data "aws_route_tables" "default" {
   vpc_id = data.aws_vpc.default.id
 }
 
-# Resolve the latest ECS-optimized GPU AMI automatically.
+# Resolve the latest ECS-optimized AMI automatically.
 data "aws_ssm_parameter" "ecs_gpu_ami" {
-  name = "/aws/service/ecs/optimized-ami/amazon-linux-2/gpu/recommended/image_id"
+  count = var.use_gpu ? 1 : 0
+  name  = "/aws/service/ecs/optimized-ami/amazon-linux-2/gpu/recommended/image_id"
+}
+
+data "aws_ssm_parameter" "ecs_cpu_ami" {
+  count = var.use_gpu ? 0 : 1
+  name  = "/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id"
 }
 
 ################################################################################
@@ -363,19 +393,22 @@ resource "aws_cloudwatch_log_group" "batch" {
 }
 
 ################################################################################
-# Launch Template — GPU AMI + EBS
+# Launch Template — AMI + EBS
 ################################################################################
 
-resource "aws_launch_template" "gpu" {
-  name_prefix = "${var.project_name}-gpu-lt-"
+resource "aws_launch_template" "compute" {
+  name_prefix = "${var.project_name}-lt-"
 
-  image_id = data.aws_ssm_parameter.ecs_gpu_ami.value
+  image_id = (
+    var.use_gpu
+    ? data.aws_ssm_parameter.ecs_gpu_ami[0].value
+    : data.aws_ssm_parameter.ecs_cpu_ami[0].value
+  )
 
-  # GPU instances need extra disk for CUDA libraries + Docker images.
   block_device_mappings {
     device_name = "/dev/xvda"
     ebs {
-      volume_size = var.root_volume_size_gb
+      volume_size = local.volume_size
       volume_type = "gp3"
     }
   }
@@ -388,8 +421,8 @@ resource "aws_launch_template" "gpu" {
 ################################################################################
 
 # Primary: Spot instances — up to 90% savings over On-Demand.
-resource "aws_batch_compute_environment" "gpu_spot" {
-  name = "${var.project_name}-gpu-spot"
+resource "aws_batch_compute_environment" "spot" {
+  name = "${var.project_name}-spot"
   type = "MANAGED"
 
   compute_resources {
@@ -397,7 +430,7 @@ resource "aws_batch_compute_environment" "gpu_spot" {
     allocation_strategy = "BEST_FIT_PROGRESSIVE"
     bid_percentage      = 100
 
-    instance_type = ["g4dn.xlarge", "g4dn.2xlarge"]
+    instance_type = local.instance_types
 
     max_vcpus     = var.spot_max_vcpus
     min_vcpus     = 0
@@ -409,7 +442,7 @@ resource "aws_batch_compute_environment" "gpu_spot" {
     instance_role = aws_iam_instance_profile.ecs_instance_profile.arn
 
     launch_template {
-      launch_template_id = aws_launch_template.gpu.id
+      launch_template_id = aws_launch_template.compute.id
       version            = "$Latest"
     }
   }
@@ -421,15 +454,15 @@ resource "aws_batch_compute_environment" "gpu_spot" {
 }
 
 # Fallback: On-Demand instances — guaranteed availability when Spot is scarce.
-resource "aws_batch_compute_environment" "gpu_on_demand" {
-  name = "${var.project_name}-gpu-on-demand"
+resource "aws_batch_compute_environment" "on_demand" {
+  name = "${var.project_name}-on-demand"
   type = "MANAGED"
 
   compute_resources {
     type                = "EC2"
     allocation_strategy = "BEST_FIT_PROGRESSIVE"
 
-    instance_type = ["g4dn.xlarge", "g4dn.2xlarge"]
+    instance_type = local.instance_types
 
     max_vcpus     = var.on_demand_max_vcpus
     min_vcpus     = 0
@@ -441,7 +474,7 @@ resource "aws_batch_compute_environment" "gpu_on_demand" {
     instance_role = aws_iam_instance_profile.ecs_instance_profile.arn
 
     launch_template {
-      launch_template_id = aws_launch_template.gpu.id
+      launch_template_id = aws_launch_template.compute.id
       version            = "$Latest"
     }
   }
@@ -463,12 +496,12 @@ resource "aws_batch_job_queue" "queue" {
 
   compute_environment_order {
     order               = 1
-    compute_environment = aws_batch_compute_environment.gpu_spot.arn
+    compute_environment = aws_batch_compute_environment.spot.arn
   }
 
   compute_environment_order {
     order               = 2
-    compute_environment = aws_batch_compute_environment.gpu_on_demand.arn
+    compute_environment = aws_batch_compute_environment.on_demand.arn
   }
 
   tags = local.common_tags
@@ -507,14 +540,10 @@ resource "aws_batch_job_definition" "training" {
     jobRoleArn       = aws_iam_role.batch_job_role.arn
     executionRoleArn = aws_iam_role.batch_execution_role.arn
 
-    resourceRequirements = [
-      { type = "VCPU", value = var.job_vcpus },
-      { type = "MEMORY", value = var.job_memory_mib },
-      { type = "GPU", value = "1" },
-    ]
+    resourceRequirements = local.resource_requirements
 
     # Override the image CMD; ENTRYPOINT is already `python -m experiments.cli`.
-    command = ["run", "--only-dataset", each.key, "--use-gpu"]
+    command = concat(local.job_command_prefix, [each.key])
 
     environment = local.common_env_vars
 
@@ -558,4 +587,9 @@ output "job_definition_names" {
 output "job_definition_arns" {
   description = "Batch job definition ARNs, keyed by dataset."
   value       = { for k, v in aws_batch_job_definition.training : k => v.arn }
+}
+
+output "use_gpu" {
+  description = "Whether GPU instances are provisioned."
+  value       = var.use_gpu
 }
