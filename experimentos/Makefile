@@ -5,6 +5,9 @@
 PROJECT_NAME = loan-default-prediction
 PYTHON_VERSION = 3.12
 PYTHON_INTERPRETER = python
+AWS_REGION = us-east-1
+ECR_REPO_URL = $(shell cd terraform && terraform output -raw ecr_repo_url 2>/dev/null)
+IMAGE_TAG ?= latest
 
 
 #################################################################################
@@ -99,6 +102,61 @@ train:
 .PHONY: analyze
 analyze:
 	uv run ldp analyze all
+
+
+#################################################################################
+# INFRASTRUCTURE                                                                #
+#################################################################################
+
+## Build GPU Docker image
+.PHONY: docker-build
+docker-build:
+	docker build --build-arg GPU=1 -t $(PROJECT_NAME):$(IMAGE_TAG) .
+
+## Tag and push Docker image to ECR
+.PHONY: docker-push
+docker-push:
+	aws ecr get-login-password --region $(AWS_REGION) | docker login --username AWS --password-stdin $(ECR_REPO_URL)
+	docker tag $(PROJECT_NAME):$(IMAGE_TAG) $(ECR_REPO_URL):$(IMAGE_TAG)
+	docker push $(ECR_REPO_URL):$(IMAGE_TAG)
+
+## Bootstrap Terraform remote state (run once)
+.PHONY: tf-bootstrap
+tf-bootstrap:
+	cd terraform/bootstrap && terraform init && terraform apply
+
+## Initialize Terraform
+.PHONY: tf-init
+tf-init:
+	cd terraform && terraform init
+
+## Plan Terraform changes
+.PHONY: tf-plan
+tf-plan:
+	cd terraform && terraform plan
+
+## Apply Terraform changes
+.PHONY: tf-apply
+tf-apply:
+	cd terraform && terraform apply
+
+## Full deploy: build, push, apply infra
+.PHONY: deploy
+deploy: docker-build docker-push tf-apply
+
+## Submit all training jobs (one per dataset)
+.PHONY: submit-jobs
+submit-jobs:
+	@JOB_QUEUE=$$(cd terraform && terraform output -raw job_queue_name); \
+	for dataset in corporate_credit_rating lending_club taiwan_credit; do \
+		JOB_DEF=$$(cd terraform && terraform output -json job_definition_arns | jq -r ".\"$$dataset\""); \
+		echo "Submitting job for $$dataset ..."; \
+		aws batch submit-job \
+			--job-name "$(PROJECT_NAME)-$$dataset-$$(date +%Y%m%d-%H%M%S)" \
+			--job-queue "$$JOB_QUEUE" \
+			--job-definition "$$JOB_DEF" \
+			--region $(AWS_REGION); \
+	done
 
 
 #################################################################################
