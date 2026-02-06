@@ -14,7 +14,7 @@ terraform {
   # Run `cd terraform/bootstrap && terraform init && terraform apply` first,
   # then paste the output values here.
   backend "s3" {
-    bucket         = "loan-default-prediction-terraform-state-264981922234"
+    bucket         = var.bucket_name
     key            = "loan-default-prediction/terraform.tfstate"
     region         = "us-east-1"
     dynamodb_table = "loan-default-prediction-terraform-locks"
@@ -82,6 +82,17 @@ variable "root_volume_size_gb" {
   description = "Root EBS volume size in GB (GPU needs ~100 for CUDA + Docker images, CPU can use ~50)."
   type        = number
   default     = 100
+}
+
+variable "user_email" {
+    description = "Email address for SNS alerts."
+    type        = string
+    sensitive   = true
+}
+
+variable "bucket_name" {
+  description = "S3 bucket name for Terraform state (created by bootstrap)."
+  type        = string
 }
 
 ################################################################################
@@ -382,17 +393,6 @@ resource "aws_iam_role_policy" "batch_job_s3_access" {
 }
 
 ################################################################################
-# CloudWatch — Log Group
-################################################################################
-
-resource "aws_cloudwatch_log_group" "batch" {
-  name              = "/aws/batch/${var.project_name}"
-  retention_in_days = 30
-
-  tags = local.common_tags
-}
-
-################################################################################
 # Launch Template — AMI + EBS
 ################################################################################
 
@@ -592,4 +592,52 @@ output "job_definition_arns" {
 output "use_gpu" {
   description = "Whether GPU instances are provisioned."
   value       = var.use_gpu
+}
+
+################################################################################
+# Observability
+################################################################################
+
+resource "aws_cloudwatch_log_group" "batch" {
+  name              = "/aws/batch/${var.project_name}"
+  retention_in_days = 30
+
+  tags = local.common_tags
+}
+
+resource "aws_sns_topic" "alerts" {
+  name = "${var.project_name}-alerts"
+}
+
+resource "aws_cloudwatch_log_metric_filter" "app_errors" {
+  name           = "ApplicationErrors"
+  pattern        = "{ $.record.level.name = \"ERROR\" }"
+  log_group_name = aws_cloudwatch_log_group.batch.name
+
+  metric_transformation {
+    name      = "ErrorCount"
+    namespace = "${var.project_name}/Observability"
+    value     = "1"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "error_alarm" {
+  alarm_name          = "${var.project_name}-error-rate-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "1"
+  metric_name         = "ErrorCount"
+  namespace           = "${var.project_name}/Observability"
+  period              = "60" # Check every minute
+  statistic           = "Sum"
+  threshold           = "0"  # Alert on even a single error
+  alarm_description   = "Triggers when application logs contain ERROR level"
+  treat_missing_data  = "notBreaching"
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
+}
+
+resource "aws_sns_topic_subscription" "email_target" {
+  topic_arn = aws_sns_topic.alerts.arn
+  protocol  = "email"
+  endpoint  = var.user_email
 }
