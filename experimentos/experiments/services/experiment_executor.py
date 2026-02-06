@@ -72,36 +72,31 @@ class _SavePredictionsOnTrainingCompletionObserver(
 
     @override
     def on_pipeline_finish(self, pipeline, result):
-        try:
-            self._predictions_repository.save_predictions(
-                execution_id=self._execution_id,
-                seed=result.context.seed,
-                dataset=result.context.dataset,
-                model_type=result.context.model_type,
-                technique=result.context.technique,
-                predictions=result.final_state["predictions"],
-            )
-        except Exception as e:
-            logger.error(
-                "Failed to save predictions for dataset={dataset}, model_type={model_type}, technique={technique}, seed={seed}: {error}",
-                dataset=result.context.dataset,
-                model_type=result.context.model_type,
-                technique=result.context.technique,
-                seed=result.context.seed,
-                error=e,
-            )
-            return Action.PANIC
-        else:
-            logger.info(
-                "Saved predictions for dataset={dataset}, model_type={model_type}, technique={technique}, seed={seed}",
-                dataset=result.context.dataset,
-                model_type=result.context.model_type,
-                technique=result.context.technique,
-                seed=result.context.seed,
-            )
-            return Action.PROCEED
-        finally:
-            result.final_state = {}  # Clear state to free memory
+        with logger.contextualize(
+            model_type=result.context.model_type,
+            technique=result.context.technique,
+            seed=result.context.seed,
+        ):
+            try:
+                self._predictions_repository.save_predictions(
+                    execution_id=self._execution_id,
+                    seed=result.context.seed,
+                    dataset=result.context.dataset,
+                    model_type=result.context.model_type,
+                    technique=result.context.technique,
+                    predictions=result.final_state["predictions"],
+                )
+            except Exception as e:
+                logger.error(
+                    "Failed to save predictions for dataset: {error}",
+                    error=e,
+                )
+                return Action.PANIC
+            else:
+                logger.info("Saved predictions for dataset.")
+                return Action.PROCEED
+            finally:
+                result.final_state = {}  # Clear state to free memory
 
 
 class ExperimentExecutor:
@@ -141,8 +136,16 @@ class ExperimentExecutor:
     ) -> None:
         """Execute the experiment with the given parameters."""
         config = self._merge_with_default_config(config or {})
-        self._schedule_pipelines(params, config)
-        self._execute_pipelines(params.execution_id, config["n_jobs"])
+
+        with logger.contextualize(
+            execution_id=params.execution_id,
+            num_seeds=config["num_seeds"],
+            n_jobs=config["n_jobs"],
+            models_n_jobs=config["models_n_jobs"],
+            **{dataset.value: (dataset in params.datasets) for dataset in Dataset},
+        ):
+            self._schedule_pipelines(params, config)
+            self._execute_pipelines(params.execution_id, config["n_jobs"])
 
     def _merge_with_default_config(self, config: ExperimentConfig) -> ExperimentConfig:
         """Get the default experiment configuration from settings."""
@@ -180,15 +183,13 @@ class ExperimentExecutor:
 
         if skipped_count > 0:
             logger.info(
-                "Continuing execution {execution_id}: scheduled {scheduled}, skipped {skipped} completed combinations",
-                execution_id=params.execution_id,
+                "Continuing execution: scheduled {scheduled}, skipped {skipped} completed combinations",
                 scheduled=scheduled_count,
                 skipped=skipped_count,
             )
         else:
             logger.info(
-                "Execution {execution_id}: scheduled {scheduled} combinations",
-                execution_id=params.execution_id,
+                "Execution: scheduled {scheduled} combinations",
                 scheduled=scheduled_count,
             )
 
@@ -200,8 +201,7 @@ class ExperimentExecutor:
             # Check if this looks like a continuation attempt (existing execution_id passed)
             # We can't distinguish new vs continuation here, but log for visibility
             logger.debug(
-                "No completed combinations found for execution {execution_id}",
-                execution_id=execution_id,
+                "No completed combinations found for execution.",
             )
 
         return completed
