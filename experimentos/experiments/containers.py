@@ -10,7 +10,7 @@ from typing import Any
 from dependency_injector import containers, providers
 from loguru import logger
 
-from experiments.config.logging import LoggingObserver
+from experiments.config.logging import LoggingObserver, configure_logging
 from experiments.config.settings import LdpSettings, StorageProvider
 from experiments.lib.pipelines.execution import PipelineExecutor
 from experiments.pipelines.data import (
@@ -321,6 +321,9 @@ class Container(containers.DeclarativeContainer):
         if self.settings().debug:
             logger.debug("Application is running in DEBUG mode.")
             logger.debug(f"Settings: {self.settings()}")
+
+        configure_logging(self.settings())
+        logger.info("Logging configured successfully.")
 
 
 def create_container() -> Container:
