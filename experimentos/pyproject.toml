@@ -37,6 +37,7 @@ dependencies = [
   "s3fs>=0.4.2",
   "scikit-learn>=1.7.2",
   "seaborn>=0.13.2",
+  "sentry-sdk>=2.52.0",
   "tqdm",
   "typer",
   "uuid7>=0.1.0",

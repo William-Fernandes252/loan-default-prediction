@@ -213,8 +213,15 @@ class LdpSettings(BaseSettings):
     experiment: ExperimentSettings = Field(default_factory=ExperimentSettings)
     resources: ResourceSettings = Field(default_factory=ResourceSettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)
-    debug: Annotated[bool, Field(default=True)]
+
+    debug: Annotated[bool, Field(default=True)] = True
     """Debug mode flag."""
+
+    sentry_dns: Annotated[
+        str | None,
+        Field(default=None),
+    ] = None
+    """Sentry DSN for error tracking (if not set, Sentry is disabled)."""
 
     locale: Annotated[
         str,

@@ -11,6 +11,7 @@ from dependency_injector import containers, providers
 from loguru import logger
 
 from experiments.config.logging import LoggingObserver, configure_logging
+from experiments.config.sentry import init_sentry
 from experiments.config.settings import LdpSettings, StorageProvider
 from experiments.lib.pipelines.execution import PipelineExecutor
 from experiments.pipelines.data import (
@@ -324,6 +325,10 @@ class Container(containers.DeclarativeContainer):
 
         configure_logging(self.settings())
         logger.info("Logging configured successfully.")
+
+        if self.settings().sentry_dns:
+            logger.info("Sentry DSN provided, initializing Sentry integration.")
+            init_sentry(self.settings())
 
 
 def create_container() -> Container:
