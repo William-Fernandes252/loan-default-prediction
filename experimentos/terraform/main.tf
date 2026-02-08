@@ -123,7 +123,7 @@ locals {
   )
 
   # Job command: append --use-gpu flag only when GPU is enabled.
-  job_command_prefix = var.use_gpu ? ["experiment", "run", "--use-gpu", "--only-dataset"] : ["experiment", "run", "--only-dataset"]
+  job_command_prefix = var.use_gpu ? ["ldp", "experiment", "run", "--use-gpu", "--only-dataset"] : ["ldp", "experiment", "run", "--only-dataset"]
 
   # Environment variables shared by every job definition.
   common_env_vars = [
@@ -416,7 +416,7 @@ resource "aws_launch_template" "compute" {
 
 # Primary: Spot instances — up to 90% savings over On-Demand.
 resource "aws_batch_compute_environment" "spot" {
-  name = "${var.project_name}-spot"
+  compute_environment_name = "${var.project_name}-spot"
   type = "MANAGED"
 
   compute_resources {
@@ -449,7 +449,7 @@ resource "aws_batch_compute_environment" "spot" {
 
 # Fallback: On-Demand instances — guaranteed availability when Spot is scarce.
 resource "aws_batch_compute_environment" "on_demand" {
-  name = "${var.project_name}-on-demand"
+  compute_environment_name = "${var.project_name}-on-demand"
   type = "MANAGED"
 
   compute_resources {
@@ -505,7 +505,7 @@ resource "aws_batch_job_queue" "queue" {
 # Batch — Job Definitions (one per dataset)
 ################################################################################
 
-resource "aws_batch_job_definition" "training" {
+resource "aws_batch_job_definition" "experiment" {
   for_each = local.datasets
 
   name = "${var.project_name}-${replace(each.key, "_", "-")}"
@@ -523,10 +523,6 @@ resource "aws_batch_job_definition" "training" {
       action    = "EXIT"
       on_reason = "*"
     }
-  }
-
-  timeout {
-    attempt_duration_seconds = 14400 # 4 hours
   }
 
   container_properties = jsonencode({
@@ -575,12 +571,12 @@ output "job_queue_name" {
 
 output "job_definition_names" {
   description = "Batch job definition names, keyed by dataset."
-  value       = { for k, v in aws_batch_job_definition.training : k => v.name }
+  value       = { for k, v in aws_batch_job_definition.experiment : k => v.name }
 }
 
 output "job_definition_arns" {
   description = "Batch job definition ARNs, keyed by dataset."
-  value       = { for k, v in aws_batch_job_definition.training : k => v.arn }
+  value       = { for k, v in aws_batch_job_definition.experiment : k => v.arn }
 }
 
 output "use_gpu" {
