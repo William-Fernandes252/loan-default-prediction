@@ -1,3 +1,5 @@
+name: ldp-test
+
 services:
   localstack:
     image: localstack/localstack:3.0
