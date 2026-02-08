@@ -77,6 +77,18 @@ variable "job_memory_mib" {
   default     = "16384"
 }
 
+variable "data_job_vcpus" {
+  description = "vCPUs allocated per data processing job."
+  type        = string
+  default     = "2"
+}
+
+variable "data_job_memory_mib" {
+  description = "Memory (MiB) allocated per data processing job."
+  type        = string
+  default     = "8192"
+}
+
 variable "root_volume_size_gb" {
   description = "Root EBS volume size in GB (GPU needs ~100 for CUDA + Docker images, CPU can use ~50)."
   type        = number
@@ -136,6 +148,18 @@ locals {
     { name = "LDP_DEBUG", value = "false" },
     { name = "LDP_LOCALE", value = "en_US" },
   ]
+
+  # Resource requirements for data processing jobs (lighter than training).
+  data_resource_requirements = concat(
+    [
+      { type = "VCPU", value = var.data_job_vcpus },
+      { type = "MEMORY", value = var.data_job_memory_mib },
+    ],
+    var.use_gpu ? [{ type = "GPU", value = "1" }] : []
+  )
+
+  # Data processing command: --force skips interactive prompts in cloud runs.
+  data_job_command_prefix = var.use_gpu ? ["ldp", "data", "process", "--force", "--use-gpu"] : ["ldp", "data", "process", "--force"]
 }
 
 ################################################################################
@@ -551,6 +575,54 @@ resource "aws_batch_job_definition" "experiment" {
 }
 
 ################################################################################
+# Batch — Data Processing Job Definitions (one per dataset)
+################################################################################
+
+resource "aws_batch_job_definition" "data_processing" {
+  for_each = local.datasets
+
+  name = "${var.project_name}-data-${replace(each.key, "_", "-")}"
+  type = "container"
+
+  # Spot-aware retry: retry on host termination, exit on app errors.
+  retry_strategy {
+    attempts = 3
+
+    evaluate_on_exit {
+      action           = "RETRY"
+      on_status_reason = "Host EC2*"
+    }
+    evaluate_on_exit {
+      action    = "EXIT"
+      on_reason = "*"
+    }
+  }
+
+  container_properties = jsonencode({
+    image            = "${aws_ecr_repository.repo.repository_url}:latest"
+    jobRoleArn       = aws_iam_role.batch_job_role.arn
+    executionRoleArn = aws_iam_role.batch_execution_role.arn
+
+    resourceRequirements = local.data_resource_requirements
+
+    command = concat(local.data_job_command_prefix, [each.key])
+
+    environment = local.common_env_vars
+
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = aws_cloudwatch_log_group.batch.name
+        "awslogs-region"        = var.aws_region
+        "awslogs-stream-prefix" = "data-${each.key}"
+      }
+    }
+  })
+
+  tags = local.common_tags
+}
+
+################################################################################
 # Outputs
 ################################################################################
 
@@ -577,6 +649,16 @@ output "job_definition_names" {
 output "job_definition_arns" {
   description = "Batch job definition ARNs, keyed by dataset."
   value       = { for k, v in aws_batch_job_definition.experiment : k => v.arn }
+}
+
+output "data_job_definition_names" {
+  description = "Batch data processing job definition names, keyed by dataset."
+  value       = { for k, v in aws_batch_job_definition.data_processing : k => v.name }
+}
+
+output "data_job_definition_arns" {
+  description = "Batch data processing job definition ARNs, keyed by dataset."
+  value       = { for k, v in aws_batch_job_definition.data_processing : k => v.arn }
 }
 
 output "use_gpu" {

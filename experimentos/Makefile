@@ -145,6 +145,13 @@ tf-apply:
 .PHONY: deploy
 deploy: docker-build docker-push tf-apply
 
+## Upload raw datasets to S3
+.PHONY: upload-data
+upload-data:
+	@S3_BUCKET=$$(cd terraform && terraform output -raw s3_bucket_name); \
+	echo "Syncing data/raw/ to s3://$$S3_BUCKET/data/raw/ ..."; \
+	aws s3 sync data/raw/ "s3://$$S3_BUCKET/data/raw/" --region $(AWS_REGION)
+
 ## Submit all training jobs (one per dataset)
 .PHONY: submit-jobs
 submit-jobs:
@@ -154,6 +161,20 @@ submit-jobs:
 		echo "Submitting job for $$dataset ..."; \
 		aws batch submit-job \
 			--job-name "$(PROJECT_NAME)-$$dataset-$$(date +%Y%m%d-%H%M%S)" \
+			--job-queue "$$JOB_QUEUE" \
+			--job-definition "$$JOB_DEF" \
+			--region $(AWS_REGION); \
+	done
+
+## Submit all data processing jobs (one per dataset)
+.PHONY: submit-data-jobs
+submit-data-jobs:
+	@JOB_QUEUE=$$(cd terraform && terraform output -raw job_queue_name); \
+	for dataset in corporate_credit_rating lending_club taiwan_credit; do \
+		JOB_DEF=$$(cd terraform && terraform output -json data_job_definition_arns | jq -r ".\"$$dataset\""); \
+		echo "Submitting data processing job for $$dataset ..."; \
+		aws batch submit-job \
+			--job-name "$(PROJECT_NAME)-data-$$dataset-$$(date +%Y%m%d-%H%M%S)" \
 			--job-queue "$$JOB_QUEUE" \
 			--job-definition "$$JOB_DEF" \
 			--region $(AWS_REGION); \
