@@ -152,19 +152,25 @@ upload-data:
 	echo "Syncing data/raw/ to s3://$$S3_BUCKET/data/raw/ ..."; \
 	aws s3 sync data/raw/ "s3://$$S3_BUCKET/data/raw/" --region $(AWS_REGION)
 
-## Submit all training jobs (one per dataset)
-.PHONY: submit-jobs
-submit-jobs:
+## Submit a data processing job for a specific dataset (set DATASET=name)
+.PHONY: submit-data-job
+submit-data-job:
+	@if [ -z "$(DATASET)" ]; then \
+		echo "Error: DATASET variable not set. Usage: make submit-data-job DATASET=taiwan_credit"; \
+		exit 1; \
+	fi
 	@JOB_QUEUE=$$(cd terraform && terraform output -raw job_queue_name); \
-	for dataset in corporate_credit_rating lending_club taiwan_credit; do \
-		JOB_DEF=$$(cd terraform && terraform output -json job_definition_arns | jq -r ".\"$$dataset\""); \
-		echo "Submitting job for $$dataset ..."; \
-		aws batch submit-job \
-			--job-name "$(PROJECT_NAME)-$$dataset-$$(date +%Y%m%d-%H%M%S)" \
-			--job-queue "$$JOB_QUEUE" \
-			--job-definition "$$JOB_DEF" \
-			--region $(AWS_REGION); \
-	done
+	JOB_DEF=$$(cd terraform && terraform output -json data_job_definition_arns | jq -r ".\"$(DATASET)\""); \
+	if [ "$$JOB_DEF" = "null" ] || [ -z "$$JOB_DEF" ]; then \
+		echo "Error: Invalid dataset '$(DATASET)' or job definition not found"; \
+		exit 1; \
+	fi; \
+	echo "Submitting data processing job for $(DATASET) ..."; \
+	aws batch submit-job \
+		--job-name "$(PROJECT_NAME)-data-$(DATASET)-$$(date +%Y%m%d-%H%M%S)" \
+		--job-queue "$$JOB_QUEUE" \
+		--job-definition "$$JOB_DEF" \
+		--region $(AWS_REGION)
 
 ## Submit all data processing jobs (one per dataset)
 .PHONY: submit-data-jobs
@@ -175,6 +181,40 @@ submit-data-jobs:
 		echo "Submitting data processing job for $$dataset ..."; \
 		aws batch submit-job \
 			--job-name "$(PROJECT_NAME)-data-$$dataset-$$(date +%Y%m%d-%H%M%S)" \
+			--job-queue "$$JOB_QUEUE" \
+			--job-definition "$$JOB_DEF" \
+			--region $(AWS_REGION); \
+	done
+
+## Submit a training job for a specific dataset (set DATASET=name)
+.PHONY: submit-job
+submit-job:
+	@if [ -z "$(DATASET)" ]; then \
+		echo "Error: DATASET variable not set. Usage: make submit-job DATASET=taiwan_credit"; \
+		exit 1; \
+	fi
+	@JOB_QUEUE=$$(cd terraform && terraform output -raw job_queue_name); \
+	JOB_DEF=$$(cd terraform && terraform output -json job_definition_arns | jq -r ".\"$(DATASET)\""); \
+	if [ "$$JOB_DEF" = "null" ] || [ -z "$$JOB_DEF" ]; then \
+		echo "Error: Invalid dataset '$(DATASET)' or job definition not found"; \
+		exit 1; \
+	fi; \
+	echo "Submitting training job for $(DATASET) ..."; \
+	aws batch submit-job \
+		--job-name "$(PROJECT_NAME)-$(DATASET)-$$(date +%Y%m%d-%H%M%S)" \
+		--job-queue "$$JOB_QUEUE" \
+		--job-definition "$$JOB_DEF" \
+		--region $(AWS_REGION)
+
+## Submit all training jobs (one per dataset)
+.PHONY: submit-jobs
+submit-jobs:
+	@JOB_QUEUE=$$(cd terraform && terraform output -raw job_queue_name); \
+	for dataset in corporate_credit_rating lending_club taiwan_credit; do \
+		JOB_DEF=$$(cd terraform && terraform output -json job_definition_arns | jq -r ".\"$$dataset\""); \
+		echo "Submitting job for $$dataset ..."; \
+		aws batch submit-job \
+			--job-name "$(PROJECT_NAME)-$$dataset-$$(date +%Y%m%d-%H%M%S)" \
 			--job-queue "$$JOB_QUEUE" \
 			--job-definition "$$JOB_DEF" \
 			--region $(AWS_REGION); \
