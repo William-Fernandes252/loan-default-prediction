@@ -85,21 +85,25 @@ All major operations are implemented as composable pipelines using the `Pipeline
 ### Core Pipelines
 
 #### Data Pipeline
+
 Processes raw datasets into the format required for experiments.
 
 - **Stages**: Load raw data → Transform → Validate → Export
 
 #### Training Pipeline
+
 Orchestrates batch model training across multiple datasets and configurations.
 
 - **Stages**: Generate tasks → Load data → Train models → Persist results
 
 #### Predictions Pipeline
+
 Runs inference using trained models.
 
 - **Stages**: Load model → Load data → Generate predictions → Persist
 
 #### Analysis Pipeline
+
 Generates reports and visualizations from experiment results. The `PredictionsAnalyzer` service orchestrates different analysis types:
 
 - **Summary Table**: LaTeX table with aggregated metrics per technique
