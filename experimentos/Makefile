@@ -129,7 +129,7 @@ tf-bootstrap:
 ## Initialize Terraform
 .PHONY: tf-init
 tf-init:
-	cd terraform && terraform init
+	cd terraform && terraform init -backend-config="bucket=$(shell cd terraform && terraform output -raw state_bucket_name)" -backend-config="key=$(PROJECT_NAME).tfstate" -backend-config="region=$(AWS_REGION)"
 
 ## Plan Terraform changes
 .PHONY: tf-plan

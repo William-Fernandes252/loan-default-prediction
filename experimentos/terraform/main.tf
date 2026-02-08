@@ -14,7 +14,6 @@ terraform {
   # Run `cd terraform/bootstrap && terraform init && terraform apply` first,
   # then paste the output values here.
   backend "s3" {
-    bucket         = var.bucket_name
     key            = "loan-default-prediction/terraform.tfstate"
     region         = "us-east-1"
     dynamodb_table = "loan-default-prediction-terraform-locks"
@@ -88,11 +87,6 @@ variable "user_email" {
     description = "Email address for SNS alerts."
     type        = string
     sensitive   = true
-}
-
-variable "bucket_name" {
-  description = "S3 bucket name for Terraform state (created by bootstrap)."
-  type        = string
 }
 
 ################################################################################
