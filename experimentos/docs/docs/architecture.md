@@ -59,11 +59,11 @@ The application uses `dependency-injector` with a centralized `Container` class 
 
 The storage layer provides a unified interface for file operations across different backends:
 
-| Backend | Implementation | URI Scheme |
-|---------|----------------|------------|
-| **Local Filesystem** | `LocalStorageService` | `file://` |
-| **AWS S3** | `S3StorageService` | `s3://` |
-| **Google Cloud Storage** | `GCSStorageService` | `gs://` |
+| Backend | Implementation |
+|---------|----------------|
+| **Local Filesystem** | `LocalStorage` |
+| **AWS S3** | `S3Storage` |
+| **Google Cloud Storage** | `GCSStorage` |
 
 Cloud storage services use **composition-based dependency injection** — the boto3/GCS clients are created by the DI container and injected into the storage services.
 
