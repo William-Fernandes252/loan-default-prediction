@@ -18,23 +18,28 @@ All resources are managed with **Terraform**, with remote state stored in S3 + D
 ### Architecture Diagram
 
 ```text
-┌─────────────────────────────────────────────────────────────────────┐
-│                          AWS Batch                                  │
-│                                                                     │
-│  ┌──────────────┐    ┌──────────────────────────────────────────┐   │
-│  │  Job Queue   │───▶│  Spot Compute Env (priority 1)           │   │
-│  │              │    │  g4dn.xlarge / c5.xlarge (GPU toggle)    │   │
-│  │              │───▶│  On-Demand Compute Env (priority 2)      │   │
-│  └──────────────┘    └──────────────────────────────────────────┘   │
-│         ▲                                                           │
-│         │  submit                                                   │
-│  ┌──────┴───────────────────────────────┐                           │
-│  │  Job Definitions (one per dataset)   │                           │
-│  │  • corporate-credit-rating           │                           │
-│  │  • lending-club                      │                           │
-│  │  • taiwan-credit                     │                           │
-│  └──────────────────────────────────────┘                           │
-└─────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────┐
+│                          AWS Batch                                 │
+│                                                                    │
+│  ┌──────────────┐    ┌──────────────────────────────────────────┐  │
+│  │  Job Queue   │───▶│  Spot Compute Env (priority 1)           │  │
+│  │              │    │  g4dn.xlarge / c5.xlarge (GPU toggle)    │  │
+│  │              │───▶│  On-Demand Compute Env (priority 2)      │  │
+│  └──────────────┘    └──────────────────────────────────────────┘  │
+│         ▲                                                          │
+│         │  submit                                                  │
+│  ┌──────┴─────────────────────────────────────────────────────┐    │
+│  │  Job Definitions:                                          │    │
+│  │  • Data Processing (one per dataset)                       │    │
+│  │    ├─ loan-default-prediction-data-corporate-credit-rating │    │
+│  │    ├─ loan-default-prediction-data-lending-club            │    │
+│  │    └─ loan-default-prediction-data-taiwan-credit           │    │
+│  │  • Training/Experiments (one per dataset)                  │    │
+│  │    ├─ loan-default-prediction-corporate-credit-rating      │    │
+│  │    ├─ loan-default-prediction-lending-club                 │    │
+│  │    └─ loan-default-prediction-taiwan-credit                │    │
+│  └────────────────────────────────────────────────────────────┘    │
+└────────────────────────────────────────────────────────────────────┘
          │                    │                    │
          ▼                    ▼                    ▼
     ┌─────────┐        ┌───────────┐       ┌──────────────┐
@@ -105,22 +110,46 @@ make docker-build GPU=true
 make docker-push
 ```
 
-### Step 5: Submit Training Jobs
+### Step 5: Upload Raw Datasets to S3
 
-Submit one job per dataset to the Batch queue:
+Upload the raw CSV files from `data/raw/` to the S3 bucket:
 
 ```bash
-make submit-jobs
+make upload-data
 ```
 
-This submits three independent jobs — one for `corporate_credit_rating`, one for `lending_club`, and one for `taiwan_credit` — allowing them to run in parallel across Batch compute instances.
+This syncs all raw datasets to `s3://<bucket>/data/raw/`, which the data processing jobs will read.
 
-### Full Deploy (Shortcut)
+### Step 6: Submit Data Processing Jobs
 
-Build, push, and apply infrastructure in one command:
+Process the raw datasets into ML-ready features. This transforms raw CSVs into:
+
+- `data/interim/{dataset}.parquet` (after transformations)
+- `data/processed/{dataset}_X.parquet` (features)
+- `data/processed/{dataset}_y.parquet` (targets)
+
+Submit data processing jobs:
 
 ```bash
-make deploy
+# Process all datasets in parallel
+make submit-data-jobs
+
+# Or test with a single dataset first
+make submit-data-job DATASET=taiwan_credit
+```
+
+Wait for data processing jobs to complete before submitting training jobs. Monitor progress via CloudWatch logs (see [Monitoring](#monitoring) section below).
+
+### Step 7: Submit Training Jobs
+
+Once data processing is complete, submit training jobs to run experiments:
+
+```bash
+# Train on all processed datasets in parallel
+make submit-jobs
+
+# Or train on a single dataset
+make submit-job DATASET=taiwan_credit
 ```
 
 ## GPU Toggle
@@ -133,7 +162,8 @@ The entire infrastructure adapts based on a single `use_gpu` variable. By defaul
 | **AMI** | ECS-optimized standard | ECS-optimized GPU (NVIDIA drivers) |
 | **EBS volume** | 50 GB gp3 | 100 GB gp3 |
 | **GPU resource** | Not requested | 1 GPU per job |
-| **Job command** | `experiment run --only-dataset <ds>` | `experiment run --use-gpu --only-dataset <ds>` |
+| **Data processing command** | `data process --force {dataset}` | `data process --force --use-gpu {dataset}` |
+| **Training command** | `experiment run --only-dataset {dataset}` | `experiment run --use-gpu --only-dataset {dataset}` |
 | **`LDP_USE_GPU`** | `"false"` | `"true"` |
 | **`LDP_N_JOBS`** | `"4"` (all vCPUs) | `"1"` (GPU-bound) |
 
@@ -166,6 +196,8 @@ All Terraform variables can be overridden via `-var` flags or a `.tfvars` file.
 | `on_demand_max_vcpus` | number | `8` | Max vCPUs for On-Demand fallback |
 | `job_vcpus` | string | `"4"` | vCPUs per training job |
 | `job_memory_mib` | string | `"16384"` | Memory per training job (MiB) |
+| `data_job_vcpus` | string | `"2"` | vCPUs per data processing job |
+| `data_job_memory_mib` | string | `"8192"` | Memory per data processing job (MiB) |
 | `root_volume_size_gb` | number | `100` | Root EBS volume size (GB) |
 
 ### Using a `.tfvars` File
@@ -250,7 +282,17 @@ Additional security measures:
 
 ### CloudWatch Logs
 
-All Batch job output is streamed to CloudWatch under `/aws/batch/loan-default-prediction`. Each dataset gets its own stream prefix:
+All Batch job output is streamed to CloudWatch under `/aws/batch/loan-default-prediction`. Data processing and training jobs use distinct stream prefixes:
+
+**Data Processing Jobs:**
+
+```text
+/aws/batch/loan-default-prediction/data-corporate_credit_rating/<job-id>
+/aws/batch/loan-default-prediction/data-lending_club/<job-id>
+/aws/batch/loan-default-prediction/data-taiwan_credit/<job-id>
+```
+
+**Training Jobs:**
 
 ```text
 /aws/batch/loan-default-prediction/corporate_credit_rating/<job-id>
@@ -265,9 +307,13 @@ View logs via the AWS Console or CLI:
 aws logs describe-log-streams \
   --log-group-name "/aws/batch/loan-default-prediction" \
   --order-by LastEventTime --descending \
-  --limit 5
+  --limit 10
 
-# Tail a specific job's logs
+# Tail data processing logs for a specific dataset
+aws logs tail "/aws/batch/loan-default-prediction" \
+  --filter-pattern "data-taiwan_credit" --follow
+
+# Tail training logs
 aws logs tail "/aws/batch/loan-default-prediction" \
   --filter-pattern "taiwan_credit" --follow
 ```
@@ -290,9 +336,11 @@ After `terraform apply`, the following outputs are available:
 |--------|-------------|
 | `ecr_repo_url` | ECR repository URL for `docker push` |
 | `s3_bucket_name` | S3 bucket for experiment data |
-| `job_queue_name` | Batch job queue name |
-| `job_definition_names` | Job definition names, keyed by dataset |
-| `job_definition_arns` | Job definition ARNs, keyed by dataset |
+| `job_queue_name` | Batch job queue name (shared by all jobs) |
+| `job_definition_names` | Training job definition names, keyed by dataset |
+| `job_definition_arns` | Training job definition ARNs, keyed by dataset |
+| `data_job_definition_names` | Data processing job definition names, keyed by dataset |
+| `data_job_definition_arns` | Data processing job definition ARNs, keyed by dataset |
 | `use_gpu` | Whether GPU mode is active |
 
 Access outputs with:
@@ -329,4 +377,8 @@ cd terraform/bootstrap && terraform destroy
 | `make tf-plan` | Preview infrastructure changes |
 | `make tf-apply` | Apply infrastructure changes |
 | `make deploy` | Full pipeline: build → push → apply |
-| `make submit-jobs` | Submit all 3 dataset training jobs |
+| `make upload-data` | Sync raw datasets from `data/raw/` to S3 |
+| `make submit-data-job DATASET=<name>` | Submit a data processing job for one dataset |
+| `make submit-data-jobs` | Submit all 3 data processing jobs in parallel |
+| `make submit-job DATASET=<name>` | Submit a training job for one dataset |
+| `make submit-jobs` | Submit all 3 training jobs in parallel |

@@ -219,8 +219,24 @@ make tf-apply
 make docker-build
 make docker-push
 
-# 4. Submit all training jobs (one per dataset, run in parallel)
+# 4. Upload raw datasets to S3
+make upload-data
+
+# 5. Submit data processing jobs (transform raw → processed data)
+make submit-data-jobs
+
+# 6. Submit training jobs (run experiments on processed data)
 make submit-jobs
+```
+
+For testing with a single dataset before running the full pipeline:
+
+```bash
+# Process one dataset
+make submit-data-job DATASET=taiwan_credit
+
+# Once data processing completes, train on that dataset
+make submit-job DATASET=taiwan_credit
 ```
 
 ### GPU Mode
