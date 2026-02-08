@@ -40,7 +40,7 @@ COPY pyproject.toml uv.lock ./
 RUN if [ "$GPU" = "1" ]; then \
     uv sync --frozen --no-install-project --all-groups; \
     else \
-    uv sync --frozen --no-install-project --all-groups --exclude gpu; \
+    uv sync --frozen --no-install-project --all-groups --no-group gpu; \
     fi
 
 COPY . .
@@ -54,5 +54,5 @@ USER appuser
 
 ENV PATH="/app/.venv/bin:$PATH"
 
-ENTRYPOINT ["python", "-m", "experiments.cli"]
+ENTRYPOINT ["uv", "run", "ldp"]
 CMD ["--help"]
