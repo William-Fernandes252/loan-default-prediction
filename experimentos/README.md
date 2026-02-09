@@ -156,7 +156,12 @@ uv run ldp experiment run --exclude-model svm
 
 # Continue an interrupted experiment using its execution ID
 uv run ldp experiment run --execution-id <execution-id>
+
+# Skip auto-resume and start a fresh execution
+uv run ldp experiment run --skip-resume
 ```
+
+**Auto-Resume Behavior**: By default, the CLI automatically resumes the latest incomplete execution for the specified datasets. This makes AWS Batch retries effective. Use `--skip-resume` to bypass this and start a new execution, or `--execution-id` to resume a specific execution.
 
 ### 3. Analysis
 

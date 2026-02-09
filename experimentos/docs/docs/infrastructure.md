@@ -270,6 +270,18 @@ aws batch submit-job \
   }'
 ```
 
+To force a new execution without auto-resume:
+
+```bash
+aws batch submit-job \
+  --job-name "new-execution" \
+  --job-queue "loan-default-prediction-queue" \
+  --job-definition "loan-default-prediction-taiwan-credit" \
+  --container-overrides '{
+    "command": ["ldp", "experiment", "run", "--only-dataset", "taiwan_credit", "--skip-resume"]
+  }'
+```
+
 ## Security
 
 The infrastructure follows the **principle of least privilege**:

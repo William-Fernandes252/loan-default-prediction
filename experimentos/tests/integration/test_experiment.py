@@ -1145,3 +1145,81 @@ class DescribePipelineScheduling:
             assert ctx.model_type == ModelType.RANDOM_FOREST
             assert ctx.use_gpu is True
             assert ctx.n_jobs == 2  # models_n_jobs from config
+
+
+class DescribeSkipResumeFlag:
+    """Tests for the --skip-resume flag behavior."""
+
+    def it_bypasses_auto_resume_with_flag(
+        self,
+        training_pipeline_factory: TrainingPipelineFactory,
+        mock_model_trainer: MagicMock,
+        mock_data_splitter: MagicMock,
+        mock_training_data_loader: MagicMock,
+        mock_classifier_factory: MagicMock,
+        experiment_settings: ExperimentSettings,
+        resource_settings: ResourceSettings,
+    ) -> None:
+        """Test that --skip-resume starts a new execution even when incomplete ones exist."""
+        predictions_repository = FakePredictionsRepository()
+
+        # Pre-populate with an incomplete execution
+        first_exec_id = "01943aaa-1111-7000-8000-0123456789ab"
+        predictions_repository.save_predictions(
+            execution_id=first_exec_id,
+            seed=1,
+            dataset=Dataset.TAIWAN_CREDIT,
+            model_type=ModelType.RANDOM_FOREST,
+            technique=Technique.BASELINE,
+            predictions=RawPredictions(
+                target=np.array([0, 1]),
+                prediction=np.array([0, 1]),
+            ),
+        )
+
+        # Verify incomplete execution exists
+        latest = predictions_repository.get_latest_execution_id([Dataset.TAIWAN_CREDIT])
+        assert latest == first_exec_id
+
+        # Now create executor and run with fresh execution (simulating --skip-resume)
+        executor = ExperimentExecutor(
+            training_pipeline_factory=training_pipeline_factory,
+            pipeline_executor=_create_mock_pipeline_executor(predictions_repository),
+            model_trainer=mock_model_trainer,
+            data_splitter=mock_data_splitter,
+            training_data_loader=mock_training_data_loader,
+            classifier_factory=mock_classifier_factory,
+            predictions_repository=predictions_repository,
+            experiment_settings=experiment_settings,
+            resource_settings=resource_settings,
+        )
+
+        # Create NEW execution with different ID (simulating --skip-resume behavior)
+        new_exec_id = "01943bbb-2222-7000-8000-0123456789ab"
+        params = ExperimentParams(
+            execution_id=new_exec_id,  # Explicitly provide new ID
+            datasets=[Dataset.TAIWAN_CREDIT],
+            excluded_models=[
+                ModelType.SVM,
+                ModelType.XGBOOST,
+                ModelType.MLP,
+            ],
+        )
+        config: ExperimentConfig = {
+            "num_seeds": 1,
+            "n_jobs": 1,
+            "models_n_jobs": 1,
+            "use_gpu": False,
+        }
+
+        executor.execute_experiment(params, config)
+
+        # Should have two separate executions now
+        first_exec_combinations = predictions_repository.get_completed_combinations(first_exec_id)
+        new_exec_combinations = predictions_repository.get_completed_combinations(new_exec_id)
+
+        assert len(first_exec_combinations) == 1  # Original incomplete execution
+        assert len(new_exec_combinations) == 5     # New complete execution (5 techniques * 1 seed)
+
+        # Verify they are distinct
+        assert first_exec_id != new_exec_id

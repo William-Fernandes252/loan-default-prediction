@@ -212,3 +212,42 @@ class DescribeExperimentRunCommand:
         assert config["n_jobs"] == 4
         assert config["models_n_jobs"] == 8
         assert config["use_gpu"] is True
+
+    def it_passes_skip_resume_flag(
+        self, runner: CliRunner, mock_experiment_executor: MagicMock, experiment_app
+    ) -> None:
+        """Test that --skip-resume flag forces new execution."""
+        result = runner.invoke(experiment_app, ["--skip-resume"])
+
+        assert result.exit_code == 0
+
+        # Should start new execution (params.execution_id will be generated)
+        call_args = mock_experiment_executor.execute_experiment.call_args
+        params = call_args[0][0]
+        assert params.execution_id is not None  # New UUID7 generated
+
+    def it_rejects_skip_resume_with_execution_id(
+        self, runner: CliRunner, mock_experiment_executor: MagicMock, experiment_app
+    ) -> None:
+        """Test that --skip-resume and --execution-id cannot be used together."""
+        exec_id = "01943abc-1234-7000-8000-0123456789ab"
+
+        result = runner.invoke(experiment_app, ["--execution-id", exec_id, "--skip-resume"])
+
+        assert result.exit_code == 1
+
+        # Should not execute experiment
+        mock_experiment_executor.execute_experiment.assert_not_called()
+
+    def it_logs_skip_resume_message(
+        self, runner: CliRunner, mock_experiment_executor: MagicMock, experiment_app
+    ) -> None:
+        """Test that --skip-resume starts a new execution."""
+        result = runner.invoke(experiment_app, ["--skip-resume"])
+
+        assert result.exit_code == 0
+
+        # Verify new execution was started
+        call_args = mock_experiment_executor.execute_experiment.call_args
+        params = call_args[0][0]
+        assert params.execution_id is not None

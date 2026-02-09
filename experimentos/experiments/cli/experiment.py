@@ -63,12 +63,24 @@ def run(
             help="Execution identifier. If provided, the experiment execution that refers to it will be continued, rather than starting a new one.",
         ),
     ] = None,
+    skip_resume: Annotated[
+        bool,
+        typer.Option(
+            "--skip-resume",
+            help="Skip auto-resume and start a new execution, even if incomplete executions exist.",
+        ),
+    ] = False,
 ):
     """Run experiments on specified datasets and models."""
     executor = container.experiment_executor()
 
     def run_experiment():
         logger.info("Starting experiment run...")
+
+        # Validate mutually exclusive options
+        if execution_id is not None and skip_resume:
+            logger.error("Cannot use both --execution-id and --skip-resume flags together")
+            raise typer.Exit(1)
 
         params = get_experiment_params()
         logger.debug(f"Experiment parameters: {params}")
@@ -102,7 +114,18 @@ def run(
                 execution_id=execution_id,
             )
 
-        # Case 2: No execution ID → auto-resume latest execution
+        # Case 2: User wants to skip auto-resume → force new execution
+        if skip_resume:
+            logger.info(
+                "Skipping auto-resume (--skip-resume flag). Starting new execution for datasets: {datasets}",
+                datasets=[ds.value for ds in datasets],
+            )
+            return ExperimentParams(
+                datasets=datasets,
+                excluded_models=exclude_models or [],
+            )
+
+        # Case 3: No execution ID and no skip flag → auto-resume latest execution
         predictions_repo = container.model_predictions_repository()
         latest_exec_id = predictions_repo.get_latest_execution_id(datasets)
 
