@@ -299,3 +299,34 @@ class ExperimentExecutor:
             The number of completed combinations, or 0 if none exist.
         """
         return len(self._predictions_repository.get_completed_combinations(execution_id))
+
+    def is_execution_complete(
+        self,
+        execution_id: str,
+        params: ExperimentParams,
+        config: ExperimentConfig,
+    ) -> bool:
+        """Check if an execution has completed all expected combinations.
+
+        Args:
+            execution_id: The execution to check.
+            params: Experiment parameters (datasets, excluded models).
+            config: Experiment configuration (num_seeds, etc.).
+
+        Returns:
+            True if all expected combinations have been executed, False otherwise.
+        """
+        completed = self._predictions_repository.get_completed_combinations(execution_id)
+        completed_count = len(completed)
+
+        # Calculate expected total using the same logic as _schedule_pipelines
+        expected_count = 0
+        for dataset in params.datasets:
+            for model_type in self._get_model_types(params):
+                for technique in Technique:
+                    if self._is_valid_combination(model_type, technique):
+                        expected_count += config.get(
+                            "num_seeds", self._default_config["num_seeds"]
+                        )
+
+        return completed_count >= expected_count

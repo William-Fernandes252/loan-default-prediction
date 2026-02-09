@@ -40,6 +40,16 @@ def mock_experiment_executor(mock_container: MagicMock) -> MagicMock:
 
 
 @pytest.fixture
+def mock_model_predictions_repository(mock_container: MagicMock) -> MagicMock:
+    """Fixture providing a mocked ModelPredictionsRepository from the container."""
+    repository = MagicMock()
+    # Default to returning None for get_latest_execution_id to simulate no prior executions
+    repository.get_latest_execution_id.return_value = None
+    mock_container.model_predictions_repository.return_value = repository
+    return repository
+
+
+@pytest.fixture
 def mock_model_versioner(mock_container: MagicMock) -> MagicMock:
     """Fixture providing a mocked ModelVersioner from the container."""
     versioner = MagicMock()

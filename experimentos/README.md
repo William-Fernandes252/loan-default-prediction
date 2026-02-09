@@ -250,6 +250,22 @@ make docker-push
 make submit-jobs
 ```
 
+### Automatic Execution Resumption
+
+Experiment jobs automatically resume interrupted work, making AWS Batch retries effective:
+
+- **First run**: If no previous execution exists, a new UUID7 execution ID is generated
+- **Spot interruption**: If AWS Batch retries the job, it automatically detects and resumes the latest incomplete execution
+- **Completion**: Once all combinations are finished, subsequent runs exit immediately (idempotent)
+- **Manual override**: Use `--execution-id` to explicitly continue a specific execution
+
+This makes Batch's retry strategy (configured for 3 attempts) effective at handling Spot reclamations.
+
+**Example flow:**
+1. Job starts: 100 combinations, completes 30, Spot interrupts
+2. Batch retries: Auto-detects execution, skips 30, resumes with 70 remaining
+3. Completes all 100: Subsequent retries exit immediately (no wasted compute)
+
 ### Infrastructure Resources
 
 | Resource | Purpose |

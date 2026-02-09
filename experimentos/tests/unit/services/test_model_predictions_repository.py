@@ -170,6 +170,107 @@ class DescribeGetCompletedCombinations:
         assert len(result) == 1
 
 
+class DescribeGetLatestExecutionId:
+    def it_returns_none_when_no_files(
+        self, mock_storage: MagicMock, predictions_repository: ModelPredictionsStorageRepository
+    ) -> None:
+        mock_storage.list_files.return_value = []
+
+        result = predictions_repository.get_latest_execution_id()
+
+        assert result is None
+
+    def it_returns_latest_execution_using_uuid7_sorting(
+        self,
+        mock_storage: MagicMock,
+        predictions_repository: ModelPredictionsStorageRepository,
+        make_predictions_file_info,
+    ) -> None:
+        # UUID7 is time-sortable: higher string value = more recent
+        mock_storage.list_files.return_value = [
+            make_predictions_file_info(execution_id="01943000-0000-7000-8000-000000000001"),
+            make_predictions_file_info(execution_id="01943fff-ffff-7000-8000-ffffffffffff"),
+            make_predictions_file_info(execution_id="01943abc-1234-7000-8000-0123456789ab"),
+        ]
+
+        result = predictions_repository.get_latest_execution_id()
+
+        assert result == "01943fff-ffff-7000-8000-ffffffffffff"
+
+    def it_filters_by_datasets_when_provided(
+        self,
+        mock_storage: MagicMock,
+        predictions_repository: ModelPredictionsStorageRepository,
+        make_predictions_file_info,
+    ) -> None:
+        from experiments.core.data.datasets import Dataset
+
+        mock_storage.list_files.return_value = [
+            make_predictions_file_info(execution_id="exec-taiwan", dataset="taiwan_credit"),
+            make_predictions_file_info(execution_id="exec-lending", dataset="lending_club"),
+        ]
+
+        result = predictions_repository.get_latest_execution_id(datasets=[Dataset.TAIWAN_CREDIT])
+
+        assert result == "exec-taiwan"
+
+    def it_returns_any_overlap_when_multiple_datasets_specified(
+        self,
+        mock_storage: MagicMock,
+        predictions_repository: ModelPredictionsStorageRepository,
+        make_predictions_file_info,
+    ) -> None:
+        from experiments.core.data.datasets import Dataset
+
+        mock_storage.list_files.return_value = [
+            make_predictions_file_info(execution_id="exec-taiwan", dataset="taiwan_credit"),
+            make_predictions_file_info(execution_id="exec-lending", dataset="lending_club"),
+            make_predictions_file_info(
+                execution_id="exec-corporate", dataset="corporate_credit_rating"
+            ),
+        ]
+
+        result = predictions_repository.get_latest_execution_id(
+            datasets=[Dataset.TAIWAN_CREDIT, Dataset.LENDING_CLUB]
+        )
+
+        # Should find the latest execution that has either dataset
+        assert result in ["exec-taiwan", "exec-lending"]
+
+    def it_skips_invalid_dataset_values(
+        self,
+        mock_storage: MagicMock,
+        predictions_repository: ModelPredictionsStorageRepository,
+        make_predictions_file_info,
+    ) -> None:
+        from experiments.core.data.datasets import Dataset
+
+        mock_storage.list_files.return_value = [
+            make_predictions_file_info(execution_id="exec-valid", dataset="taiwan_credit"),
+            make_predictions_file_info(execution_id="exec-invalid", dataset="invalid_dataset"),
+        ]
+
+        result = predictions_repository.get_latest_execution_id(datasets=[Dataset.TAIWAN_CREDIT])
+
+        assert result == "exec-valid"
+
+    def it_returns_none_when_no_matching_datasets(
+        self,
+        mock_storage: MagicMock,
+        predictions_repository: ModelPredictionsStorageRepository,
+        make_predictions_file_info,
+    ) -> None:
+        from experiments.core.data.datasets import Dataset
+
+        mock_storage.list_files.return_value = [
+            make_predictions_file_info(execution_id="exec-lending", dataset="lending_club"),
+        ]
+
+        result = predictions_repository.get_latest_execution_id(datasets=[Dataset.TAIWAN_CREDIT])
+
+        assert result is None
+
+
 class DescribeSavePredictions:
     def it_writes_predictions_to_storage(
         self, mock_storage: MagicMock, predictions_repository: ModelPredictionsStorageRepository

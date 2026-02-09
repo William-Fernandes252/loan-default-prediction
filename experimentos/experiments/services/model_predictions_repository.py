@@ -141,6 +141,51 @@ class ModelPredictionsStorageRepository:
 
         return completed
 
+    def get_latest_execution_id(
+        self,
+        datasets: list[Dataset] | None = None,
+    ) -> str | None:
+        """Find the most recent execution ID, optionally filtered by datasets.
+
+        This method lists all prediction files, extracts execution IDs, and returns
+        the latest one based on UUID7's time-sortable property (higher = more recent).
+
+        Args:
+            datasets: Optional list of datasets to filter by. If provided, only returns
+                     execution IDs that have predictions for at least one of these datasets.
+
+        Returns:
+            The latest execution ID, or None if no executions are found.
+
+        Example:
+            >>> repo.get_latest_execution_id([Dataset.TAIWAN_CREDIT])
+            "01943abc-1234-7000-8000-0123456789ab"
+        """
+        prefix = self._layout.predictions_prefix
+        execution_ids: set[str] = set()
+
+        for file_info in self._storage.list_files(prefix, "*.parquet"):
+            parsed = self._layout.parse_predictions_key(file_info.key)
+            if not parsed:
+                continue
+
+            # Filter by datasets if specified (any overlap)
+            if datasets is not None:
+                try:
+                    file_dataset = Dataset(parsed["dataset"])
+                    if file_dataset not in datasets:
+                        continue
+                except ValueError:
+                    continue
+
+            execution_ids.add(parsed["execution_id"])
+
+        if not execution_ids:
+            return None
+
+        # UUID7 is time-sortable: higher string value = more recent
+        return max(execution_ids)
+
     def save_predictions(
         self,
         *,

@@ -75,6 +75,19 @@ class ModelPredictionsRepository(Protocol):
         """
         ...
 
+    def get_latest_execution_id(self, datasets: list[Dataset] | None = None) -> str | None:
+        """Find the most recent execution ID, optionally filtered by datasets.
+
+        Args:
+            datasets (list[Dataset] | None): Optional list of datasets to filter by.
+                If provided, only returns execution IDs that have predictions for
+                at least one of these datasets.
+
+        Returns:
+            str | None: The latest execution ID, or None if no executions are found.
+        """
+        ...
+
     def get_latest_predictions_for_experiment(
         self, dataset: Dataset
     ) -> ModelPredictionsResults | None:

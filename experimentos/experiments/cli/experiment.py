@@ -93,6 +93,7 @@ def run(
         """Construct experiment parameters based on user input."""
         datasets = filter_datasets()
 
+        # Case 1: User provided explicit execution ID → validate and use it
         if execution_id is not None:
             validate_execution_id_for_continuation(execution_id)
             return ExperimentParams(
@@ -100,9 +101,56 @@ def run(
                 excluded_models=exclude_models or [],
                 execution_id=execution_id,
             )
+
+        # Case 2: No execution ID → auto-resume latest execution
+        predictions_repo = container.model_predictions_repository()
+        latest_exec_id = predictions_repo.get_latest_execution_id(datasets)
+
+        if latest_exec_id is None:
+            # No prior executions → start fresh with new ID
+            logger.info(
+                "No previous executions found for datasets: {datasets}. Starting new execution.",
+                datasets=[ds.value for ds in datasets],
+            )
+            return ExperimentParams(
+                datasets=datasets,
+                excluded_models=exclude_models or [],
+            )
+
+        # Found latest execution → check if complete
+        experiment_config = get_experiment_config()
+        temp_params = ExperimentParams(
+            datasets=datasets,
+            excluded_models=exclude_models or [],
+            execution_id=latest_exec_id,
+        )
+
+        is_complete = executor.is_execution_complete(
+            latest_exec_id,
+            temp_params,
+            experiment_config,
+        )
+
+        if is_complete:
+            # All work done → exit successfully (idempotent)
+            logger.success(
+                "Latest execution {execution_id} is complete. All combinations finished. Exiting.",
+                execution_id=latest_exec_id,
+            )
+            raise typer.Exit(0)
+
+        # Incomplete execution → resume it
+        completed_count = executor.get_completed_count(latest_exec_id)
+        logger.info(
+            "Auto-resuming latest execution {execution_id} with {completed} completed combinations",
+            execution_id=latest_exec_id,
+            completed=completed_count,
+        )
+
         return ExperimentParams(
             datasets=datasets,
             excluded_models=exclude_models or [],
+            execution_id=latest_exec_id,
         )
 
     def get_experiment_config() -> ExperimentConfig:

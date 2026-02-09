@@ -19,7 +19,11 @@ class DescribeExperimentRunCommand:
     """Tests for the `experiment run` command."""
 
     @pytest.fixture
-    def experiment_app(self, mock_experiment_executor: MagicMock):
+    def experiment_app(
+        self,
+        mock_experiment_executor: MagicMock,
+        mock_model_predictions_repository: MagicMock,
+    ):
         """Import the app after mocking the container."""
         from experiments.cli.experiment import app
 

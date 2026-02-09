@@ -243,21 +243,30 @@ The infrastructure is designed to minimize costs:
 
 ## Spot Instance Handling
 
-Spot instances can be interrupted by AWS with a 2-minute warning. The infrastructure handles this with:
+Spot instances can be interrupted by AWS with a 2-minute warning. The infrastructure handles this gracefully:
 
-1. **Smart retry strategy**: Jobs automatically retry (up to 3 attempts) when terminated due to Spot reclamation (`Host EC2*` reason), but exit immediately on application errors.
-2. **On-Demand fallback**: If Spot capacity is unavailable, the job queue routes to the On-Demand compute environment.
-3. **Resume support**: The application's `--execution-id` flag allows resuming interrupted experiments from where they left off.
+**Automatic Retry Strategy:**
+- Jobs retry up to 3 attempts on Spot reclamation (`Host EC2*` errors)
+- Exit immediately on application errors (no retry loops)
 
-To resume a Spot-interrupted experiment manually:
+**Automatic Resumption:**
+- When a job is retried, it automatically detects and resumes the latest incomplete execution
+- Completed work is skipped (stored in S3 as `.parquet` files)
+- Only missing combinations are executed
+- Once complete, subsequent retries exit successfully (idempotent)
 
+**No manual intervention needed:**
+The retry strategy is fully automated. You don't need to pass `--execution-id` manually or track execution IDs.
+
+**Manual override:**
+To resume a specific execution (e.g., after debugging):
 ```bash
 aws batch submit-job \
-  --job-name "resume-taiwan-credit" \
+  --job-name "resume-specific-execution" \
   --job-queue "loan-default-prediction-queue" \
   --job-definition "loan-default-prediction-taiwan-credit" \
   --container-overrides '{
-    "command": ["experiment", "run", "--only-dataset", "taiwan_credit", "--execution-id", "<previous-execution-id>"]
+    "command": ["ldp", "experiment", "run", "--only-dataset", "taiwan_credit", "--execution-id", "<your-execution-id>"]
   }'
 ```
 

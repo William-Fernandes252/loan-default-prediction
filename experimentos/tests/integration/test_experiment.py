@@ -18,6 +18,7 @@ from experiments.core.modeling.classifiers import ModelType, Technique
 from experiments.core.predictions.repository import (
     ExperimentCombination,
     ModelPredictions,
+    ModelPredictionsRepository,
     RawPredictions,
 )
 from experiments.lib.pipelines import (
@@ -40,7 +41,7 @@ from experiments.services.experiment_executor import (
 # =============================================================================
 
 
-class FakePredictionsRepository:
+class FakePredictionsRepository(ModelPredictionsRepository):
     """In-memory fake predictions repository for testing."""
 
     def __init__(self):
@@ -74,6 +75,28 @@ class FakePredictionsRepository:
             return set()
         return set(self._predictions[execution_id].keys())
 
+    def get_latest_execution_id(self, datasets: list[Dataset] | None = None) -> str | None:
+        """Get the latest execution ID, optionally filtered by datasets."""
+        if not self._predictions:
+            return None
+
+        # Filter executions by datasets if specified
+        matching_executions: set[str] = set()
+        for execution_id, combinations in self._predictions.items():
+            if datasets is None:
+                matching_executions.add(execution_id)
+            else:
+                # Check if this execution has any of the requested datasets
+                execution_datasets = {combo.dataset for combo in combinations}
+                if any(dataset in execution_datasets for dataset in datasets):
+                    matching_executions.add(execution_id)
+
+        if not matching_executions:
+            return None
+
+        # Return the max (latest) execution ID (UUID7 is time-sortable)
+        return max(matching_executions)
+
     def get_predictions(
         self, execution_id: str, combination: ExperimentCombination
     ) -> RawPredictions | None:
@@ -95,6 +118,10 @@ class FakePredictionsRepository:
     def get_latest_predictions_for_experiment(
         self, dataset: Dataset
     ) -> Iterator[ModelPredictions] | None:
+        """Not implemented for fake repository."""
+        return None
+
+    def get_predictions_for_execution(self, dataset, execution_id):
         """Not implemented for fake repository."""
         return None
 
@@ -235,7 +262,7 @@ def experiment_executor(
     mock_data_splitter: MagicMock,
     mock_training_data_loader: MagicMock,
     mock_classifier_factory: MagicMock,
-    predictions_repository: FakePredictionsRepository,
+    predictions_repository: ModelPredictionsRepository,
     experiment_settings: ExperimentSettings,
     resource_settings: ResourceSettings,
 ) -> ExperimentExecutor:
@@ -628,6 +655,104 @@ class DescribeExperimentResumption:
         # The pre-completed one should still be there
         assert pre_completed in completed
 
+    def it_simulates_auto_resume_workflow(
+        self,
+        training_pipeline_factory: TrainingPipelineFactory,
+        mock_model_trainer: MagicMock,
+        mock_data_splitter: MagicMock,
+        mock_training_data_loader: MagicMock,
+        mock_classifier_factory: MagicMock,
+        experiment_settings: ExperimentSettings,
+        resource_settings: ResourceSettings,
+    ) -> None:
+        """Test the complete auto-resume workflow: find latest, check complete, resume if needed.
+
+        This simulates what the CLI does: get latest execution ID, check if complete,
+        and resume automatically if not complete.
+        """
+        predictions_repository = FakePredictionsRepository()
+
+        # Step 1: First execution - simulate partial completion
+        executor1 = ExperimentExecutor(
+            training_pipeline_factory=training_pipeline_factory,
+            pipeline_executor=_create_mock_pipeline_executor(predictions_repository),
+            model_trainer=mock_model_trainer,
+            data_splitter=mock_data_splitter,
+            training_data_loader=mock_training_data_loader,
+            classifier_factory=mock_classifier_factory,
+            predictions_repository=predictions_repository,
+            experiment_settings=experiment_settings,
+            resource_settings=resource_settings,
+        )
+
+        # Pre-populate with partial results (simulating interrupted execution)
+        first_exec_id = "01943abc-1234-7000-8000-0123456789ab"
+        for seed in [1]:  # Only first seed completed
+            for technique in [Technique.BASELINE, Technique.SMOTE]:  # Only 2 techniques
+                predictions_repository.save_predictions(
+                    execution_id=first_exec_id,
+                    seed=seed,
+                    dataset=Dataset.TAIWAN_CREDIT,
+                    model_type=ModelType.RANDOM_FOREST,
+                    technique=technique,
+                    predictions=RawPredictions(
+                        target=np.array([0, 1]),
+                        prediction=np.array([0, 1]),
+                    ),
+                )
+
+        # Step 2: Simulate CLI auto-resume logic
+        datasets = [Dataset.TAIWAN_CREDIT]
+        latest_exec_id = predictions_repository.get_latest_execution_id(datasets)
+
+        # Should find the partial execution
+        assert latest_exec_id == first_exec_id
+
+        # Check if complete
+        params = ExperimentParams(
+            execution_id=latest_exec_id,
+            datasets=datasets,
+            excluded_models=[
+                ModelType.SVM,
+                ModelType.XGBOOST,
+                ModelType.MLP,
+            ],
+        )
+        config: ExperimentConfig = {
+            "num_seeds": 2,
+            "n_jobs": 1,
+            "models_n_jobs": 1,
+            "use_gpu": False,
+        }
+
+        is_complete = executor1.is_execution_complete(latest_exec_id, params, config)
+
+        # Should be incomplete (2 out of 10 combinations)
+        assert is_complete is False
+
+        # Step 3: Resume execution
+        executor2 = ExperimentExecutor(
+            training_pipeline_factory=training_pipeline_factory,
+            pipeline_executor=_create_mock_pipeline_executor(predictions_repository),
+            model_trainer=mock_model_trainer,
+            data_splitter=mock_data_splitter,
+            training_data_loader=mock_training_data_loader,
+            classifier_factory=mock_classifier_factory,
+            predictions_repository=predictions_repository,
+            experiment_settings=experiment_settings,
+            resource_settings=resource_settings,
+        )
+
+        executor2.execute_experiment(params, config)
+
+        # Should now be complete
+        final_completed = predictions_repository.get_completed_combinations(latest_exec_id)
+        assert len(final_completed) == 10  # 5 techniques * 2 seeds
+
+        # Verify it's now complete
+        is_complete_after = executor2.is_execution_complete(latest_exec_id, params, config)
+        assert is_complete_after is True
+
 
 class DescribeGetCompletedCount:
     """Tests for the get_completed_count method."""
@@ -663,6 +788,130 @@ class DescribeGetCompletedCount:
 
         count = experiment_executor.get_completed_count(params.execution_id)
         assert count == 5  # 5 techniques * 1 seed
+
+
+class DescribeIsExecutionComplete:
+    """Tests for the is_execution_complete method."""
+
+    def it_returns_false_for_incomplete_execution(
+        self,
+        experiment_executor: ExperimentExecutor,
+        predictions_repository: FakePredictionsRepository,
+    ) -> None:
+        """Test that execution is detected as incomplete when combinations remain."""
+        execution_id = "partial-execution"
+
+        # Pre-populate with only 2 out of 5 combinations
+        for seed in [1, 2]:
+            predictions_repository.save_predictions(
+                execution_id=execution_id,
+                seed=seed,
+                dataset=Dataset.TAIWAN_CREDIT,
+                model_type=ModelType.RANDOM_FOREST,
+                technique=Technique.BASELINE,
+                predictions=RawPredictions(
+                    target=np.array([0, 1]),
+                    prediction=np.array([0, 1]),
+                ),
+            )
+
+        params = ExperimentParams(
+            execution_id=execution_id,
+            datasets=[Dataset.TAIWAN_CREDIT],
+            excluded_models=[
+                ModelType.SVM,
+                ModelType.XGBOOST,
+                ModelType.MLP,
+            ],
+        )
+        config: ExperimentConfig = {
+            "num_seeds": 2,
+            "n_jobs": 1,
+            "models_n_jobs": 1,
+            "use_gpu": False,
+        }
+
+        # Only 2 out of 10 combinations (5 techniques * 2 seeds)
+        is_complete = experiment_executor.is_execution_complete(execution_id, params, config)
+        assert is_complete is False
+
+    def it_returns_true_for_complete_execution(
+        self,
+        experiment_executor: ExperimentExecutor,
+    ) -> None:
+        """Test that execution is detected as complete when all combinations done."""
+        params = ExperimentParams(
+            datasets=[Dataset.TAIWAN_CREDIT],
+            excluded_models=[
+                ModelType.SVM,
+                ModelType.XGBOOST,
+                ModelType.MLP,
+            ],
+        )
+        config: ExperimentConfig = {
+            "num_seeds": 2,
+            "n_jobs": 1,
+            "models_n_jobs": 1,
+            "use_gpu": False,
+        }
+
+        # Execute all combinations
+        experiment_executor.execute_experiment(params, config)
+
+        # Now check if complete
+        is_complete = experiment_executor.is_execution_complete(
+            params.execution_id, params, config
+        )
+        assert is_complete is True
+
+    def it_returns_true_when_completed_exceeds_expected(
+        self,
+        experiment_executor: ExperimentExecutor,
+        predictions_repository: FakePredictionsRepository,
+    ) -> None:
+        """Test that execution is complete even when more combinations exist than expected.
+
+        This can happen if parameters change (e.g., fewer seeds in the new run).
+        """
+        execution_id = "over-complete"
+
+        # Pre-populate with 3 seeds worth of data
+        for seed in [1, 2, 3]:
+            for technique in Technique:
+                # Skip CS_SVM for non-SVM models
+                if technique == Technique.CS_SVM:
+                    continue
+                predictions_repository.save_predictions(
+                    execution_id=execution_id,
+                    seed=seed,
+                    dataset=Dataset.TAIWAN_CREDIT,
+                    model_type=ModelType.RANDOM_FOREST,
+                    technique=technique,
+                    predictions=RawPredictions(
+                        target=np.array([0, 1]),
+                        prediction=np.array([0, 1]),
+                    ),
+                )
+
+        params = ExperimentParams(
+            execution_id=execution_id,
+            datasets=[Dataset.TAIWAN_CREDIT],
+            excluded_models=[
+                ModelType.SVM,
+                ModelType.XGBOOST,
+                ModelType.MLP,
+            ],
+        )
+        config: ExperimentConfig = {
+            "num_seeds": 2,  # Now only expecting 2 seeds, but have 3
+            "n_jobs": 1,
+            "models_n_jobs": 1,
+            "use_gpu": False,
+        }
+
+        # Should be complete (15 completed >= 10 expected)
+        is_complete = experiment_executor.is_execution_complete(execution_id, params, config)
+        assert is_complete is True
 
 
 class DescribeExperimentConfig:
