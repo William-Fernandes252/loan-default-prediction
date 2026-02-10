@@ -8,6 +8,9 @@ from experiments.core.data.datasets import Dataset
 from experiments.core.data.transformers import get_engine, register_transformer
 
 
+@register_transformer(
+    Dataset.TEST
+)  # For simplicity, we can use the same transformer as Taiwan Credit for the test dataset, since it has the same structure.
 @register_transformer(Dataset.TAIWAN_CREDIT)
 def taiwan_credit_transformer(
     df: pl.DataFrame | pl.LazyFrame, use_gpu: bool = False
