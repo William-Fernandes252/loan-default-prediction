@@ -6,7 +6,13 @@ import typer
 from experiments.containers import container
 from experiments.core.data.datasets import Dataset
 from experiments.core.modeling.classifiers import ModelType
-from experiments.services.experiment_executor import ExperimentConfig, ExperimentParams
+from experiments.services.experiment_executor import ExperimentConfig
+from experiments.services.experiment_params_resolver import (
+    ResolutionContext,
+    ResolutionError,
+    ResolutionStatus,
+    ResolverOptions,
+)
 
 app = typer.Typer()
 
@@ -72,142 +78,127 @@ def run(
     ] = False,
 ):
     """Run experiments on specified datasets and models."""
+    logger.info("Starting experiment run...")
+
+    # Get services from container
     executor = container.experiment_executor()
+    resolver = container.experiment_params_resolver()
 
-    def run_experiment():
-        logger.info("Starting experiment run...")
+    # Build resolver options from CLI arguments
+    datasets = [only_dataset] if only_dataset is not None else list(Dataset)
+    options = ResolverOptions(
+        datasets=datasets,
+        excluded_models=exclude_models or [],
+        execution_id=execution_id,
+        skip_resume=skip_resume,
+    )
 
-        # Validate mutually exclusive options
-        if execution_id is not None and skip_resume:
-            logger.error("Cannot use both --execution-id and --skip-resume flags together")
-            raise typer.Exit(1)
+    # Build experiment config
+    config = _build_experiment_config(jobs, models_jobs, use_gpu)
 
-        params = get_experiment_params()
-        logger.debug(f"Experiment parameters: {params}")
+    # Resolve parameters
+    result = resolver.resolve_params(options, config)
 
-        config = get_experiment_config()
+    # Handle resolution errors
+    if isinstance(result, ResolutionError):
+        logger.error("Parameter resolution failed: {message}", message=result.message)
+        if result.details:
+            logger.debug("Error details: {details}", details=result.details)
+        raise typer.Exit(1)
 
+    # Extract parameters and context (guaranteed to exist after error check)
+    params = result.params  # type: ignore
+    context = result.context  # type: ignore
+    status = context["status"]
+
+    # Log resolution status
+    _log_resolution_status(status, context)
+
+    # Handle idempotent completion (already complete)
+    if result.should_exit_early:
+        logger.success(
+            "Latest execution {execution_id} is complete. All combinations finished. Exiting.",
+            execution_id=context["execution_id"],
+        )
+        raise typer.Exit(0)
+
+    logger.debug(f"Experiment parameters: {params}")
+    logger.info(
+        "Executing experiment for datasets: {datasets}",
+        datasets=", ".join(d.value for d in params.datasets),
+    )
+
+    # Execute the experiment
+    try:
+        executor.execute_experiment(params, config)
+    except Exception as e:
+        logger.error(f"Experiment run failed: {e}")
+        raise typer.Exit(1)
+
+    typer.echo("Experiment run completed successfully.")
+    raise typer.Exit(0)
+
+
+def _log_resolution_status(status: ResolutionStatus, context: ResolutionContext) -> None:
+    """Log information about how parameters were resolved.
+
+    Args:
+        status: The resolution status
+        context: Resolution context with metadata
+    """
+    datasets_str = [ds.value for ds in context["datasets"]]
+
+    if status == ResolutionStatus.NEW_EXECUTION:
         logger.info(
-            "Executing experiment for datasets: {datasets}",
-            datasets=", ".join(d for d in params.datasets),
+            "No previous executions found for datasets: {datasets}. Starting new execution.",
+            datasets=datasets_str,
         )
-
-        try:
-            executor.execute_experiment(params, config)
-        except Exception as e:
-            logger.error(f"Experiment run failed: {e}")
-            return typer.Exit(1)
-
-        typer.echo("Experiment run completed successfully.")
-        return typer.Exit(0)
-
-    def get_experiment_params() -> ExperimentParams:
-        """Construct experiment parameters based on user input."""
-        datasets = filter_datasets()
-
-        # Case 1: User provided explicit execution ID → validate and use it
-        if execution_id is not None:
-            validate_execution_id_for_continuation(execution_id)
-            return ExperimentParams(
-                datasets=datasets,
-                excluded_models=exclude_models or [],
-                execution_id=execution_id,
-            )
-
-        # Case 2: User wants to skip auto-resume → force new execution
-        if skip_resume:
-            logger.info(
-                "Skipping auto-resume (--skip-resume flag). Starting new execution for datasets: {datasets}",
-                datasets=[ds.value for ds in datasets],
-            )
-            return ExperimentParams(
-                datasets=datasets,
-                excluded_models=exclude_models or [],
-            )
-
-        # Case 3: No execution ID and no skip flag → auto-resume latest execution
-        predictions_repo = container.model_predictions_repository()
-        latest_exec_id = predictions_repo.get_latest_execution_id(datasets)
-
-        if latest_exec_id is None:
-            # No prior executions → start fresh with new ID
-            logger.info(
-                "No previous executions found for datasets: {datasets}. Starting new execution.",
-                datasets=[ds.value for ds in datasets],
-            )
-            return ExperimentParams(
-                datasets=datasets,
-                excluded_models=exclude_models or [],
-            )
-
-        # Found latest execution → check if complete
-        experiment_config = get_experiment_config()
-        temp_params = ExperimentParams(
-            datasets=datasets,
-            excluded_models=exclude_models or [],
-            execution_id=latest_exec_id,
-        )
-
-        is_complete = executor.is_execution_complete(
-            latest_exec_id,
-            temp_params,
-            experiment_config,
-        )
-
-        if is_complete:
-            # All work done → exit successfully (idempotent)
-            logger.success(
-                "Latest execution {execution_id} is complete. All combinations finished. Exiting.",
-                execution_id=latest_exec_id,
-            )
-            raise typer.Exit(0)
-
-        # Incomplete execution → resume it
-        completed_count = executor.get_completed_count(latest_exec_id)
+    elif status == ResolutionStatus.RESUMED_INCOMPLETE:
         logger.info(
             "Auto-resuming latest execution {execution_id} with {completed} completed combinations",
-            execution_id=latest_exec_id,
-            completed=completed_count,
+            execution_id=context["execution_id"],
+            completed=context.get("completed_count", 0),
         )
-
-        return ExperimentParams(
-            datasets=datasets,
-            excluded_models=exclude_models or [],
-            execution_id=latest_exec_id,
+    elif status == ResolutionStatus.SKIP_RESUME:
+        logger.info(
+            "Skipping auto-resume (--skip-resume flag). Starting new execution for datasets: {datasets}",
+            datasets=datasets_str,
         )
+    elif status == ResolutionStatus.EXPLICIT_ID_CONTINUED:
+        logger.info(
+            "Continuing execution {execution_id}: found {count} completed combinations",
+            execution_id=context["execution_id"],
+            count=context.get("completed_count", 0),
+        )
+    elif status == ResolutionStatus.EXPLICIT_ID_NEW:
+        logger.warning(
+            "Execution ID {execution_id} has no completed combinations. "
+            "This will start a fresh experiment with the provided ID.",
+            execution_id=context["execution_id"],
+        )
+    # ALREADY_COMPLETE is handled separately before this function is called
 
-    def get_experiment_config() -> ExperimentConfig:
-        """Construct experiment configuration based on user input."""
-        config: ExperimentConfig = {}
-        if jobs is not None:
-            config["n_jobs"] = jobs
-        if models_jobs is not None:
-            config["models_n_jobs"] = models_jobs
-        if use_gpu is not None:
-            config["use_gpu"] = use_gpu
-        return config
 
-    def validate_execution_id_for_continuation(exec_id: str) -> None:
-        """Validate that the execution ID has prior work to continue."""
-        completed_count = executor.get_completed_count(exec_id)
+def _build_experiment_config(
+    jobs: int | None, models_jobs: int | None, use_gpu: bool | None
+) -> ExperimentConfig:
+    """Build experiment configuration from CLI options.
 
-        if completed_count > 0:
-            logger.info(
-                "Continuing execution {execution_id}: found {count} completed combinations",
-                execution_id=exec_id,
-                count=completed_count,
-            )
-        else:
-            logger.warning(
-                "Execution ID {execution_id} has no completed combinations. "
-                "This will start a fresh experiment with the provided ID.",
-                execution_id=exec_id,
-            )
+    This is a simple mapping function with no business logic.
 
-    def filter_datasets() -> list[Dataset]:
-        """Filter datasets based on user input."""
-        if only_dataset is not None:
-            return [only_dataset]
-        return list(Dataset)
+    Args:
+        jobs: Number of parallel jobs for experiment execution
+        models_jobs: Number of parallel jobs for model training
+        use_gpu: Whether to use GPU acceleration
 
-    return run_experiment()
+    Returns:
+        Experiment configuration dictionary
+    """
+    config: ExperimentConfig = {}
+    if jobs is not None:
+        config["n_jobs"] = jobs
+    if models_jobs is not None:
+        config["models_n_jobs"] = models_jobs
+    if use_gpu is not None:
+        config["use_gpu"] = use_gpu
+    return config

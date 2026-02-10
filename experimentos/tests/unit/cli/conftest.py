@@ -50,6 +50,49 @@ def mock_model_predictions_repository(mock_container: MagicMock) -> MagicMock:
 
 
 @pytest.fixture
+def mock_experiment_params_resolver(mock_container: MagicMock) -> MagicMock:
+    """Fixture providing a mocked ExperimentParamsResolver from the container.
+
+    By default, configures resolve_params to behave like a real resolver,
+    creating proper ExperimentParams based on input options.
+    Tests can override resolve_params.side_effect or return_value as needed.
+    """
+    from experiments.services.experiment_executor import ExperimentParams
+    from experiments.services.experiment_params_resolver import (
+        ResolutionStatus,
+        ResolutionSuccess,
+    )
+
+    resolver = MagicMock()
+
+    # Create a default resolution behavior that mimics real resolver
+    def _default_resolve(options, config):
+        # Only pass execution_id if it's not None, otherwise let default_factory generate it
+        params_kwargs = {
+            "datasets": options.datasets,
+            "excluded_models": options.excluded_models,
+        }
+        if options.execution_id is not None:
+            params_kwargs["execution_id"] = options.execution_id
+
+        params = ExperimentParams(**params_kwargs)
+        return ResolutionSuccess(
+            params=params,
+            context={
+                "status": ResolutionStatus.NEW_EXECUTION,
+                "execution_id": params.execution_id,
+                "datasets": options.datasets,
+            },
+        )
+
+    # Use side_effect for default behavior
+    # Tests can override with either return_value or side_effect
+    resolver.resolve_params = MagicMock(side_effect=_default_resolve)
+    mock_container.experiment_params_resolver.return_value = resolver
+    return resolver
+
+
+@pytest.fixture
 def mock_model_versioner(mock_container: MagicMock) -> MagicMock:
     """Fixture providing a mocked ModelVersioner from the container."""
     versioner = MagicMock()

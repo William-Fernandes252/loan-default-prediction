@@ -23,6 +23,7 @@ from experiments.services.analysis_artifacts_repository import AnalysisArtifacts
 from experiments.services.data_manager import DataManager
 from experiments.services.data_repository import DataStorageLayout, StorageDataRepository
 from experiments.services.experiment_executor import ExperimentExecutor
+from experiments.services.experiment_params_resolver import ExperimentParamsResolver
 from experiments.services.feature_extractor import FeatureExtractorImpl
 from experiments.services.grid_search_trainer import GridSearchModelTrainer
 from experiments.services.inference_service import InferenceService
@@ -303,6 +304,13 @@ class Container(containers.DeclarativeContainer):
         experiment_settings=settings.provided.experiment,
         resource_settings=settings.provided.resources,
     )
+
+    experiment_params_resolver = providers.Singleton(
+        ExperimentParamsResolver,
+        predictions_repository=_model_predictions_repository,
+        experiment_executor=experiment_executor,
+    )
+    """Resolver for experiment parameters with auto-resume logic."""
 
     _results_evaluator = providers.Singleton(ModelResultsEvaluatorImpl)
     """Results evaluator for computing analysis metrics."""

@@ -22,7 +22,7 @@ class DescribeExperimentRunCommand:
     def experiment_app(
         self,
         mock_experiment_executor: MagicMock,
-        mock_model_predictions_repository: MagicMock,
+        mock_experiment_params_resolver: MagicMock,
     ):
         """Import the app after mocking the container."""
         from experiments.cli.experiment import app
@@ -139,10 +139,38 @@ class DescribeExperimentRunCommand:
         assert ModelType.MLP in params.excluded_models
 
     def it_passes_execution_id_option(
-        self, runner: CliRunner, mock_experiment_executor: MagicMock, experiment_app
+        self,
+        runner: CliRunner,
+        mock_experiment_executor: MagicMock,
+        mock_experiment_params_resolver: MagicMock,
+        experiment_app,
     ) -> None:
-        mock_experiment_executor.get_completed_count.return_value = 5
+        from experiments.services.experiment_executor import ExperimentParams
+        from experiments.services.experiment_params_resolver import (
+            ResolutionStatus,
+            ResolutionSuccess,
+        )
+
         exec_id = "01912345-6789-7abc-8def-0123456789ab"
+
+        # Mock resolver to return explicit ID continuation
+        def _resolve_with_explicit_id(options, config):
+            params = ExperimentParams(
+                datasets=options.datasets,
+                excluded_models=options.excluded_models,
+                execution_id=exec_id,
+            )
+            return ResolutionSuccess(
+                params=params,
+                context={
+                    "status": ResolutionStatus.EXPLICIT_ID_CONTINUED,
+                    "execution_id": exec_id,
+                    "completed_count": 5,
+                    "datasets": options.datasets,
+                },
+            )
+
+        mock_experiment_params_resolver.resolve_params.side_effect = _resolve_with_explicit_id
 
         result = runner.invoke(experiment_app, ["--execution-id", exec_id])
 
@@ -152,10 +180,38 @@ class DescribeExperimentRunCommand:
         assert params.execution_id == exec_id
 
     def it_passes_execution_id_option_short_form(
-        self, runner: CliRunner, mock_experiment_executor: MagicMock, experiment_app
+        self,
+        runner: CliRunner,
+        mock_experiment_executor: MagicMock,
+        mock_experiment_params_resolver: MagicMock,
+        experiment_app,
     ) -> None:
-        mock_experiment_executor.get_completed_count.return_value = 0
+        from experiments.services.experiment_executor import ExperimentParams
+        from experiments.services.experiment_params_resolver import (
+            ResolutionStatus,
+            ResolutionSuccess,
+        )
+
         exec_id = "01912345-6789-7abc-8def-0123456789ab"
+
+        # Mock resolver to return explicit ID as new
+        def _resolve_with_explicit_id(options, config):
+            params = ExperimentParams(
+                datasets=options.datasets,
+                excluded_models=options.excluded_models,
+                execution_id=exec_id,
+            )
+            return ResolutionSuccess(
+                params=params,
+                context={
+                    "status": ResolutionStatus.EXPLICIT_ID_NEW,
+                    "execution_id": exec_id,
+                    "completed_count": 0,
+                    "datasets": options.datasets,
+                },
+            )
+
+        mock_experiment_params_resolver.resolve_params.side_effect = _resolve_with_explicit_id
 
         result = runner.invoke(experiment_app, ["-e", exec_id])
 
@@ -165,15 +221,44 @@ class DescribeExperimentRunCommand:
         assert params.execution_id == exec_id
 
     def it_validates_execution_id_for_continuation(
-        self, runner: CliRunner, mock_experiment_executor: MagicMock, experiment_app
+        self,
+        runner: CliRunner,
+        mock_experiment_executor: MagicMock,
+        mock_experiment_params_resolver: MagicMock,
+        experiment_app,
     ) -> None:
-        mock_experiment_executor.get_completed_count.return_value = 10
+        from experiments.services.experiment_executor import ExperimentParams
+        from experiments.services.experiment_params_resolver import (
+            ResolutionStatus,
+            ResolutionSuccess,
+        )
+
         exec_id = "01912345-6789-7abc-8def-0123456789ab"
+
+        # Mock resolver to indicate continuation
+        def _resolve_continuation(options, config):
+            params = ExperimentParams(
+                datasets=options.datasets,
+                excluded_models=options.excluded_models,
+                execution_id=exec_id,
+            )
+            return ResolutionSuccess(
+                params=params,
+                context={
+                    "status": ResolutionStatus.EXPLICIT_ID_CONTINUED,
+                    "execution_id": exec_id,
+                    "completed_count": 10,
+                    "datasets": options.datasets,
+                },
+            )
+
+        mock_experiment_params_resolver.resolve_params.side_effect = _resolve_continuation
 
         result = runner.invoke(experiment_app, ["-e", exec_id])
 
         assert result.exit_code == 0
-        mock_experiment_executor.get_completed_count.assert_called_once_with(exec_id)
+        # Verify resolver was called (which internally validates)
+        mock_experiment_params_resolver.resolve_params.assert_called_once()
 
     def it_runs_all_datasets_when_none_specified(
         self, runner: CliRunner, mock_experiment_executor: MagicMock, experiment_app
@@ -214,7 +299,11 @@ class DescribeExperimentRunCommand:
         assert config["use_gpu"] is True
 
     def it_passes_skip_resume_flag(
-        self, runner: CliRunner, mock_experiment_executor: MagicMock, experiment_app
+        self,
+        runner: CliRunner,
+        mock_experiment_executor: MagicMock,
+        mock_experiment_params_resolver: MagicMock,
+        experiment_app,
     ) -> None:
         """Test that --skip-resume flag forces new execution."""
         result = runner.invoke(experiment_app, ["--skip-resume"])
@@ -227,10 +316,24 @@ class DescribeExperimentRunCommand:
         assert params.execution_id is not None  # New UUID7 generated
 
     def it_rejects_skip_resume_with_execution_id(
-        self, runner: CliRunner, mock_experiment_executor: MagicMock, experiment_app
+        self,
+        runner: CliRunner,
+        mock_experiment_executor: MagicMock,
+        mock_experiment_params_resolver: MagicMock,
+        experiment_app,
     ) -> None:
         """Test that --skip-resume and --execution-id cannot be used together."""
+        from experiments.services.experiment_params_resolver import ResolutionError
+
         exec_id = "01943abc-1234-7000-8000-0123456789ab"
+
+        # Mock resolver to return error for mutually exclusive options
+        # Must clear side_effect first for return_value to take effect
+        mock_experiment_params_resolver.resolve_params.side_effect = None
+        mock_experiment_params_resolver.resolve_params.return_value = ResolutionError(
+            code="mutually_exclusive_options",
+            message="Cannot use both execution_id and skip_resume options together",
+        )
 
         result = runner.invoke(experiment_app, ["--execution-id", exec_id, "--skip-resume"])
 
@@ -240,7 +343,11 @@ class DescribeExperimentRunCommand:
         mock_experiment_executor.execute_experiment.assert_not_called()
 
     def it_logs_skip_resume_message(
-        self, runner: CliRunner, mock_experiment_executor: MagicMock, experiment_app
+        self,
+        runner: CliRunner,
+        mock_experiment_executor: MagicMock,
+        mock_experiment_params_resolver: MagicMock,
+        experiment_app,
     ) -> None:
         """Test that --skip-resume starts a new execution."""
         result = runner.invoke(experiment_app, ["--skip-resume"])
