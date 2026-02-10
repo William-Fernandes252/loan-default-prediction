@@ -441,7 +441,7 @@ resource "aws_launch_template" "compute" {
 
 # Primary: Spot instances — up to 90% savings over On-Demand.
 resource "aws_batch_compute_environment" "spot" {
-  name = "${var.project_name}-spot"
+  compute_environment_name = "${var.project_name}-spot"
   type                     = "MANAGED"
 
   compute_resources {
@@ -474,7 +474,7 @@ resource "aws_batch_compute_environment" "spot" {
 
 # Fallback: On-Demand instances — guaranteed availability when Spot is scarce.
 resource "aws_batch_compute_environment" "on_demand" {
-  name = "${var.project_name}-on-demand"
+  compute_environment_name = "${var.project_name}-on-demand"
   type                     = "MANAGED"
 
   compute_resources {
