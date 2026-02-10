@@ -96,9 +96,9 @@ variable "root_volume_size_gb" {
 }
 
 variable "user_email" {
-    description = "Email address for SNS alerts."
-    type        = string
-    sensitive   = true
+  description = "Email address for SNS alerts."
+  type        = string
+  sensitive   = true
 }
 
 ################################################################################
@@ -106,13 +106,6 @@ variable "user_email" {
 ################################################################################
 
 locals {
-  # The three datasets in the project – one Batch job definition per dataset.
-  datasets = toset([
-    "corporate_credit_rating",
-    "lending_club",
-    "taiwan_credit",
-  ])
-
   common_tags = {
     Project     = var.project_name
     Environment = var.environment
@@ -134,8 +127,12 @@ locals {
     var.use_gpu ? [{ type = "GPU", value = "1" }] : []
   )
 
-  # Job command: append --use-gpu flag only when GPU is enabled.
-  job_command_prefix = var.use_gpu ? ["ldp", "experiment", "run", "--use-gpu", "--only-dataset"] : ["ldp", "experiment", "run", "--only-dataset"]
+  # Experiment command with Ref:: placeholder for AWS Batch parameter substitution.
+  experiment_command = var.use_gpu ? [
+    "ldp", "experiment", "run", "--use-gpu", "--only-dataset", "Ref::dataset_name"
+    ] : [
+    "ldp", "experiment", "run", "--only-dataset", "Ref::dataset_name"
+  ]
 
   # Environment variables shared by every job definition.
   common_env_vars = [
@@ -158,8 +155,12 @@ locals {
     var.use_gpu ? [{ type = "GPU", value = "1" }] : []
   )
 
-  # Data processing command: --force skips interactive prompts in cloud runs.
-  data_job_command_prefix = var.use_gpu ? ["ldp", "data", "process", "--force", "--use-gpu"] : ["ldp", "data", "process", "--force"]
+  # Data processing command with Ref:: placeholder for AWS Batch parameter substitution.
+  data_processing_command = var.use_gpu ? [
+    "ldp", "data", "process", "--force", "--use-gpu", "Ref::dataset_name"
+    ] : [
+    "ldp", "data", "process", "--force", "Ref::dataset_name"
+  ]
 }
 
 ################################################################################
@@ -440,8 +441,8 @@ resource "aws_launch_template" "compute" {
 
 # Primary: Spot instances — up to 90% savings over On-Demand.
 resource "aws_batch_compute_environment" "spot" {
-  compute_environment_name = "${var.project_name}-spot"
-  type = "MANAGED"
+  name = "${var.project_name}-spot"
+  type                     = "MANAGED"
 
   compute_resources {
     type                = "SPOT"
@@ -473,8 +474,8 @@ resource "aws_batch_compute_environment" "spot" {
 
 # Fallback: On-Demand instances — guaranteed availability when Spot is scarce.
 resource "aws_batch_compute_environment" "on_demand" {
-  compute_environment_name = "${var.project_name}-on-demand"
-  type = "MANAGED"
+  name = "${var.project_name}-on-demand"
+  type                     = "MANAGED"
 
   compute_resources {
     type                = "EC2"
@@ -526,14 +527,15 @@ resource "aws_batch_job_queue" "queue" {
 }
 
 ################################################################################
-# Batch — Job Definitions (one per dataset)
+# Batch — Experiment Job Definition (parameterized)
 ################################################################################
 
 resource "aws_batch_job_definition" "experiment" {
-  for_each = local.datasets
-
-  name = "${var.project_name}-${replace(each.key, "_", "-")}"
+  name = "${var.project_name}-experiment"
   type = "container"
+
+  # Dataset name is passed at job submission time via --parameters.
+  parameters = {}
 
   # Spot-aware retry: retry on host termination, exit on app errors.
   retry_strategy {
@@ -556,8 +558,8 @@ resource "aws_batch_job_definition" "experiment" {
 
     resourceRequirements = local.resource_requirements
 
-    # Override the image CMD; ENTRYPOINT is already `python -m experiments.cli`.
-    command = concat(local.job_command_prefix, [each.key])
+    # Ref::dataset_name is substituted by AWS Batch at job submission time.
+    command = local.experiment_command
 
     environment = local.common_env_vars
 
@@ -566,7 +568,7 @@ resource "aws_batch_job_definition" "experiment" {
       options = {
         "awslogs-group"         = aws_cloudwatch_log_group.batch.name
         "awslogs-region"        = var.aws_region
-        "awslogs-stream-prefix" = each.key
+        "awslogs-stream-prefix" = "experiment"
       }
     }
   })
@@ -575,14 +577,15 @@ resource "aws_batch_job_definition" "experiment" {
 }
 
 ################################################################################
-# Batch — Data Processing Job Definitions (one per dataset)
+# Batch — Data Processing Job Definition (parameterized)
 ################################################################################
 
 resource "aws_batch_job_definition" "data_processing" {
-  for_each = local.datasets
-
-  name = "${var.project_name}-data-${replace(each.key, "_", "-")}"
+  name = "${var.project_name}-data-processing"
   type = "container"
+
+  # Dataset name is passed at job submission time via --parameters.
+  parameters = {}
 
   # Spot-aware retry: retry on host termination, exit on app errors.
   retry_strategy {
@@ -605,7 +608,8 @@ resource "aws_batch_job_definition" "data_processing" {
 
     resourceRequirements = local.data_resource_requirements
 
-    command = concat(local.data_job_command_prefix, [each.key])
+    # Ref::dataset_name is substituted by AWS Batch at job submission time.
+    command = local.data_processing_command
 
     environment = local.common_env_vars
 
@@ -614,7 +618,7 @@ resource "aws_batch_job_definition" "data_processing" {
       options = {
         "awslogs-group"         = aws_cloudwatch_log_group.batch.name
         "awslogs-region"        = var.aws_region
-        "awslogs-stream-prefix" = "data-${each.key}"
+        "awslogs-stream-prefix" = "data-processing"
       }
     }
   })
@@ -641,24 +645,24 @@ output "job_queue_name" {
   value       = aws_batch_job_queue.queue.name
 }
 
-output "job_definition_names" {
-  description = "Batch job definition names, keyed by dataset."
-  value       = { for k, v in aws_batch_job_definition.experiment : k => v.name }
+output "job_definition_name" {
+  description = "Batch experiment job definition name."
+  value       = aws_batch_job_definition.experiment.name
 }
 
-output "job_definition_arns" {
-  description = "Batch job definition ARNs, keyed by dataset."
-  value       = { for k, v in aws_batch_job_definition.experiment : k => v.arn }
+output "job_definition_arn" {
+  description = "Batch experiment job definition ARN."
+  value       = aws_batch_job_definition.experiment.arn
 }
 
-output "data_job_definition_names" {
-  description = "Batch data processing job definition names, keyed by dataset."
-  value       = { for k, v in aws_batch_job_definition.data_processing : k => v.name }
+output "data_job_definition_name" {
+  description = "Batch data processing job definition name."
+  value       = aws_batch_job_definition.data_processing.name
 }
 
-output "data_job_definition_arns" {
-  description = "Batch data processing job definition ARNs, keyed by dataset."
-  value       = { for k, v in aws_batch_job_definition.data_processing : k => v.arn }
+output "data_job_definition_arn" {
+  description = "Batch data processing job definition ARN."
+  value       = aws_batch_job_definition.data_processing.arn
 }
 
 output "use_gpu" {
@@ -701,7 +705,7 @@ resource "aws_cloudwatch_metric_alarm" "error_alarm" {
   namespace           = "${var.project_name}/Observability"
   period              = "60" # Check every minute
   statistic           = "Sum"
-  threshold           = "0"  # Alert on even a single error
+  threshold           = "0" # Alert on even a single error
   alarm_description   = "Triggers when application logs contain ERROR level"
   treat_missing_data  = "notBreaching"
 

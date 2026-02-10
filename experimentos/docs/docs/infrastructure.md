@@ -29,15 +29,13 @@ All resources are managed with **Terraform**, with remote state stored in S3 + D
 │         ▲                                                          │
 │         │  submit                                                  │
 │  ┌──────┴─────────────────────────────────────────────────────┐    │
-│  │  Job Definitions:                                          │    │
-│  │  • Data Processing (one per dataset)                       │    │
-│  │    ├─ loan-default-prediction-data-corporate-credit-rating │    │
-│  │    ├─ loan-default-prediction-data-lending-club            │    │
-│  │    └─ loan-default-prediction-data-taiwan-credit           │    │
-│  │  • Training/Experiments (one per dataset)                  │    │
-│  │    ├─ loan-default-prediction-corporate-credit-rating      │    │
-│  │    ├─ loan-default-prediction-lending-club                 │    │
-│  │    └─ loan-default-prediction-taiwan-credit                │    │
+│  │  Job Definitions (parameterized):                          │    │
+│  │  • Data Processing                                         │    │
+│  │    └─ loan-default-prediction-data-processing              │    │
+│  │       (dataset passed via --parameters at submission)      │    │
+│  │  • Training/Experiments                                    │    │
+│  │    └─ loan-default-prediction-experiment                   │    │
+│  │       (dataset passed via --parameters at submission)      │    │
 │  └────────────────────────────────────────────────────────────┘    │
 └────────────────────────────────────────────────────────────────────┘
          │                    │                    │
@@ -264,9 +262,10 @@ To resume a specific execution (e.g., after debugging):
 aws batch submit-job \
   --job-name "resume-specific-execution" \
   --job-queue "loan-default-prediction-queue" \
-  --job-definition "loan-default-prediction-taiwan-credit" \
+  --job-definition "loan-default-prediction-experiment" \
+  --parameters '{"dataset_name":"taiwan_credit"}' \
   --container-overrides '{
-    "command": ["ldp", "experiment", "run", "--only-dataset", "taiwan_credit", "--execution-id", "<your-execution-id>"]
+    "command": ["ldp", "experiment", "run", "--only-dataset", "Ref::dataset_name", "--execution-id", "<your-execution-id>"]
   }'
 ```
 
@@ -276,9 +275,10 @@ To force a new execution without auto-resume:
 aws batch submit-job \
   --job-name "new-execution" \
   --job-queue "loan-default-prediction-queue" \
-  --job-definition "loan-default-prediction-taiwan-credit" \
+  --job-definition "loan-default-prediction-experiment" \
+  --parameters '{"dataset_name":"taiwan_credit"}' \
   --container-overrides '{
-    "command": ["ldp", "experiment", "run", "--only-dataset", "taiwan_credit", "--skip-resume"]
+    "command": ["ldp", "experiment", "run", "--only-dataset", "Ref::dataset_name", "--skip-resume"]
   }'
 ```
 
@@ -303,23 +303,21 @@ Additional security measures:
 
 ### CloudWatch Logs
 
-All Batch job output is streamed to CloudWatch under `/aws/batch/loan-default-prediction`. Data processing and training jobs use distinct stream prefixes:
+All Batch job output is streamed to CloudWatch under `/aws/batch/loan-default-prediction`. Both job definitions use static stream prefixes (the dataset name is passed as a parameter, not part of the job definition):
 
 **Data Processing Jobs:**
 
 ```text
-/aws/batch/loan-default-prediction/data-corporate_credit_rating/<job-id>
-/aws/batch/loan-default-prediction/data-lending_club/<job-id>
-/aws/batch/loan-default-prediction/data-taiwan_credit/<job-id>
+/aws/batch/loan-default-prediction/data-processing/<job-id>
 ```
 
 **Training Jobs:**
 
 ```text
-/aws/batch/loan-default-prediction/corporate_credit_rating/<job-id>
-/aws/batch/loan-default-prediction/lending_club/<job-id>
-/aws/batch/loan-default-prediction/taiwan_credit/<job-id>
+/aws/batch/loan-default-prediction/experiment/<job-id>
 ```
+
+Individual job runs are differentiated by the `<job-id>` that AWS Batch assigns to each submission.
 
 View logs via the AWS Console or CLI:
 
@@ -330,13 +328,13 @@ aws logs describe-log-streams \
   --order-by LastEventTime --descending \
   --limit 10
 
-# Tail data processing logs for a specific dataset
+# Tail data processing logs
 aws logs tail "/aws/batch/loan-default-prediction" \
-  --filter-pattern "data-taiwan_credit" --follow
+  --filter-pattern "data-processing" --follow
 
 # Tail training logs
 aws logs tail "/aws/batch/loan-default-prediction" \
-  --filter-pattern "taiwan_credit" --follow
+  --filter-pattern "experiment" --follow
 ```
 
 ### Batch Job Status
@@ -358,10 +356,10 @@ After `terraform apply`, the following outputs are available:
 | `ecr_repo_url` | ECR repository URL for `docker push` |
 | `s3_bucket_name` | S3 bucket for experiment data |
 | `job_queue_name` | Batch job queue name (shared by all jobs) |
-| `job_definition_names` | Training job definition names, keyed by dataset |
-| `job_definition_arns` | Training job definition ARNs, keyed by dataset |
-| `data_job_definition_names` | Data processing job definition names, keyed by dataset |
-| `data_job_definition_arns` | Data processing job definition ARNs, keyed by dataset |
+| `job_definition_name` | Training job definition name (parameterized) |
+| `job_definition_arn` | Training job definition ARN (parameterized) |
+| `data_job_definition_name` | Data processing job definition name (parameterized) |
+| `data_job_definition_arn` | Data processing job definition ARN (parameterized) |
 | `use_gpu` | Whether GPU mode is active |
 
 Access outputs with:
