@@ -539,15 +539,21 @@ resource "aws_batch_job_definition" "experiment" {
 
   # Spot-aware retry: retry on host termination, exit on app errors.
   retry_strategy {
-    attempts = 3
+    attempts = 10
 
     evaluate_on_exit {
       action           = "RETRY"
       on_status_reason = "Host EC2*"
     }
+
     evaluate_on_exit {
-      action    = "EXIT"
+      action    = "RETRY"
       on_reason = "*"
+    }
+
+    evaluate_on_exit {
+      action           = "EXIT"
+      on_exit_code     = "*"
     }
   }
 
