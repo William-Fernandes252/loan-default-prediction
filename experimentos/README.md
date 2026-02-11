@@ -244,6 +244,26 @@ make submit-data-job DATASET=taiwan_credit
 make submit-job DATASET=taiwan_credit
 ```
 
+#### Customizing Seeds and CV Folds
+
+You can override the number of random seeds and cross-validation folds on training jobs using the `SEEDS` and `CV_FOLDS` parameters:
+
+```bash
+# Submit a job with 50 seeds (instead of default 30)
+make submit-job DATASET=taiwan_credit SEEDS=50
+
+# Submit with custom CV folds (instead of default 5)
+make submit-job DATASET=taiwan_credit CV_FOLDS=10
+
+# Submit with both parameters
+make submit-job DATASET=taiwan_credit SEEDS=100 CV_FOLDS=3
+
+# Submit all datasets with the same custom parameters
+make submit-jobs SEEDS=50 CV_FOLDS=10
+```
+
+These parameters override the `LDP_NUM_SEEDS` and `LDP_CV_FOLDS` environment variables in the container. If not specified, the defaults from the job definition are used (30 seeds, 5 CV folds).
+
 ### GPU Mode
 
 To provision GPU instances (`g4dn`) and build with CUDA support:
@@ -267,6 +287,7 @@ Experiment jobs automatically resume interrupted work, making AWS Batch retries 
 This makes Batch's retry strategy (configured for 3 attempts) effective at handling Spot reclamations.
 
 **Example flow:**
+
 1. Job starts: 100 combinations, completes 30, Spot interrupts
 2. Batch retries: Auto-detects execution, skips 30, resumes with 70 remaining
 3. Completes all 100: Subsequent retries exit immediately (no wasted compute)

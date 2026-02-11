@@ -244,10 +244,12 @@ The infrastructure is designed to minimize costs:
 Spot instances can be interrupted by AWS with a 2-minute warning. The infrastructure handles this gracefully:
 
 **Automatic Retry Strategy:**
+
 - Jobs retry up to 3 attempts on Spot reclamation (`Host EC2*` errors)
 - Exit immediately on application errors (no retry loops)
 
 **Automatic Resumption:**
+
 - When a job is retried, it automatically detects and resumes the latest incomplete execution
 - Completed work is skipped (stored in S3 as `.parquet` files)
 - Only missing combinations are executed
@@ -258,6 +260,7 @@ The retry strategy is fully automated. You don't need to pass `--execution-id` m
 
 **Manual override:**
 To resume a specific execution (e.g., after debugging):
+
 ```bash
 aws batch submit-job \
   --job-name "resume-specific-execution" \
@@ -280,6 +283,35 @@ aws batch submit-job \
   --container-overrides '{
     "command": ["ldp", "experiment", "run", "--only-dataset", "Ref::dataset_name", "--skip-resume"]
   }'
+```
+
+To override experiment configuration (seeds and CV folds):
+
+```bash
+aws batch submit-job \
+  --job-name "custom-experiment-config" \
+  --job-queue "loan-default-prediction-queue" \
+  --job-definition "loan-default-prediction-experiment" \
+  --parameters '{"dataset_name":"taiwan_credit"}' \
+  --container-overrides '{
+    "environment": [
+      {"name": "LDP_NUM_SEEDS", "value": "50"},
+      {"name": "LDP_CV_FOLDS", "value": "10"}
+    ]
+  }'
+```
+
+The `make submit-job` target provides a convenient way to submit jobs with these overrides:
+
+```bash
+# Submit with custom number of seeds
+make submit-job DATASET=taiwan_credit SEEDS=50
+
+# Submit with custom CV folds
+make submit-job DATASET=taiwan_credit CV_FOLDS=10
+
+# Submit with both overrides
+make submit-job DATASET=taiwan_credit SEEDS=100 CV_FOLDS=3
 ```
 
 ## Security

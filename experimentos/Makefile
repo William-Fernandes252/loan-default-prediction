@@ -185,6 +185,7 @@ submit-data-jobs:
 	done
 
 ## Submit a training job for a specific dataset (set DATASET=name)
+## Optional: SEEDS=<num_seeds> CV_FOLDS=<num_folds>
 .PHONY: submit-job
 submit-job:
 	@if [ -z "$(DATASET)" ]; then \
@@ -193,27 +194,32 @@ submit-job:
 	fi
 	@JOB_QUEUE=$$(cd terraform && terraform output -raw job_queue_name); \
 	JOB_DEF=$$(cd terraform && terraform output -raw job_definition_arn); \
+	OVERRIDES=""; \
+	ENV_VARS=""; \
+	if [ -n "$(SEEDS)" ]; then \
+		ENV_VARS="$$ENV_VARS,{\"name\":\"LDP_NUM_SEEDS\",\"value\":\"$(SEEDS)\"}"; \
+	fi; \
+	if [ -n "$(CV_FOLDS)" ]; then \
+		ENV_VARS="$$ENV_VARS,{\"name\":\"LDP_CV_FOLDS\",\"value\":\"$(CV_FOLDS)\"}"; \
+	fi; \
+	if [ -n "$$ENV_VARS" ]; then \
+		ENV_VARS=$${ENV_VARS#,}; \
+		OVERRIDES="--container-overrides '{\"environment\":[$$ENV_VARS]}'"; \
+	fi; \
 	echo "Submitting training job for $(DATASET) ..."; \
 	aws batch submit-job \
 		--job-name "$(PROJECT_NAME)-$(DATASET)-$$(date +%Y%m%d-%H%M%S)" \
 		--job-queue "$$JOB_QUEUE" \
 		--job-definition "$$JOB_DEF" \
 		--parameters '{"dataset_name":"$(DATASET)"}' \
+		$$OVERRIDES \
 		--region $(AWS_REGION)
 
 ## Submit all training jobs (one per dataset)
 .PHONY: submit-jobs
 submit-jobs:
-	@JOB_QUEUE=$$(cd terraform && terraform output -raw job_queue_name); \
-	JOB_DEF=$$(cd terraform && terraform output -raw job_definition_arn); \
-	for dataset in corporate_credit_rating lending_club taiwan_credit; do \
-		echo "Submitting job for $$dataset ..."; \
-		aws batch submit-job \
-			--job-name "$(PROJECT_NAME)-$$dataset-$$(date +%Y%m%d-%H%M%S)" \
-			--job-queue "$$JOB_QUEUE" \
-			--job-definition "$$JOB_DEF" \
-			--parameters "{\"dataset_name\":\"$$dataset\"}" \
-			--region $(AWS_REGION); \
+	@for dataset in corporate_credit_rating lending_club taiwan_credit; do \
+		$(MAKE) submit-job DATASET=$$dataset SEEDS=$(SEEDS) CV_FOLDS=$(CV_FOLDS); \
 	done
 
 
