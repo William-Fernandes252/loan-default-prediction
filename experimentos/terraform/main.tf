@@ -129,9 +129,9 @@ locals {
 
   # Experiment command with Ref:: placeholder for AWS Batch parameter substitution.
   experiment_command = var.use_gpu ? [
-    "uv", "run", "ldp", "experiment", "run", "--use-gpu", "--only-dataset", "Ref::dataset_name"
+    "experiment", "run", "--use-gpu", "--only-dataset", "Ref::dataset_name"
     ] : [
-    "uv", "run", "ldp", "experiment", "run", "--only-dataset", "Ref::dataset_name"
+    "experiment", "run", "--only-dataset", "Ref::dataset_name"
   ]
 
   # Environment variables shared by every job definition.
@@ -157,9 +157,9 @@ locals {
 
   # Data processing command with Ref:: placeholder for AWS Batch parameter substitution.
   data_processing_command = var.use_gpu ? [
-    "uv", "run", "ldp", "data", "process", "--force", "--use-gpu", "Ref::dataset_name"
+    "data", "process", "--force", "--use-gpu", "Ref::dataset_name"
     ] : [
-    "uv", "run", "ldp", "data", "process", "--force", "Ref::dataset_name"
+    "data", "process", "--force", "Ref::dataset_name"
   ]
 }
 
