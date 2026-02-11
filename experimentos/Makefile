@@ -184,7 +184,7 @@ submit-data-jobs:
 			--region $(AWS_REGION); \
 	done
 
-## Submit a training job for a specific dataset (set DATASET=name)
+## Submit an experiment job for a specific dataset (set DATASET=name)
 ## Optional: SEEDS=<num_seeds> CV_FOLDS=<num_folds>
 .PHONY: submit-job
 submit-job:
@@ -204,9 +204,9 @@ submit-job:
 	fi; \
 	if [ -n "$$ENV_VARS" ]; then \
 		ENV_VARS=$${ENV_VARS#,}; \
-		OVERRIDES="--container-overrides '{\"environment\":[$$ENV_VARS]}'"; \
+		OVERRIDES="--container-overrides {\"environment\":[$$ENV_VARS]}"; \
 	fi; \
-	echo "Submitting training job for $(DATASET) ..."; \
+	echo "Submitting experiment job for $(DATASET) ..."; \
 	aws batch submit-job \
 		--job-name "$(PROJECT_NAME)-$(DATASET)-$$(date +%Y%m%d-%H%M%S)" \
 		--job-queue "$$JOB_QUEUE" \
@@ -215,7 +215,7 @@ submit-job:
 		$$OVERRIDES \
 		--region $(AWS_REGION)
 
-## Submit all training jobs (one per dataset)
+## Submit all experiment jobs (one per dataset)
 .PHONY: submit-jobs
 submit-jobs:
 	@for dataset in corporate_credit_rating lending_club taiwan_credit; do \
