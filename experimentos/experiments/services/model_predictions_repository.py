@@ -87,7 +87,8 @@ class ModelPredictionsStorageLayout:
         Returns:
             _ParsedPredictionsKey | None: The parsed components, or `None` if the key does not match the expected format.
         """
-        pattern = r"^predictions/([^/]+)/([^/]+)/([^/]+)/([^/]+)/seed_(\d+)\.parquet$"
+        prefix = re.escape(self.predictions_prefix)
+        pattern = f"^{prefix}([^/]+)/([^/]+)/([^/]+)/([^/]+)/seed_(\\d+)\\.parquet$"
         match = re.match(pattern, key)
         if not match:
             return None

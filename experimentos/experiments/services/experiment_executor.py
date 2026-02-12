@@ -77,6 +77,13 @@ class _SavePredictionsOnTrainingCompletionObserver(
             technique=result.context.technique,
             seed=result.context.seed,
         ):
+            if "predictions" not in result.final_state:
+                if not result.succeeded():
+                    logger.warning("Pipeline failed; skipping prediction save.")
+                else:
+                    logger.warning("Pipeline finished but no predictions found in state.")
+                return Action.PROCEED
+
             try:
                 self._predictions_repository.save_predictions(
                     execution_id=self._execution_id,

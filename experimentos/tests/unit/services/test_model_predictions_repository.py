@@ -77,6 +77,15 @@ class DescribeParsePredictionsKey:
 
         assert result is None
 
+    def it_parses_key_with_custom_prefix(self) -> None:
+        layout = ModelPredictionsStorageLayout(predictions_prefix="custom_prefix/")
+        key = "custom_prefix/exec-123/taiwan_credit/random_forest/smote/seed_42.parquet"
+
+        result = layout.parse_predictions_key(key)
+
+        assert result is not None
+        assert result["execution_id"] == "exec-123"
+
 
 # ============================================================================
 # ModelPredictionsStorageRepository Tests
