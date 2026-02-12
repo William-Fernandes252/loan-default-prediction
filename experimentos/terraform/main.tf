@@ -101,6 +101,13 @@ variable "user_email" {
   sensitive   = true
 }
 
+variable "sentry_dns" {
+  description = "Sentry DSN for error tracking (optional)."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 ################################################################################
 # Locals
 ################################################################################
@@ -143,7 +150,9 @@ locals {
     { name = "LDP_N_JOBS", value = var.use_gpu ? "1" : var.job_vcpus },
     { name = "LDP_MODELS_N_JOBS", value = "2" },
     { name = "LDP_DEBUG", value = "false" },
-    { name = "LDP_LOCALE", value = "en_US" },
+    { name = "LDP_LOCALE", value = "pt_BR" },
+    { name = "LDP_DEBUG", value = "false" },
+    { name = "LDP_SENTRY_DSN", value = var.sentry_dns },
   ]
 
   # Resource requirements for data processing jobs (lighter than training).
