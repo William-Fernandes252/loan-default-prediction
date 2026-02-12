@@ -7,7 +7,7 @@ PYTHON_VERSION = 3.12
 PYTHON_INTERPRETER = python
 AWS_REGION = us-east-1
 ECR_REPO_URL = $(shell cd terraform && terraform output -raw ecr_repo_url 2>/dev/null)
-IMAGE_TAG ?= latest
+IMAGE_TAG ?= $(shell git rev-parse --short HEAD)
 
 
 #################################################################################
