@@ -327,12 +327,12 @@ class Container(containers.DeclarativeContainer):
     def init_resources(self, *args, **kwargs) -> Any:
         super().init_resources(*args, **kwargs)
 
+        configure_logging(self.settings())
+        logger.info("Logging configured successfully.")
+
         if self.settings().debug:
             logger.debug("Application is running in DEBUG mode.")
             logger.debug(f"Settings: {self.settings()}")
-
-        configure_logging(self.settings())
-        logger.info("Logging configured successfully.")
 
         if self.settings().sentry_dns:
             logger.info("Sentry DSN provided, initializing Sentry integration.")

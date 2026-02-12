@@ -96,7 +96,7 @@ def configure_logging(settings: LdpSettings):
     logger.add(
         sys.stderr,
         serialize=True,
-        level="INFO",
+        level="DEBUG" if settings.debug else "INFO",
         format="{message}",
         backtrace=True,
         diagnose=settings.debug,  # Include stack traces only in debug mode
