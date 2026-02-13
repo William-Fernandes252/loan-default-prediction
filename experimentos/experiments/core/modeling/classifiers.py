@@ -7,7 +7,7 @@ import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.dummy import DummyClassifier
 from sklearn.ensemble import BaggingClassifier
-from sklearn.svm import SVC
+from sklearn.linear_model import SGDClassifier
 from sklearn.utils.class_weight import compute_class_weight
 from xgboost import XGBClassifier
 
@@ -50,7 +50,7 @@ class _ProbabilityMatrixClassesCorrectionMixin:
         return probas
 
 
-class RobustSVC(_ProbabilityMatrixClassesCorrectionMixin, SVC):
+class RobustSVC(_ProbabilityMatrixClassesCorrectionMixin, SGDClassifier):
     """SVC that ensures output (N, 2) in predict_proba even in degenerate cases.
 
     Inherits from SVC, so it works natively with GridSearchCV.

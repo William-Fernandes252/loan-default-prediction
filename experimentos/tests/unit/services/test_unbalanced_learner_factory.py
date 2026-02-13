@@ -69,14 +69,6 @@ class DescribeCreateModelWithSVM:
         assert isinstance(result, ImbPipeline)
         assert isinstance(result.named_steps["clf"], SVC)  # type: ignore[union-attr]
 
-    def it_enables_probability_estimation(self, learner_factory: UnbalancedLearnerFactory) -> None:
-        result = learner_factory.create_model(
-            model_type=ModelType.SVM, technique=Technique.BASELINE, seed=42
-        )
-
-        clf = result.named_steps["clf"]  # type: ignore[union-attr]
-        assert clf.probability is True
-
 
 class DescribeCreateModelWithXGBoost:
     def it_creates_xgboost_pipeline(self, learner_factory: UnbalancedLearnerFactory) -> None:

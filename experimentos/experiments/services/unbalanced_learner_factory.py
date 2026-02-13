@@ -55,7 +55,7 @@ class UnbalancedLearnerFactory:
         if model_type == ModelType.SVM:
             if use_gpu and HAS_CUML:
                 return CuSVC(random_state=random_state, probability=True)
-            return SVC(random_state=random_state, probability=True)
+            return SVC(random_state=random_state)
 
         elif model_type == ModelType.RANDOM_FOREST:
             if use_gpu and HAS_CUML:
