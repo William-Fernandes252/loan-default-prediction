@@ -264,6 +264,23 @@ make submit-jobs SEEDS=50 CV_FOLDS=10
 
 These parameters override the `LDP_NUM_SEEDS` and `LDP_CV_FOLDS` environment variables in the container. If not specified, the defaults from the job definition are used (30 seeds, 5 CV folds).
 
+#### Customizing Parallel Jobs
+
+You can also override the number of parallel jobs using the `NUM_JOBS` parameter:
+
+```bash
+# Submit a job with 1 parallel job (useful for memory-constrained datasets)
+make submit-job DATASET=taiwan_credit NUM_JOBS=1
+
+# Submit with custom seeds, CV folds, and parallel jobs
+make submit-job DATASET=taiwan_credit SEEDS=50 CV_FOLDS=10 NUM_JOBS=2
+
+# Submit all datasets with the same custom parallel job count
+make submit-jobs NUM_JOBS=1
+```
+
+The `NUM_JOBS` parameter overrides the `LDP_N_JOBS` environment variable, which controls how many parallel data processing tasks can run simultaneously. If not specified, it defaults to the number of vCPUs available on the compute instance.
+
 ### GPU Mode
 
 To provision GPU instances (`g4dn`) and build with CUDA support:

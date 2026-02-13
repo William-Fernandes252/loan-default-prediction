@@ -296,7 +296,8 @@ aws batch submit-job \
   --container-overrides '{
     "environment": [
       {"name": "LDP_NUM_SEEDS", "value": "50"},
-      {"name": "LDP_CV_FOLDS", "value": "10"}
+      {"name": "LDP_CV_FOLDS", "value": "10"},
+      {"name": "LDP_N_JOBS", "value": "1"}
     ]
   }'
 ```
@@ -310,8 +311,11 @@ make submit-job DATASET=taiwan_credit SEEDS=50
 # Submit with custom CV folds
 make submit-job DATASET=taiwan_credit CV_FOLDS=10
 
-# Submit with both overrides
-make submit-job DATASET=taiwan_credit SEEDS=100 CV_FOLDS=3
+# Submit with custom parallel jobs (useful for memory-constrained datasets)
+make submit-job DATASET=taiwan_credit NUM_JOBS=1
+
+# Submit with all overrides
+make submit-job DATASET=taiwan_credit SEEDS=100 CV_FOLDS=3 NUM_JOBS=2
 ```
 
 ## Security

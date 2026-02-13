@@ -185,7 +185,7 @@ submit-data-jobs:
 	done
 
 ## Submit an experiment job for a specific dataset (set DATASET=name)
-## Optional: SEEDS=<num_seeds> CV_FOLDS=<num_folds>
+## Optional: SEEDS=<num_seeds> CV_FOLDS=<num_folds> NUM_JOBS=<num_parallel_jobs>
 .PHONY: submit-job
 submit-job:
 	@if [ -z "$(DATASET)" ]; then \
@@ -201,6 +201,9 @@ submit-job:
 	fi; \
 	if [ -n "$(CV_FOLDS)" ]; then \
 		ENV_VARS="$$ENV_VARS,{\"name\":\"LDP_CV_FOLDS\",\"value\":\"$(CV_FOLDS)\"}"; \
+	fi; \
+	if [ -n "$(NUM_JOBS)" ]; then \
+		ENV_VARS="$$ENV_VARS,{\"name\":\"LDP_N_JOBS\",\"value\":\"$(NUM_JOBS)\"}"; \
 	fi; \
 	if [ -n "$$ENV_VARS" ]; then \
 		ENV_VARS=$${ENV_VARS#,}; \
@@ -219,7 +222,7 @@ submit-job:
 .PHONY: submit-jobs
 submit-jobs:
 	@for dataset in corporate_credit_rating lending_club taiwan_credit; do \
-		$(MAKE) submit-job DATASET=$$dataset SEEDS=$(SEEDS) CV_FOLDS=$(CV_FOLDS); \
+		$(MAKE) submit-job DATASET=$$dataset SEEDS=$(SEEDS) CV_FOLDS=$(CV_FOLDS) NUM_JOBS=$(NUM_JOBS); \
 	done
 
 
