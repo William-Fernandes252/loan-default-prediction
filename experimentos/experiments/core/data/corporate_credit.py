@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 import polars as pl
+from polars import selectors as cs
 
 from experiments.core.data.datasets import Dataset
 from experiments.core.data.transformers import get_engine, register_transformer
@@ -54,10 +55,10 @@ def corporate_credit_transformer(
 
     # --- 3. One-Hot Encoding of the 'Sector' feature ---
     # Collect the result (execute the lazy plan) and apply to_dummies
-    final_df_with_dummies = final_features_df.collect(engine=get_engine(use_gpu)).to_dummies(
-        columns=categorical_cols,
-        separator="_",
-        drop_first=False,  # Keep all categories
+    final_df_with_dummies = (
+        final_features_df.cast({cs.float(): pl.Float32, cs.integer(): pl.Int32})
+        .collect(engine=get_engine(use_gpu))
+        .to_dummies(columns=categorical_cols, separator="_", drop_first=True)
     )
 
     # Clean column names for compatibility (remove special characters)

@@ -3,6 +3,7 @@
 import re
 
 import polars as pl
+from polars import selectors as cs
 
 from experiments.core.data.datasets import Dataset
 from experiments.core.data.transformers import get_engine, register_transformer
@@ -87,8 +88,9 @@ def taiwan_credit_transformer(
     # Collect (execute) the lazy plan and apply to_dummies
     final_df_with_dummies = (
         df_processed.drop(cols_to_drop)
+        .cast({cs.float(): pl.Float32, cs.integer(): pl.Int32})
         .collect(engine=get_engine(use_gpu))
-        .to_dummies(columns=categorical_to_encode, separator="_", drop_first=False)
+        .to_dummies(columns=categorical_to_encode, separator="_", drop_first=True)
     )
 
     # Clean column names for compatibility

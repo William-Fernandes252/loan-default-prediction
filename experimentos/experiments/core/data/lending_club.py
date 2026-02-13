@@ -6,6 +6,7 @@ import re
 
 import polars as pl
 from polars import datatypes
+from polars import selectors as cs
 
 from experiments.core.data.datasets import Dataset
 from experiments.core.data.transformers import get_engine, register_transformer
@@ -128,10 +129,14 @@ def lending_club_transformer(
 
     # --- 6. One-Hot Encoding ---
     # Convert categorical columns to dummy (binary) columns
-    final_df_with_dummies = final_features_df.collect(engine=get_engine(use_gpu)).to_dummies(
-        columns=categorical_cols,
-        separator="_",
-        drop_first=False,  # Keep all categories
+    final_df_with_dummies = (
+        final_features_df.cast({cs.float(): pl.Float32, cs.integer(): pl.Int32})
+        .collect(engine=get_engine(use_gpu))
+        .to_dummies(
+            columns=categorical_cols,
+            separator="_",
+            drop_first=True,
+        )
     )
 
     # Replace invalid characters in column names (for Scikit-learn)
