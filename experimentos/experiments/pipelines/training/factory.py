@@ -89,7 +89,6 @@ def train_model(
             data=state["data_split"],
             seed=context.seed,
         ),
-        n_jobs=context.n_jobs,
     )
 
     state["trained_model"] = trained_model

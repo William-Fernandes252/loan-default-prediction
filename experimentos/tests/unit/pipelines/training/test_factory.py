@@ -203,8 +203,6 @@ class DescribeTrainModel:
         result = train_model(state, context)
 
         assert mock_trainer.train.called
-        call_args = mock_trainer.train.call_args
-        assert call_args.kwargs["n_jobs"] == 4
         assert result.status == TaskStatus.SUCCESS
 
     def it_updates_state_with_trained_model(self, context: TrainingPipelineContext) -> None:
