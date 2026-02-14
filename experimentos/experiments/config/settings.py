@@ -157,6 +157,9 @@ class ExperimentSettings(BaseSettings):
         extra="ignore",
     )
 
+    sampler_k_neighbors: Annotated[int, Field(default=3)]
+    """Number of neighbors for over-sampling."""
+
     cv_folds: Annotated[int, Field(default=5)]
     """Number of cross-validation folds."""
 

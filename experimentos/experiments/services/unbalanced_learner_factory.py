@@ -36,8 +36,9 @@ if HAS_CUML:
 class UnbalancedLearnerFactory:
     """Factory for creating estimators that handle unbalanced datasets."""
 
-    def __init__(self, use_gpu: bool = False):
+    def __init__(self, use_gpu: bool = False, sampler_k_neighbors: int = 3) -> None:
         self._use_gpu = use_gpu
+        self._sampler_k_neighbors = sampler_k_neighbors
 
         if self._use_gpu and not HAS_CUML:
             raise ImportError("cuML is not available, cannot use GPU-based estimators.")
@@ -108,9 +109,11 @@ class UnbalancedLearnerFactory:
         if technique == Technique.RANDOM_UNDER_SAMPLING:
             steps.append(("sampler", RandomUnderSampler(random_state=seed)))
         elif technique == Technique.SMOTE:
-            steps.append(("sampler", SMOTE(random_state=seed)))
+            steps.append(("sampler", self._create_smote_sampler(seed)))
         elif technique == Technique.SMOTE_TOMEK:
-            steps.append(("sampler", SMOTETomek(random_state=seed)))
+            steps.append(
+                ("sampler", SMOTETomek(random_state=seed, smote=self._create_smote_sampler(seed)))
+            )
         # Add classifier
         clf = self._get_model_instance(model_type, seed, use_gpu=use_gpu, n_jobs=n_jobs)
 
@@ -120,3 +123,7 @@ class UnbalancedLearnerFactory:
 
         steps.append(("clf", clf))
         return cast(Classifier, ImbPipeline(steps))
+
+    def _create_smote_sampler(self, seed: int) -> SMOTE:
+        """Helper to create a SMOTE sampler with appropriate parameters."""
+        return SMOTE(random_state=seed, k_neighbors=self._sampler_k_neighbors)

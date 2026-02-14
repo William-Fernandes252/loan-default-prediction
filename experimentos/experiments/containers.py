@@ -190,6 +190,7 @@ class Container(containers.DeclarativeContainer):
     _classifier_factory = providers.Singleton(
         UnbalancedLearnerFactory,
         use_gpu=settings.provided.resources.use_gpu,
+        sampler_k_neighbors=settings.provided.experiment.sampler_k_neighbors,
     )
     """Factory for creating unbalanced learner classifiers."""
 
