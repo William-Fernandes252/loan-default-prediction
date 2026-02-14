@@ -148,7 +148,6 @@ locals {
     { name = "LDP_STORAGE_S3_REGION", value = var.aws_region },
     { name = "LDP_USE_GPU", value = tostring(var.use_gpu) },
     { name = "LDP_N_JOBS", value = var.use_gpu ? "1" : var.job_vcpus },
-    { name = "LDP_MODELS_N_JOBS", value = "2" },
     { name = "LDP_DEBUG", value = "false" },
     { name = "LDP_LOCALE", value = "pt_BR" },
     { name = "LDP_DEBUG", value = "false" },
