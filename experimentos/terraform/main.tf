@@ -447,7 +447,6 @@ resource "aws_launch_template" "compute" {
 # Batch — Compute Environments
 ################################################################################
 
-# Primary: Spot instances — up to 90% savings over On-Demand.
 resource "aws_batch_compute_environment" "spot" {
   compute_environment_name = "${var.project_name}-spot"
   type                     = "MANAGED"
@@ -480,7 +479,6 @@ resource "aws_batch_compute_environment" "spot" {
   tags = local.common_tags
 }
 
-# Fallback: On-Demand instances — guaranteed availability when Spot is scarce.
 resource "aws_batch_compute_environment" "on_demand" {
   compute_environment_name = "${var.project_name}-on-demand"
   type                     = "MANAGED"
@@ -513,7 +511,7 @@ resource "aws_batch_compute_environment" "on_demand" {
 }
 
 ################################################################################
-# Batch — Job Queue (Spot first, On-Demand fallback)
+# Batch — Job Queue (On-demand first, Spot fallback)
 ################################################################################
 
 resource "aws_batch_job_queue" "queue" {
@@ -523,12 +521,12 @@ resource "aws_batch_job_queue" "queue" {
 
   compute_environment_order {
     order               = 1
-    compute_environment = aws_batch_compute_environment.spot.arn
+    compute_environment = aws_batch_compute_environment.on_demand.arn
   }
 
   compute_environment_order {
     order               = 2
-    compute_environment = aws_batch_compute_environment.on_demand.arn
+    compute_environment = aws_batch_compute_environment.spot.arn
   }
 
   tags = local.common_tags
