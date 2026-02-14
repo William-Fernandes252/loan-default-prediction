@@ -18,7 +18,7 @@ def corporate_credit_transformer(
     """Apply Corporate Credit specific transformations.
 
     Processing steps:
-    1. Binarize target variable 'Rating' ('D' -> 1, others -> 0).
+    1. Binarize target variable 'Rating' ('D' or 'C' -> 1, others -> 0).
     2. Remove non-predictive metadata columns (Name, Symbol, Date).
     3. One-hot encode the categorical feature 'Sector'.
     4. Select all financial indicators (Float64) as features.
@@ -33,7 +33,10 @@ def corporate_credit_transformer(
     # --- 1. Definition of Target Variable ---
     # As per Section 3.2 of chapter/ferramentas.tex
     df_processed = df.lazy().with_columns(
-        pl.when(pl.col("Rating") == "D").then(pl.lit(1)).otherwise(pl.lit(0)).alias("target")
+        pl.when(pl.col("Rating").is_in(["D", "C", "CC"]))
+        .then(pl.lit(1))
+        .otherwise(pl.lit(0))
+        .alias("target")
     )
 
     # --- 2. Feature Selection ---

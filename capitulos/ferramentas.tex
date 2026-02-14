@@ -18,7 +18,7 @@ O percentual por classe é de \(48.4\%\) para \texttt{Fully Paid}, \(39.5\%\) pa
 
 O segundo conjunto de dados contém registros de inadimplência de cartões de crédito em Taiwan, coletados entre abril e setembro de 2005. Ele é composto por \(30.000\) amostras com informações demográficas, limites de crédito e históricos de pagamento. A variável-alvo, \texttt{default.payment.next.month}, indica se o cliente se tornou inadimplente no mês subsequente (\(1\)) ou não (\(0\)). Os casos de inadimplência representam \(22\%\) do total de registros. O conjunto de dados está disponível em~\url{https://www.kaggle.com/datasets/uciml/default-of-credit-card-clients-dataset}.
 
-Por fim, o terceiro conjunto de dados é focado em crédito corporativo, relacionando indicadores fundamentalistas de \(2.029\) empresas — como margem líquida e retorno sobre o patrimônio líquido (\textit{return on equity}) — a uma de 10 categorias de risco (\texttt{Rating}): \texttt{AAA} (\(0.34\%\)), \texttt{AA} (\(4.39\%\)), \texttt{A} (\(19.6\%\)), \texttt{BBB} (\(33.1\%\)), \texttt{BB} (\(24.2\%\)), \texttt{B} (\(14.9\%\)), \texttt{CCC} (\(3.15\%\)), \texttt{CC} (\(0.25\%\)), \texttt{C} (\(0.10\%\)), \texttt{D} (\(0.05\%\)). A classe de maior risco, \texttt{D}, indica que a empresa não seria capaz de arcar com suas obrigações financeiras. Tais empresas representam apenas \(0,05\%\) dos dados, tornando este o conjunto mais desbalanceado entre os selecionados. Os dados podem ser acessados em~\url{https://www.kaggle.com/datasets/agewerc/corporate-credit-rating}.
+Por fim, o terceiro conjunto de dados é focado em crédito corporativo, relacionando indicadores fundamentalistas de \(2.029\) empresas — como margem líquida e retorno sobre o patrimônio líquido (\textit{return on equity}) — a uma de 10 categorias de risco (\texttt{Rating}): \texttt{AAA} (\(0.34\%\)), \texttt{AA} (\(4.39\%\)), \texttt{A} (\(19.6\%\)), \texttt{BBB} (\(33.1\%\)), \texttt{BB} (\(24.2\%\)), \texttt{B} (\(14.9\%\)), \texttt{CCC} (\(3.15\%\)), \texttt{CC} (\(0.25\%\)), \texttt{C} (\(0.10\%\)), \texttt{D} (\(0.05\%\)). As classes de maior risco, \texttt{D}, \texttt{C} e \texttt{CC}, indicam que a empresa teria dificuldades em arcar com suas obrigações financeiras. Tais empresas representam apenas \(0,4\%\) dos dados, tornando este o conjunto mais desbalanceado entre os selecionados. Os dados podem ser acessados em~\url{https://www.kaggle.com/datasets/agewerc/corporate-credit-rating}.
 
 A Tabela~\ref{tab:resumo-datasets} resume as principais características dos conjuntos de dados utilizados.
 
@@ -35,7 +35,7 @@ A Tabela~\ref{tab:resumo-datasets} resume as principais características dos con
       \textbf{Nº de Atributos} & 145 & 24 & 31 \\ \hline
       \textbf{Variável-Alvo} & \texttt{loan\_status} & \texttt{default.payment.next.month} & \texttt{Rating} \\ \hline
       \textbf{Classes} & \texttt{Fully Paid, Current, Charged Off} & 0 (Adimplente), 1 (Inadimplente) & 10 classes de risco (\texttt{AAA, AA, ..., D}) \\ \hline
-      \textbf{Proporção Minoritária} & \(\sim 1,1\%\) (Inadimplentes) & \(22\%\) (Inadimplentes) & \(0,05\%\) (\texttt{Rating = D}) \\ \hline
+      \textbf{Proporção Minoritária} & \(\sim 1,1\%\) (Inadimplentes) & \(22\%\) (Inadimplentes) & \(0,15\%\) (\texttt{D, C ou CC}) \\ \hline
     \end{tabular}%
   }
 \end{table}
