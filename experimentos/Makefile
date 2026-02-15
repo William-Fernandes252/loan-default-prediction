@@ -119,7 +119,9 @@ docker-build:
 docker-push:
 	aws ecr get-login-password --region $(AWS_REGION) | docker login --username AWS --password-stdin $(ECR_REPO_URL)
 	docker tag $(PROJECT_NAME):$(IMAGE_TAG) $(ECR_REPO_URL):$(IMAGE_TAG)
+	docker tag $(PROJECT_NAME):$(IMAGE_TAG) $(ECR_REPO_URL):latest
 	docker push $(ECR_REPO_URL):$(IMAGE_TAG)
+	docker push $(ECR_REPO_URL):latest
 
 ## Bootstrap Terraform remote state (run once)
 .PHONY: tf-bootstrap
