@@ -119,7 +119,7 @@ class UnbalancedLearnerFactory:
 
         # Wrap with MetaCost if applicable
         if technique == Technique.META_COST:
-            clf = MetaCostClassifier(base_estimator=clf, random_state=seed)
+            clf = MetaCostClassifier(base_estimator=clf, random_state=seed, n_jobs=n_jobs)
 
         steps.append(("clf", clf))
         return cast(Classifier, ImbPipeline(steps))

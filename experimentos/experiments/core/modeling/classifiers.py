@@ -94,6 +94,16 @@ class MetaCostClassifier(ClassifierMixin, BaseEstimator):
 
     It uses bagging to estimate class probabilities and then relabels the training
     data to minimize expected cost.
+
+    This implementation is designed for binary classification and supports both
+    user-defined cost matrices and automatic balancing based on class frequencies.
+
+    Attributes:
+        base_estimator (BaseEstimator): The underlying classifier to be made cost-sensitive.
+        cost_matrix (dict[int, float]): Either a dict {class_label: cost} or the string "balanced".
+        n_estimators (int): Number of bagging estimators for probability estimation.
+        random_state (int | None): Random seed for reproducibility. If not provided, it will be random.
+        n_jobs (int | None): Number of parallel jobs for bagging. If not provided, it will use all available cores.
     """
 
     _estimator_type = "classifier"
@@ -105,11 +115,13 @@ class MetaCostClassifier(ClassifierMixin, BaseEstimator):
         cost_matrix: dict[int, Any] | str | None = None,
         n_estimators: int = 50,
         random_state: int | None = None,
+        n_jobs: int | None = None,
     ):
         self.base_estimator = base_estimator
         self.cost_matrix = cost_matrix
         self.n_estimators = n_estimators
         self.random_state = random_state
+        self.n_jobs = n_jobs
         self.final_estimator_ = None
 
     def fit(self, X: np.ndarray, y: np.ndarray):
@@ -149,7 +161,7 @@ class MetaCostClassifier(ClassifierMixin, BaseEstimator):
             n_estimators=self.n_estimators,
             oob_score=True,
             random_state=self.random_state,
-            n_jobs=1,
+            n_jobs=self.n_jobs,
         )
         bagging.fit(X, y)
 
