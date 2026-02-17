@@ -54,7 +54,7 @@ class StratifiedDataSplitter:
         target_col, *_ = y.collect_schema().names()
 
         # Calculate class counts without loading full data yet
-        class_counts_df = y.group_by(target_col).len().collect()
+        class_counts_df = y.group_by(target_col).len()
 
         min_class_count: int = cast(int, class_counts_df["len"].min())
 
@@ -64,8 +64,8 @@ class StratifiedDataSplitter:
 
         # 2. Materialize Data for Splitting
         # Scikit-Learn requires in-memory arrays for stratification logic
-        X_arr = X.collect().to_numpy()
-        y_arr = y.collect().to_numpy().ravel()  # Flatten to 1D array
+        X_arr = X.to_numpy()
+        y_arr = y.to_numpy().ravel()  # Flatten to 1D array
 
         # 3. Determine Stratification
         # Only stratify if every class has enough samples for the subsequent CV folds

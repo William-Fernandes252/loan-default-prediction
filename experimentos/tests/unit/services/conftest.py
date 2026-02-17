@@ -179,13 +179,13 @@ def sample_lazyframe(sample_dataframe: pl.DataFrame) -> pl.LazyFrame:
 def balanced_training_data() -> TrainingData:
     """Balanced training data with 50 samples per class."""
     n_samples = 100
-    X = pl.LazyFrame(
+    X = pl.DataFrame(
         {
             "feature1": list(range(n_samples)),
             "feature2": list(range(n_samples, n_samples * 2)),
         }
     )
-    y = pl.LazyFrame({"target": [0] * 50 + [1] * 50})
+    y = pl.DataFrame({"target": [0] * 50 + [1] * 50})
     return TrainingData(X=X, y=y)
 
 
@@ -193,8 +193,8 @@ def balanced_training_data() -> TrainingData:
 def imbalanced_training_data() -> TrainingData:
     """Imbalanced training data (80% class 0, 20% class 1)."""
     n_samples = 50
-    X = pl.LazyFrame({"feature": list(range(n_samples))})
-    y = pl.LazyFrame({"target": [0] * 40 + [1] * 10})
+    X = pl.DataFrame({"feature": list(range(n_samples))})
+    y = pl.DataFrame({"target": [0] * 40 + [1] * 10})
     return TrainingData(X=X, y=y)
 
 

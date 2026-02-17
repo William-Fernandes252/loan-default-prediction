@@ -15,8 +15,8 @@ class TrainingData(NamedTuple):
         y (pl.LazyFrame): Target labels for training.
     """
 
-    X: pl.LazyFrame
-    y: pl.LazyFrame
+    X: pl.DataFrame
+    y: pl.DataFrame
 
 
 class TrainingDataLoader(Protocol):

@@ -51,6 +51,8 @@ def split_data(
         data=state["training_data"],
         seed=context.seed,
     )
+    # Free training data immediately after split to reduce memory usage
+    del state["training_data"]
     return TaskResult(state, TaskStatus.SUCCESS, "Data split successfully.")
 
 
@@ -112,6 +114,9 @@ def predict(
         target=state["data_split"].y_test,
         prediction=predictions,
     )
+    # Free model and data split immediately after predictions to reduce memory usage
+    del state["trained_model"]
+    del state["data_split"]
     return TaskResult(state, TaskStatus.SUCCESS, "Predictions made successfully.")
 
 

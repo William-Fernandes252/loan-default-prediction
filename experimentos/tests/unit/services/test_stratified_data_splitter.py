@@ -92,8 +92,8 @@ class DescribeSplit:
     def it_raises_when_class_has_too_few_samples(
         self, stratified_splitter: StratifiedDataSplitter
     ) -> None:
-        X = pl.LazyFrame({"feature": [1, 2, 3]})
-        y = pl.LazyFrame({"target": [0, 0, 1]})  # Only 1 sample of class 1
+        X = pl.DataFrame({"feature": [1, 2, 3]})
+        y = pl.DataFrame({"target": [0, 0, 1]})  # Only 1 sample of class 1
         data = TrainingData(X=X, y=y)
 
         with pytest.raises(Exception):
@@ -111,8 +111,8 @@ class DescribeSplit:
 class DescribeSplitWithMinimalData:
     def it_raises_when_cv_folds_exceed_class_samples(self) -> None:
         splitter = StratifiedDataSplitter(test_size=0.30, cv_folds=5)
-        X = pl.LazyFrame({"feature": list(range(10))})
-        y = pl.LazyFrame({"target": [0] * 5 + [1] * 5})
+        X = pl.DataFrame({"feature": list(range(10))})
+        y = pl.DataFrame({"target": [0] * 5 + [1] * 5})
         data = TrainingData(X=X, y=y)
 
         with pytest.raises(Exception):

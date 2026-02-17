@@ -191,7 +191,7 @@ class DescribeLoadTrainingData:
         dataset = make_mock_dataset()
         mock_X = MagicMock()
         mock_y = MagicMock()
-        mock_storage.scan_parquet.side_effect = [mock_X, mock_y]
+        mock_storage.read_parquet.side_effect = [mock_X, mock_y]
 
         result = data_repository.load_training_data(dataset)
 
@@ -202,7 +202,7 @@ class DescribeLoadTrainingData:
         self, mock_storage: MagicMock, data_repository: StorageDataRepository
     ) -> None:
         dataset = make_mock_dataset()
-        mock_storage.scan_parquet.side_effect = FileNotFoundError("Not found")
+        mock_storage.read_parquet.side_effect = FileNotFoundError("Not found")
 
         with pytest.raises(ValueError) as exc_info:
             data_repository.load_training_data(dataset)

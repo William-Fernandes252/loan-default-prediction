@@ -45,6 +45,9 @@ class StorageDataRepository:
     def __init__(self, storage: Storage, data_layout: DataStorageLayout) -> None:
         self._storage = storage
         self._data_layout = data_layout
+        # Cache for loaded training data (shared across threads)
+        # It is persisted for the lifetime of the repository singleton
+        self._training_data_cache: dict[Dataset, TrainingData] = {}
 
     def get_size_in_bytes(self, dataset: Dataset) -> int:
         key = self._data_layout.get_raw_data_key(dataset)
@@ -74,11 +77,38 @@ class StorageDataRepository:
         self._storage.write_parquet(y, y_key)
 
     def load_training_data(self, dataset: Dataset) -> TrainingData:
+        """Load training data with caching.
+
+        Caches loaded data to avoid redundant I/O when multiple pipelines
+        use the same dataset. Since PipelineExecutor uses threads, the cache
+        is naturally shared across all worker threads.
+
+        The cache persists for the lifetime of the repository instance
+        (singleton). For CLI applications that run one experiment per process,
+        the cache is automatically freed when the process exits.
+
+        Args:
+            dataset: The dataset to load.
+
+        Returns:
+            TrainingData containing the frames for features and target.
+
+        Raises:
+            ValueError: If training data files are not found.
+        """
+        # Check cache first
+        if dataset in self._training_data_cache:
+            return self._training_data_cache[dataset]
+
+        # Load from storage
         X_key, y_key = self._data_layout.get_features_and_target_keys(dataset)
         try:
-            X = self._storage.scan_parquet(X_key)
-            y = self._storage.scan_parquet(y_key)
+            X = self._storage.read_parquet(X_key)
+            y = self._storage.read_parquet(y_key)
         except FileNotFoundError as e:
             raise ValueError("Training data not found for the given dataset.") from e
-        else:
-            return TrainingData(X=X, y=y)
+
+        # Cache and return
+        training_data = TrainingData(X=X, y=y)
+        self._training_data_cache[dataset] = training_data
+        return training_data
