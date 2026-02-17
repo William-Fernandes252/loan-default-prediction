@@ -18,6 +18,7 @@ from experiments.core.training.data import TrainingDataLoader
 from experiments.core.training.splitters import DataSplitter
 from experiments.core.training.trainers import ModelTrainer
 from experiments.lib.pipelines import Action, IgnoreAllObserver, PipelineExecutor
+from experiments.lib.pipelines.lifecycle import PipelineObserver
 from experiments.pipelines.training.factory import TrainingPipelineFactory
 from experiments.pipelines.training.pipeline import (
     TrainingPipeline,
@@ -62,7 +63,7 @@ class ExperimentParams(BaseModel):
 
 
 class _SavePredictionsOnTrainingCompletionObserver(
-    IgnoreAllObserver[TrainingPipelineState, TrainingPipelineContext]
+    IgnoreAllObserver[TrainingPipelineState, TrainingPipelineContext],
 ):
     """Observer that saves predictions when training completes."""
 
@@ -215,7 +216,7 @@ class ExperimentExecutor:
         scheduled_count = 0
         skipped_count = 0
 
-        observers = {
+        observers: set[PipelineObserver[TrainingPipelineState, TrainingPipelineContext]] = {
             _SavePredictionsOnTrainingCompletionObserver(
                 params.execution_id, self._predictions_repository
             )
