@@ -75,6 +75,7 @@ class GridSearchModelTrainer:
             n_jobs=n_jobs,
             verbose=self._verbose,
             error_score="raise",
+            return_train_score=False,
         )
 
         # Fit and return
