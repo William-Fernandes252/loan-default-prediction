@@ -11,12 +11,14 @@ Follow these steps to set up the project and run your first experiment.
 ## Installation
 
 1. **Clone the repository**:
+
    ```bash
    git clone <repository-url>
    cd experimentos
    ```
 
 2. **Create a virtual environment**:
+
    ```bash
    make create_environment
    # or
@@ -24,11 +26,13 @@ Follow these steps to set up the project and run your first experiment.
    ```
 
 3. **Activate the environment**:
+
    ```bash
    source .venv/bin/activate
    ```
 
 4. **Install dependencies**:
+
    ```bash
    make requirements
    # or
@@ -118,6 +122,7 @@ make test-e2e
 ```
 
 ### Linting and Formatting
+
 ```bash
 make lint
 make format
