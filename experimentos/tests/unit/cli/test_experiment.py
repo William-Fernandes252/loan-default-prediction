@@ -358,3 +358,42 @@ class DescribeExperimentRunCommand:
         call_args = mock_experiment_executor.execute_experiment.call_args
         params = call_args[0][0]
         assert params.execution_id is not None
+
+    def it_passes_sequential_flag(
+        self,
+        runner: CliRunner,
+        mock_experiment_executor: MagicMock,
+        experiment_app,
+    ) -> None:
+        result = runner.invoke(experiment_app, ["--sequential"])
+
+        assert result.exit_code == 0
+        call_args = mock_experiment_executor.execute_experiment.call_args
+        config = call_args[0][1]
+        assert config["sequential"] is True
+
+    def it_passes_sequential_flag_short_form(
+        self,
+        runner: CliRunner,
+        mock_experiment_executor: MagicMock,
+        experiment_app,
+    ) -> None:
+        result = runner.invoke(experiment_app, ["-s"])
+
+        assert result.exit_code == 0
+        call_args = mock_experiment_executor.execute_experiment.call_args
+        config = call_args[0][1]
+        assert config["sequential"] is True
+
+    def it_does_not_include_sequential_when_not_specified(
+        self,
+        runner: CliRunner,
+        mock_experiment_executor: MagicMock,
+        experiment_app,
+    ) -> None:
+        result = runner.invoke(experiment_app, [])
+
+        assert result.exit_code == 0
+        call_args = mock_experiment_executor.execute_experiment.call_args
+        config = call_args[0][1]
+        assert "sequential" not in config

@@ -163,6 +163,30 @@ uv run ldp experiment run --skip-resume
 
 **Auto-Resume Behavior**: By default, the CLI automatically resumes the latest incomplete execution for the specified datasets. This makes AWS Batch retries effective. Use `--skip-resume` to bypass this and start a new execution, or `--execution-id` to resume a specific execution.
 
+### Sequential Execution
+
+By default, the experiment executor runs training pipelines in parallel (limited by available memory). For memory-constrained environments, you can force sequential execution where pipelines run one at a time:
+
+```bash
+# Run pipelines sequentially (one at a time)
+uv run ldp experiment run --sequential
+
+# Or via environment variable
+export LDP_SEQUENTIAL=true
+uv run ldp experiment run
+
+# Via Makefile
+make train SEQUENTIAL=true
+```
+
+Sequential execution:
+
+- Processes one training pipeline completely before starting the next
+- Explicitly frees memory between pipelines (calls `gc.collect()`)
+- Reduces peak memory usage at the cost of longer total runtime
+- Useful for large datasets that don't fit multiple pipelines in memory
+- Model-level parallelism (`--models-jobs`) still works within each pipeline
+
 ### 3. Analysis
 
 Generate analysis reports and visualizations.
@@ -280,6 +304,23 @@ make submit-jobs NUM_JOBS=1
 ```
 
 The `NUM_JOBS` parameter overrides the `LDP_N_JOBS` environment variable, which controls how many parallel data processing tasks can run simultaneously. If not specified, it defaults to the number of vCPUs available on the compute instance.
+
+#### Sequential Execution
+
+For memory-constrained jobs, you can force pipelines to run sequentially (one at a time):
+
+```bash
+# Submit a job with sequential execution (reduces memory usage)
+make submit-job DATASET=taiwan_credit SEQUENTIAL=true
+
+# Combine with other parameters
+make submit-job DATASET=lending_club NUM_JOBS=1 SEQUENTIAL=true
+
+# Submit all datasets with sequential execution
+make submit-jobs SEQUENTIAL=true
+```
+
+The `SEQUENTIAL` parameter sets the `LDP_SEQUENTIAL` environment variable, causing training pipelines to execute one at a time with explicit memory cleanup between pipelines. This trades runtime for lower peak memory usage.
 
 ### GPU Mode
 

@@ -1,6 +1,6 @@
 """Defines the pipeline execution engine with managed parallel execution."""
 
-from collections.abc import Sequence, Set
+from collections.abc import Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from enum import Enum
@@ -207,11 +207,11 @@ class PipelineExecutor:
     def __init__(
         self,
         max_workers: int = 4,
-        observers: Set[PipelineObserver[Any, Any]] | None = None,
+        observers: set[PipelineObserver[Any, Any]] | None = None,
         default_action: Action = Action.ABORT,
     ) -> None:
         self._max_workers = max_workers
-        self._default_observers: Set[PipelineObserver[Any, Any]] = observers or set()
+        self._default_observers: set[PipelineObserver[Any, Any]] = observers or set()
         self._default_action = default_action
 
         self._executor: ThreadPoolExecutor | None = None
@@ -221,10 +221,24 @@ class PipelineExecutor:
         self._panic_error: Exception | None = None
 
         # Observers for current execution (merged with defaults)
-        self._active_observers: Set[PipelineObserver[Any, Any]] = set()
+        self._active_observers: set[PipelineObserver[Any, Any]] = set()
 
         self._lock = threading.Lock()
         self._completion_event = threading.Event()
+        self._started = False
+        self._shutdown = False
+
+    def reset(self) -> None:
+        """Reset the executor to allow reuse for another execution cycle."""
+        if self._executor:
+            self._executor.shutdown(wait=True)
+            self._executor = None
+        self._pipeline_contexts.clear()
+        self._pending_futures.clear()
+        self._results.clear()
+        self._panic_error = None
+        self._active_observers.clear()
+        self._completion_event.clear()
         self._started = False
         self._shutdown = False
 
@@ -261,7 +275,7 @@ class PipelineExecutor:
 
     def start(
         self,
-        observers: Set[PipelineObserver[Any, Any]] | None = None,
+        observers: set[PipelineObserver[Any, Any]] | None = None,
         max_workers: int | None = None,
     ) -> None:
         """Start execution of all scheduled pipelines.
@@ -326,7 +340,7 @@ class PipelineExecutor:
         pipeline: Pipeline[State, Context],
         initial_state: State,
         context: Context,
-        observers: Set[PipelineObserver[State, Context]] | None = None,
+        observers: set[PipelineObserver[State, Context]] | None = None,
         max_workers: int | None = None,
     ) -> PipelineExecutionResult[State, Context]:
         """Execute a single pipeline synchronously.
@@ -355,7 +369,7 @@ class PipelineExecutor:
         self,
         pipelines: Sequence[tuple[Pipeline[State, Context], State]],
         context: Context,
-        observers: Set[PipelineObserver[State, Context]] | None = None,
+        observers: set[PipelineObserver[State, Context]] | None = None,
         max_workers: int | None = None,
     ) -> list[PipelineExecutionResult[State, Context]]:
         """Execute multiple pipelines in parallel.

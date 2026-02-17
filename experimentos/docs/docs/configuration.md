@@ -64,6 +64,7 @@ Settings for controlling parallelism and resource usage.
 | `LDP_N_JOBS` | int | `1` | Default number of parallel jobs |
 | `LDP_MODELS_N_JOBS` | int | `1` | Number of parallel jobs for model training |
 | `LDP_USE_GPU` | bool | `False` | Enable GPU acceleration (requires cuML) |
+| `LDP_SEQUENTIAL` | bool | `False` | Run training pipelines sequentially instead of in parallel |
 | `LDP_DEBUG` | bool | `True` | Enable debug mode for verbose logging |
 
 ## Internationalization Settings
@@ -140,6 +141,7 @@ LDP_NUM_SEEDS=30
 LDP_N_JOBS=4
 LDP_MODELS_N_JOBS=2
 LDP_USE_GPU=false
+LDP_SEQUENTIAL=false
 LDP_DEBUG=false
 
 # Internationalization
@@ -172,6 +174,7 @@ LDP_STORAGE_S3_REGION=us-east-1
 LDP_USE_GPU=false  # or true, based on use_gpu Terraform variable
 LDP_N_JOBS=4       # or 1 for GPU mode
 LDP_MODELS_N_JOBS=2
+LDP_SEQUENTIAL=false  # can be overridden via SEQUENTIAL parameter
 LDP_DEBUG=false
 LDP_LOCALE=en_US
 ```

@@ -542,3 +542,73 @@ class DescribePipelineStatus:
 
     def it_has_panicked_status(self) -> None:
         assert PipelineStatus.PANICKED.value == "panicked"
+
+
+class DescribePipelineExecutorReset:
+    @pytest.fixture
+    def executor(self) -> PipelineExecutor:
+        return PipelineExecutor(max_workers=2)
+
+    @pytest.fixture
+    def simple_pipeline(self) -> Pipeline[int, dict[str, Any]]:
+        def task(state: int, context: dict) -> TaskResult[int]:
+            return TaskResult(state + 1, TaskStatus.SUCCESS, "Done")
+
+        pipeline = Pipeline[int, dict]("simple_pipeline")
+        pipeline.add_step("step1", task)
+        return pipeline
+
+    def it_allows_reuse_after_reset(
+        self, executor: PipelineExecutor, simple_pipeline: Pipeline[int, dict[str, Any]]
+    ) -> None:
+        # First execution
+        result1 = executor.execute(
+            pipeline=simple_pipeline,
+            initial_state=0,
+            context={},
+        )
+        assert result1.succeeded()
+        assert result1.final_state == 1
+
+        # Reset and execute again
+        executor.reset()
+
+        result2 = executor.execute(
+            pipeline=simple_pipeline,
+            initial_state=10,
+            context={},
+        )
+        assert result2.succeeded()
+        assert result2.final_state == 11
+
+    def it_resets_started_flag(
+        self, executor: PipelineExecutor, simple_pipeline: Pipeline[int, dict[str, Any]]
+    ) -> None:
+        executor.execute(
+            pipeline=simple_pipeline,
+            initial_state=0,
+            context={},
+        )
+        assert executor._started is True
+
+        executor.reset()
+        assert not executor._started
+
+    def it_clears_pipeline_contexts(
+        self, executor: PipelineExecutor, simple_pipeline: Pipeline[int, dict[str, Any]]
+    ) -> None:
+        executor.execute(
+            pipeline=simple_pipeline,
+            initial_state=0,
+            context={},
+        )
+        assert len(executor._pipeline_contexts) > 0
+
+        executor.reset()
+        assert len(executor._pipeline_contexts) == 0
+
+    def it_can_reset_before_any_execution(self, executor: PipelineExecutor) -> None:
+        # Should not raise
+        executor.reset()
+        assert not executor._started
+        assert len(executor._pipeline_contexts) == 0

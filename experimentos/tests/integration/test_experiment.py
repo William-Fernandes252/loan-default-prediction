@@ -184,6 +184,7 @@ def resource_settings() -> ResourceSettings:
         use_gpu=False,
         n_jobs=1,
         models_n_jobs=1,
+        sequential=False,
     )
 
 
@@ -244,6 +245,10 @@ def _create_mock_pipeline_executor(
         def wait(self) -> list[Any]:
             """No-op for mock."""
             return []
+
+        def reset(self) -> None:
+            """Reset for reuse in sequential mode."""
+            self._scheduled.clear()
 
     return MockPipelineExecutor()  # type: ignore[return-value]
 
@@ -1219,7 +1224,150 @@ class DescribeSkipResumeFlag:
         new_exec_combinations = predictions_repository.get_completed_combinations(new_exec_id)
 
         assert len(first_exec_combinations) == 1  # Original incomplete execution
-        assert len(new_exec_combinations) == 5     # New complete execution (5 techniques * 1 seed)
+        assert len(new_exec_combinations) == 5  # New complete execution (5 techniques * 1 seed)
 
         # Verify they are distinct
         assert first_exec_id != new_exec_id
+
+
+class DescribeSequentialExecution:
+    """Integration tests for sequential execution mode."""
+
+    def it_produces_same_results_in_sequential_mode(
+        self,
+        experiment_executor: ExperimentExecutor,
+        predictions_repository: FakePredictionsRepository,
+    ) -> None:
+        """Test that sequential mode produces the same combinations as parallel."""
+        params = ExperimentParams(
+            datasets=[Dataset.TAIWAN_CREDIT],
+            excluded_models=[
+                ModelType.SVM,
+                ModelType.XGBOOST,
+                ModelType.MLP,
+            ],
+        )
+        config: ExperimentConfig = {
+            "num_seeds": 2,
+            "n_jobs": 1,
+            "models_n_jobs": 1,
+            "use_gpu": False,
+            "sequential": True,
+        }
+
+        experiment_executor.execute_experiment(params, config)
+
+        completed = predictions_repository.get_completed_combinations(params.execution_id)
+        assert len(completed) == 10  # 5 techniques * 2 seeds
+
+        # Check both seeds are present
+        seeds = {c.seed for c in completed}
+        assert seeds == {1, 2}
+
+        # Check all valid techniques are present
+        techniques = {c.technique for c in completed}
+        assert Technique.CS_SVM not in techniques  # Only valid for SVM
+        assert len(techniques) == 5
+
+    def it_saves_predictions_correctly_in_sequential_mode(
+        self,
+        experiment_executor: ExperimentExecutor,
+        predictions_repository: FakePredictionsRepository,
+    ) -> None:
+        """Test that predictions are saved for each pipeline in sequential mode."""
+        params = ExperimentParams(
+            datasets=[Dataset.TAIWAN_CREDIT],
+            excluded_models=[
+                ModelType.SVM,
+                ModelType.XGBOOST,
+                ModelType.MLP,
+            ],
+        )
+        config: ExperimentConfig = {
+            "num_seeds": 1,
+            "n_jobs": 1,
+            "models_n_jobs": 1,
+            "use_gpu": False,
+            "sequential": True,
+        }
+
+        experiment_executor.execute_experiment(params, config)
+
+        completed = predictions_repository.get_completed_combinations(params.execution_id)
+        for combination in completed:
+            preds = predictions_repository.get_predictions(params.execution_id, combination)
+            assert preds is not None
+            assert len(preds.prediction) > 0
+            assert len(preds.target) > 0
+            assert len(preds.prediction) == len(preds.target)
+
+    def it_resumes_correctly_in_sequential_mode(
+        self,
+        training_pipeline_factory: TrainingPipelineFactory,
+        mock_model_trainer: MagicMock,
+        mock_data_splitter: MagicMock,
+        mock_training_data_loader: MagicMock,
+        mock_classifier_factory: MagicMock,
+        experiment_settings: ExperimentSettings,
+        resource_settings: ResourceSettings,
+    ) -> None:
+        """Test that auto-resume works in sequential mode."""
+        execution_id = "test-sequential-resumption"
+        predictions_repository = FakePredictionsRepository()
+
+        # Pre-populate with some completed combinations
+        pre_completed = ExperimentCombination(
+            dataset=Dataset.TAIWAN_CREDIT,
+            model_type=ModelType.RANDOM_FOREST,
+            technique=Technique.BASELINE,
+            seed=1,
+        )
+        predictions_repository.save_predictions(
+            execution_id=execution_id,
+            seed=pre_completed.seed,
+            dataset=pre_completed.dataset,
+            model_type=pre_completed.model_type,
+            technique=pre_completed.technique,
+            predictions=RawPredictions(
+                target=np.array([0, 1]),
+                prediction=np.array([0, 1]),
+            ),
+        )
+
+        executor = ExperimentExecutor(
+            training_pipeline_factory=training_pipeline_factory,
+            pipeline_executor=_create_mock_pipeline_executor(predictions_repository),
+            model_trainer=mock_model_trainer,
+            data_splitter=mock_data_splitter,
+            training_data_loader=mock_training_data_loader,
+            classifier_factory=mock_classifier_factory,
+            predictions_repository=predictions_repository,
+            experiment_settings=experiment_settings,
+            resource_settings=resource_settings,
+        )
+
+        params = ExperimentParams(
+            execution_id=execution_id,
+            datasets=[Dataset.TAIWAN_CREDIT],
+            excluded_models=[
+                ModelType.SVM,
+                ModelType.XGBOOST,
+                ModelType.MLP,
+            ],
+        )
+        config: ExperimentConfig = {
+            "num_seeds": 1,
+            "n_jobs": 1,
+            "models_n_jobs": 1,
+            "use_gpu": False,
+            "sequential": True,
+        }
+
+        executor.execute_experiment(params, config)
+
+        # Should have completed the remaining 4 techniques (BASELINE already done)
+        completed = predictions_repository.get_completed_combinations(execution_id)
+        assert len(completed) == 5  # All 5 techniques completed
+
+        # The pre-completed one should still be there
+        assert pre_completed in completed

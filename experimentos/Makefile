@@ -93,10 +93,11 @@ docs-serve:
 process-data:
 	uv run ldp data process
 
-## Run training experiments
+## Run training experiments (set SEQUENTIAL=true to run pipelines one at a time)
 .PHONY: train
+SEQUENTIAL ?=
 train:
-	uv run ldp experiment run
+	uv run ldp experiment run $(if $(filter true,$(SEQUENTIAL)),--sequential,)
 
 ## Analyze results
 .PHONY: analyze
@@ -187,7 +188,7 @@ submit-data-jobs:
 	done
 
 ## Submit an experiment job for a specific dataset (set DATASET=name)
-## Optional: SEEDS=<num_seeds> CV_FOLDS=<num_folds> NUM_JOBS=<num_parallel_jobs>
+## Optional: SEEDS=<num_seeds> CV_FOLDS=<num_folds> NUM_JOBS=<num_parallel_jobs> SEQUENTIAL=<true/false>
 .PHONY: submit-job
 submit-job:
 	@if [ -z "$(DATASET)" ]; then \
@@ -207,6 +208,9 @@ submit-job:
 	if [ -n "$(NUM_JOBS)" ]; then \
 		ENV_VARS="$$ENV_VARS,{\"name\":\"LDP_N_JOBS\",\"value\":\"$(NUM_JOBS)\"}"; \
 	fi; \
+	if [ -n "$(SEQUENTIAL)" ]; then \
+		ENV_VARS="$$ENV_VARS,{\"name\":\"LDP_SEQUENTIAL\",\"value\":\"$(SEQUENTIAL)\"}"; \
+	fi; \
 	if [ -n "$$ENV_VARS" ]; then \
 		ENV_VARS=$${ENV_VARS#,}; \
 		OVERRIDES="--container-overrides {\"environment\":[$$ENV_VARS]}"; \
@@ -224,7 +228,7 @@ submit-job:
 .PHONY: submit-jobs
 submit-jobs:
 	@for dataset in corporate_credit_rating lending_club taiwan_credit; do \
-		$(MAKE) submit-job DATASET=$$dataset SEEDS=$(SEEDS) CV_FOLDS=$(CV_FOLDS) NUM_JOBS=$(NUM_JOBS); \
+		$(MAKE) submit-job DATASET=$$dataset SEEDS=$(SEEDS) CV_FOLDS=$(CV_FOLDS) NUM_JOBS=$(NUM_JOBS) SEQUENTIAL=$(SEQUENTIAL); \
 	done
 
 

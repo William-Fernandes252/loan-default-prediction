@@ -1,5 +1,6 @@
 """Definition of the experiment execution service."""
 
+import gc
 from typing import Generator, TypedDict, override
 
 from loguru import logger
@@ -32,6 +33,7 @@ class ExperimentConfig(TypedDict, total=False):
     use_gpu: bool
     n_jobs: int
     models_n_jobs: int
+    sequential: bool
 
 
 class ExperimentParams(BaseModel):
@@ -136,6 +138,7 @@ class ExperimentExecutor:
             "use_gpu": self._resource_settings.use_gpu,
             "n_jobs": self._resource_settings.n_jobs,
             "models_n_jobs": self._resource_settings.models_n_jobs,
+            "sequential": self._resource_settings.sequential,
         }
 
     def execute_experiment(
@@ -151,8 +154,11 @@ class ExperimentExecutor:
             models_n_jobs=config["models_n_jobs"],
             **{dataset.value: (dataset in params.datasets) for dataset in Dataset},
         ):
-            self._schedule_pipelines(params, config)
-            self._execute_pipelines(params.execution_id, config["n_jobs"])
+            if config.get("sequential", False):
+                self._execute_experiment_sequentially(params, config)
+            else:
+                self._schedule_pipelines(params, config)
+                self._execute_pipelines(params.execution_id, config["n_jobs"])
 
     def _merge_with_default_config(self, config: ExperimentConfig) -> ExperimentConfig:
         """Get the default experiment configuration from settings."""
@@ -197,6 +203,62 @@ class ExperimentExecutor:
         else:
             logger.info(
                 "Execution: scheduled {scheduled} combinations",
+                scheduled=scheduled_count,
+            )
+
+    def _execute_experiment_sequentially(
+        self, params: ExperimentParams, config: ExperimentConfig
+    ) -> None:
+        """Execute training pipelines one at a time, freeing memory between each."""
+        completed = self._get_completed_combinations(params.execution_id)
+
+        scheduled_count = 0
+        skipped_count = 0
+
+        observers = {
+            _SavePredictionsOnTrainingCompletionObserver(
+                params.execution_id, self._predictions_repository
+            )
+        }
+
+        for dataset in params.datasets:
+            for model_type in self._get_model_types(params):
+                for technique in Technique:
+                    if self._is_valid_combination(model_type, technique):
+                        for seed in self._generate_seeds(config["num_seeds"]):
+                            combination = ExperimentCombination(
+                                dataset=dataset,
+                                model_type=model_type,
+                                technique=technique,
+                                seed=seed,
+                            )
+                            if combination in completed:
+                                skipped_count += 1
+                                continue
+
+                            scheduled_count += 1
+
+                            pipeline, initial_state, context = self._create_training_pipeline(
+                                dataset, model_type, technique, seed, config
+                            )
+                            self._pipeline_executor.schedule(pipeline, initial_state, context)
+                            self._pipeline_executor.start(
+                                observers=observers,
+                                max_workers=config["n_jobs"],
+                            )
+                            self._pipeline_executor.wait()
+                            self._pipeline_executor.reset()
+                            gc.collect()
+
+        if skipped_count > 0:
+            logger.info(
+                "Sequential execution complete: ran {scheduled}, skipped {skipped} completed combinations",
+                scheduled=scheduled_count,
+                skipped=skipped_count,
+            )
+        else:
+            logger.info(
+                "Sequential execution complete: ran {scheduled} combinations",
                 scheduled=scheduled_count,
             )
 

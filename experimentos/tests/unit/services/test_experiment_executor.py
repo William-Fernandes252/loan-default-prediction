@@ -76,6 +76,7 @@ def mock_resource_settings() -> MagicMock:
     settings.use_gpu = False
     settings.n_jobs = 4
     settings.models_n_jobs = 2
+    settings.sequential = False
     return settings
 
 
@@ -148,6 +149,7 @@ class DescribeExperimentExecutorInit:
         assert executor._default_config["use_gpu"] == mock_resource_settings.use_gpu
         assert executor._default_config["n_jobs"] == mock_resource_settings.n_jobs
         assert executor._default_config["models_n_jobs"] == mock_resource_settings.models_n_jobs
+        assert executor._default_config["sequential"] == mock_resource_settings.sequential
 
 
 class DescribeExecuteExperiment:
@@ -229,7 +231,6 @@ class DescribeExecuteExperiment:
         executor: ExperimentExecutor,
         mock_resource_settings: MagicMock,
     ) -> None:
-        params = ExperimentParams(datasets=[Dataset.TAIWAN_CREDIT])
         config: ExperimentConfig = {"num_seeds": 10}
 
         # Access default config to verify merge behavior
@@ -564,3 +565,98 @@ class DescribeSeedGeneration:
         seeds = list(executor._generate_seeds(0))
 
         assert seeds == []
+
+
+class DescribeSequentialExecution:
+    def it_executes_pipelines_sequentially_when_config_is_set(
+        self,
+        executor: ExperimentExecutor,
+        mock_pipeline_executor: MagicMock,
+    ) -> None:
+        params = ExperimentParams(
+            datasets=[Dataset.TAIWAN_CREDIT],
+            excluded_models=[ModelType.RANDOM_FOREST, ModelType.XGBOOST, ModelType.MLP],
+        )
+        config: ExperimentConfig = {"num_seeds": 2, "sequential": True}
+
+        executor.execute_experiment(params, config)
+
+        # SVM: 6 techniques * 2 seeds = 12 combinations
+        # Each should trigger schedule, start, wait, reset
+        assert mock_pipeline_executor.schedule.call_count == 12
+        assert mock_pipeline_executor.start.call_count == 12
+        assert mock_pipeline_executor.wait.call_count == 12
+        assert mock_pipeline_executor.reset.call_count == 12
+
+    def it_does_not_use_schedule_for_parallel_path_in_sequential_mode(
+        self,
+        executor: ExperimentExecutor,
+        mock_pipeline_executor: MagicMock,
+    ) -> None:
+        """In sequential mode, _schedule_pipelines (bulk) is NOT called;
+        instead, individual schedule/start/wait/reset cycles are used."""
+        params = ExperimentParams(
+            datasets=[Dataset.TAIWAN_CREDIT],
+            excluded_models=[ModelType.RANDOM_FOREST, ModelType.XGBOOST, ModelType.MLP],
+        )
+        config: ExperimentConfig = {"num_seeds": 1, "sequential": True}
+
+        executor.execute_experiment(params, config)
+
+        # In sequential mode, start is called once per combination (not once overall)
+        assert mock_pipeline_executor.start.call_count == 6
+        # And each start is paired with a wait and reset
+        assert mock_pipeline_executor.wait.call_count == 6
+        assert mock_pipeline_executor.reset.call_count == 6
+
+    def it_skips_completed_combinations_in_sequential_mode(
+        self,
+        executor: ExperimentExecutor,
+        mock_pipeline_executor: MagicMock,
+        mock_predictions_repository: MagicMock,
+    ) -> None:
+        params = ExperimentParams(
+            datasets=[Dataset.TAIWAN_CREDIT],
+            excluded_models=[ModelType.RANDOM_FOREST, ModelType.XGBOOST, ModelType.MLP],
+        )
+        config: ExperimentConfig = {"num_seeds": 2, "sequential": True}
+
+        # Mock 5 completed combinations for SVM
+        completed = {
+            ExperimentCombination(Dataset.TAIWAN_CREDIT, ModelType.SVM, Technique.BASELINE, 1),
+            ExperimentCombination(Dataset.TAIWAN_CREDIT, ModelType.SVM, Technique.BASELINE, 2),
+            ExperimentCombination(Dataset.TAIWAN_CREDIT, ModelType.SVM, Technique.SMOTE, 1),
+            ExperimentCombination(Dataset.TAIWAN_CREDIT, ModelType.SVM, Technique.SMOTE, 2),
+            ExperimentCombination(
+                Dataset.TAIWAN_CREDIT, ModelType.SVM, Technique.RANDOM_UNDER_SAMPLING, 1
+            ),
+        }
+        mock_predictions_repository.get_completed_combinations.return_value = completed
+
+        executor.execute_experiment(params, config)
+
+        # 12 total - 5 completed = 7 remaining
+        assert mock_pipeline_executor.schedule.call_count == 7
+        assert mock_pipeline_executor.start.call_count == 7
+        assert mock_pipeline_executor.wait.call_count == 7
+        assert mock_pipeline_executor.reset.call_count == 7
+
+    def it_uses_parallel_by_default(
+        self,
+        executor: ExperimentExecutor,
+        mock_pipeline_executor: MagicMock,
+    ) -> None:
+        params = ExperimentParams(
+            datasets=[Dataset.TAIWAN_CREDIT],
+            excluded_models=[ModelType.RANDOM_FOREST, ModelType.XGBOOST, ModelType.MLP],
+        )
+        config: ExperimentConfig = {"num_seeds": 1}
+
+        executor.execute_experiment(params, config)
+
+        # Parallel mode: schedule is called for all, then start once and wait once
+        assert mock_pipeline_executor.schedule.call_count == 6
+        assert mock_pipeline_executor.start.call_count == 1
+        assert mock_pipeline_executor.wait.call_count == 1
+        # reset is NOT called in parallel mode
+        assert mock_pipeline_executor.reset.call_count == 0

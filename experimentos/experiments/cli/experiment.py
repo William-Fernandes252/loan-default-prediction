@@ -76,6 +76,14 @@ def run(
             help="Skip auto-resume and start a new execution, even if incomplete executions exist.",
         ),
     ] = False,
+    sequential: Annotated[
+        bool | None,
+        typer.Option(
+            "--sequential/--no-sequential",
+            "-s",
+            help="Run training pipelines sequentially instead of in parallel. Reduces memory usage.",
+        ),
+    ] = None,
 ):
     """Run experiments on specified datasets and models."""
     logger.info("Starting experiment run...")
@@ -94,7 +102,7 @@ def run(
     )
 
     # Build experiment config
-    config = _build_experiment_config(jobs, models_jobs, use_gpu)
+    config = _build_experiment_config(jobs, models_jobs, use_gpu, sequential)
 
     # Resolve parameters
     result = resolver.resolve_params(options, config)
@@ -180,7 +188,10 @@ def _log_resolution_status(status: ResolutionStatus, context: ResolutionContext)
 
 
 def _build_experiment_config(
-    jobs: int | None, models_jobs: int | None, use_gpu: bool | None
+    jobs: int | None,
+    models_jobs: int | None,
+    use_gpu: bool | None,
+    sequential: bool | None,
 ) -> ExperimentConfig:
     """Build experiment configuration from CLI options.
 
@@ -190,6 +201,7 @@ def _build_experiment_config(
         jobs: Number of parallel jobs for experiment execution
         models_jobs: Number of parallel jobs for model training
         use_gpu: Whether to use GPU acceleration
+        sequential: Whether to run pipelines sequentially
 
     Returns:
         Experiment configuration dictionary
@@ -201,4 +213,6 @@ def _build_experiment_config(
         config["models_n_jobs"] = models_jobs
     if use_gpu is not None:
         config["use_gpu"] = use_gpu
+    if sequential is not None:
+        config["sequential"] = sequential
     return config

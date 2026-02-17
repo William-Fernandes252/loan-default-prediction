@@ -202,6 +202,9 @@ class ResourceSettings(BaseSettings):
     models_n_jobs: Annotated[int, Field(default=1)]
     """Number of parallel jobs for model training."""
 
+    sequential: Annotated[bool, Field(default=False)]
+    """Whether to run training pipelines sequentially instead of in parallel."""
+
 
 class LdpSettings(BaseSettings):
     """Root settings class that composes all settings groups."""

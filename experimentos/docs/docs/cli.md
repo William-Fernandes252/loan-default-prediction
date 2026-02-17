@@ -86,7 +86,9 @@ uv run ldp experiment run [OPTIONS]
 | `--jobs`, `-j` | int | auto | Number of parallel jobs (based on RAM) |
 | `--models-jobs`, `-m` | int | auto | Number of parallel jobs for model training |
 | `--use-gpu`, `-g` | flag | false | Enable GPU acceleration |
+| `--sequential`, `-s` | flag | false | Run training pipelines sequentially (reduces memory usage) |
 | `--execution-id`, `-e` | string | none | Continue a previous experiment by its execution ID |
+| `--skip-resume` | flag | false | Start a new execution instead of resuming |
 
 **Examples:**
 
@@ -99,6 +101,9 @@ uv run ldp experiment run --only-dataset taiwan_credit
 
 # Exclude SVM models (slow to train)
 uv run ldp experiment run --exclude-model svm
+
+# Run with sequential execution (reduces memory usage)
+uv run ldp experiment run --sequential
 
 # Continue an interrupted experiment
 uv run ldp experiment run --execution-id <execution-id>
