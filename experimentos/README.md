@@ -187,6 +187,29 @@ Sequential execution:
 - Useful for large datasets that don't fit multiple pipelines in memory
 - Model-level parallelism (`--models-jobs`) still works within each pipeline
 
+### Running Experiments with Docker Compose
+
+Use the dedicated compose file for isolated experiment runs with explicit resource controls.
+
+```bash
+# Validate compose configuration
+make compose-experiment-config
+
+# Run all datasets with memory-safe defaults (sequential + 1 job)
+make compose-experiment-run
+
+# Run a single dataset
+make compose-experiment-run DATASET=taiwan_credit
+
+# Override search scale/resource settings
+make compose-experiment-run DATASET=taiwan_credit N_JOBS=1 MODELS_N_JOBS=1 CV_FOLDS=2 NUM_SEEDS=3 SEQUENTIAL=true
+
+# GPU mode (requires NVIDIA runtime)
+make compose-experiment-run DATASET=taiwan_credit GPU_PROFILE=true
+```
+
+The compose workflow reads defaults from `.env.experiments`.
+
 ### 3. Analysis
 
 Generate analysis reports and visualizations.

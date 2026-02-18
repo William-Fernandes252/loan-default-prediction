@@ -104,6 +104,28 @@ train:
 analyze:
 	uv run ldp analyze all
 
+## Validate experiments compose config
+.PHONY: compose-experiment-config
+compose-experiment-config:
+	docker compose -f docker-compose.yaml config
+
+## Run experiments in Docker Compose (optional: DATASET=taiwan_credit GPU_PROFILE=true)
+## Optional: N_JOBS=1 MODELS_N_JOBS=1 CV_FOLDS=3 NUM_SEEDS=5 SEQUENTIAL=true
+.PHONY: compose-experiment-run
+DATASET ?=
+GPU_PROFILE ?= false
+N_JOBS ?= 1
+MODELS_N_JOBS ?= 1
+CV_FOLDS ?= 3
+NUM_SEEDS ?= 5
+compose-experiment-run:
+	LDP_N_JOBS=$(N_JOBS) \
+	LDP_MODELS_N_JOBS=$(MODELS_N_JOBS) \
+	LDP_CV_FOLDS=$(CV_FOLDS) \
+	LDP_NUM_SEEDS=$(NUM_SEEDS) \
+	LDP_SEQUENTIAL=$(if $(filter true,$(SEQUENTIAL)),true,false) \
+	docker compose -f docker-compose.yaml $(if $(filter true,$(GPU_PROFILE)),--profile gpu,) run --rm $(if $(filter true,$(GPU_PROFILE)),app-gpu,app) experiment run $(if $(DATASET),--only-dataset $(DATASET),) $(if $(filter true,$(GPU_PROFILE)),--use-gpu,)
+
 
 #################################################################################
 # INFRASTRUCTURE                                                                #

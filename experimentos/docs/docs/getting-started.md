@@ -73,13 +73,31 @@ You can filter experiments by dataset, model, or technique:
 
 ```bash
 # Run only on Taiwan Credit dataset
-uv run ldp experiment run --dataset taiwan_credit
+uv run ldp experiment run --only-dataset taiwan_credit
 
-# Run only Random Forest experiments
-uv run ldp experiment run --model random_forest
+# Exclude SVM (slow to train)
+uv run ldp experiment run --exclude-model svm
 
-# Resume an interrupted experiment
-uv run ldp experiment run --resume
+# Resume a specific interrupted execution
+uv run ldp experiment run --execution-id <execution-id>
+```
+
+### Run Experiments in Docker Compose
+
+Use the dedicated compose file when you want tighter resource control.
+
+```bash
+# Validate compose configuration
+make compose-experiment-config
+
+# Run with conservative defaults from .env.experiments
+make compose-experiment-run
+
+# Run only one dataset
+make compose-experiment-run DATASET=taiwan_credit
+
+# GPU mode (requires NVIDIA runtime)
+make compose-experiment-run DATASET=taiwan_credit GPU_PROFILE=true
 ```
 
 ### 3. Analyze Results
