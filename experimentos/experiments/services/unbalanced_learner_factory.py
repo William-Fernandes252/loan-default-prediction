@@ -112,7 +112,12 @@ class UnbalancedLearnerFactory:
             steps.append(("sampler", self._create_smote_sampler(seed)))
         elif technique == Technique.SMOTE_TOMEK:
             steps.append(
-                ("sampler", SMOTETomek(random_state=seed, smote=self._create_smote_sampler(seed)))
+                (
+                    "sampler",
+                    SMOTETomek(
+                        random_state=seed, smote=self._create_smote_sampler(seed), n_jobs=n_jobs
+                    ),
+                )
             )
         # Add classifier
         clf = self._get_model_instance(model_type, seed, use_gpu=use_gpu, n_jobs=n_jobs)
