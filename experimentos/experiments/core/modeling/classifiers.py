@@ -113,7 +113,7 @@ class MetaCostClassifier(ClassifierMixin, BaseEstimator):
         self,
         base_estimator: BaseEstimator,
         cost_matrix: dict[int, Any] | str | None = None,
-        n_estimators: int = 50,
+        n_estimators: int = 10,
         random_state: int | None = None,
         n_jobs: int | None = None,
     ):

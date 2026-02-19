@@ -34,11 +34,17 @@ if HAS_CUML:
 
 
 class UnbalancedLearnerFactory:
-    """Factory for creating estimators that handle unbalanced datasets."""
+    """Factory for creating estimators that handle unbalanced datasets.
 
-    def __init__(self, use_gpu: bool = False, sampler_k_neighbors: int = 3) -> None:
+    This factory creates pipelines that include imputation, scaling, optional sampling techniques, and the specified classifier. It supports both CPU and GPU-based estimators, automatically selecting based on availability and configuration.
+    """
+
+    def __init__(
+        self, use_gpu: bool = False, sampler_k_neighbors: int = 3, bagging_estimators: int = 10
+    ) -> None:
         self._use_gpu = use_gpu
         self._sampler_k_neighbors = sampler_k_neighbors
+        self._bagging_estimators = bagging_estimators
 
         if self._use_gpu and not HAS_CUML:
             raise ImportError("cuML is not available, cannot use GPU-based estimators.")
@@ -124,7 +130,12 @@ class UnbalancedLearnerFactory:
 
         # Wrap with MetaCost if applicable
         if technique == Technique.META_COST:
-            clf = MetaCostClassifier(base_estimator=clf, random_state=seed, n_jobs=n_jobs)
+            clf = MetaCostClassifier(
+                base_estimator=clf,
+                random_state=seed,
+                n_jobs=n_jobs,
+                n_estimators=self._bagging_estimators,
+            )
 
         steps.append(("clf", clf))
         return cast(Classifier, ImbPipeline(steps))

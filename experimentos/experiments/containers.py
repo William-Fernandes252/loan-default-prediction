@@ -191,6 +191,7 @@ class Container(containers.DeclarativeContainer):
         UnbalancedLearnerFactory,
         use_gpu=settings.provided.resources.use_gpu,
         sampler_k_neighbors=settings.provided.experiment.sampler_k_neighbors,
+        bagging_estimators=settings.provided.experiment.bagging_estimators,
     )
     """Factory for creating unbalanced learner classifiers."""
 
