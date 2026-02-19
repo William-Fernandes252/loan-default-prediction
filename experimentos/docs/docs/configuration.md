@@ -47,10 +47,10 @@ Used when `LDP_STORAGE_PROVIDER=gcs`.
 
 ## Experiment Settings
 
-Settings that control the experimental design.
-
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
+| `LDP_SAMPLER_K_NEIGHBORS` | int | `3` | Number of neighbors for over-sampling techniques (SMOTE) |
+| `LDP_BAGGING_ESTIMATORS` | int | `10` | Number of estimators for bagging in cost-sensitive classifiers (e.g., MetaCost) |
 | `LDP_CV_FOLDS` | int | `5` | Number of cross-validation folds for hyperparameter tuning |
 | `LDP_NUM_SEEDS` | int | `30` | Number of random seeds (experiment iterations) |
 
