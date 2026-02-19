@@ -11,8 +11,8 @@ class TrainingData(NamedTuple):
     """Represents training data splits.
 
     Attributes:
-        X (pl.LazyFrame): Features for training.
-        y (pl.LazyFrame): Target labels for training.
+        X (pl.DataFrame): Features for training.
+        y (pl.DataFrame): Target labels for training.
     """
 
     X: pl.DataFrame
