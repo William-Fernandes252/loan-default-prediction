@@ -106,25 +106,32 @@ analyze:
 
 ## Validate experiments compose config
 .PHONY: compose-experiment-config
+EXPERIMENT_COMPOSE_FILE ?= docker-compose.yaml
 compose-experiment-config:
-	docker compose -f docker-compose.yaml config
+	docker compose -f $(EXPERIMENT_COMPOSE_FILE) config
 
 ## Run experiments in Docker Compose (optional: DATASET=taiwan_credit GPU_PROFILE=true)
 ## Optional: N_JOBS=1 MODELS_N_JOBS=1 CV_FOLDS=3 NUM_SEEDS=5 SEQUENTIAL=true
+## Optional: BUILD=true EXECUTION_ID=<id> SKIP_RESUME=true
+## Optional: EXPERIMENT_CLI='uv run ldp experiment run' (needed with docker-compose.e2e.yaml)
 .PHONY: compose-experiment-run
 DATASET ?=
 GPU_PROFILE ?= false
+BUILD ?= true
 N_JOBS ?= 1
 MODELS_N_JOBS ?= 1
 CV_FOLDS ?= 3
 NUM_SEEDS ?= 5
+EXECUTION_ID ?=
+SKIP_RESUME ?= false
+EXPERIMENT_CLI ?= experiment run
 compose-experiment-run:
 	LDP_N_JOBS=$(N_JOBS) \
 	LDP_MODELS_N_JOBS=$(MODELS_N_JOBS) \
 	LDP_CV_FOLDS=$(CV_FOLDS) \
 	LDP_NUM_SEEDS=$(NUM_SEEDS) \
 	LDP_SEQUENTIAL=$(if $(filter true,$(SEQUENTIAL)),true,false) \
-	docker compose -f docker-compose.yaml $(if $(filter true,$(GPU_PROFILE)),--profile gpu,) run --rm $(if $(filter true,$(GPU_PROFILE)),app-gpu,app) experiment run $(if $(DATASET),--only-dataset $(DATASET),) $(if $(filter true,$(GPU_PROFILE)),--use-gpu,)
+	docker compose -f $(EXPERIMENT_COMPOSE_FILE) $(if $(filter true,$(GPU_PROFILE)),--profile gpu,) run --rm $(if $(filter true,$(BUILD)),--build,) $(if $(filter true,$(GPU_PROFILE)),app-gpu,app) $(EXPERIMENT_CLI) $(if $(DATASET),--only-dataset $(DATASET),) $(if $(filter true,$(GPU_PROFILE)),--use-gpu,) $(if $(EXECUTION_ID),--execution-id $(EXECUTION_ID),) $(if $(filter true,$(SKIP_RESUME)),--skip-resume,)
 
 
 #################################################################################
