@@ -387,16 +387,24 @@ class ExperimentExecutor:
             True if all expected combinations have been executed, False otherwise.
         """
         completed = self._predictions_repository.get_completed_combinations(execution_id)
-        completed_count = len(completed)
 
-        # Calculate expected total using the same logic as _schedule_pipelines
-        expected_count = 0
+        expected: set[ExperimentCombination] = set()
+        num_seeds = config.get("num_seeds", self._default_config["num_seeds"])
+
         for dataset in params.datasets:
             for model_type in self._get_model_types(params):
                 for technique in Technique:
-                    if self._is_valid_combination(model_type, technique):
-                        expected_count += config.get(
-                            "num_seeds", self._default_config["num_seeds"]
+                    if not self._is_valid_combination(model_type, technique):
+                        continue
+
+                    for seed in self._generate_seeds(num_seeds):
+                        expected.add(
+                            ExperimentCombination(
+                                dataset=dataset,
+                                model_type=model_type,
+                                technique=technique,
+                                seed=seed,
+                            )
                         )
 
-        return completed_count >= expected_count
+        return expected.issubset(completed)

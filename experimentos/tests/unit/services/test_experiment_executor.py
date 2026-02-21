@@ -464,6 +464,39 @@ class DescribeIsExecutionComplete:
 
         assert result is True
 
+    def it_ignores_completed_combinations_from_other_datasets(
+        self,
+        executor: ExperimentExecutor,
+        mock_predictions_repository: MagicMock,
+    ) -> None:
+        execution_id = "exec-505"
+        params = ExperimentParams(
+            datasets=[Dataset.LENDING_CLUB],
+            excluded_models=[ModelType.RANDOM_FOREST, ModelType.XGBOOST, ModelType.MLP],
+        )
+        config: ExperimentConfig = {"num_seeds": 2}
+
+        # Complete all expected combinations for a different dataset
+        # (Taiwan Credit) and only a subset for Lending Club.
+        completed = {
+            ExperimentCombination(dataset, ModelType.SVM, tech, seed)
+            for dataset in [Dataset.TAIWAN_CREDIT]
+            for tech in Technique
+            for seed in [1, 2]
+        }
+        completed.update(
+            {
+                ExperimentCombination(Dataset.LENDING_CLUB, ModelType.SVM, Technique.BASELINE, 1),
+                ExperimentCombination(Dataset.LENDING_CLUB, ModelType.SVM, Technique.BASELINE, 2),
+            }
+        )
+
+        mock_predictions_repository.get_completed_combinations.return_value = completed
+
+        result = executor.is_execution_complete(execution_id, params, config)
+
+        assert result is False
+
 
 class DescribeIsValidCombination:
     def it_allows_cs_svm_for_svm_model(self) -> None:
