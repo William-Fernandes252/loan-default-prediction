@@ -1,7 +1,7 @@
 """Custom estimators for cost-sensitive classification."""
 
 import enum
-from typing import Any, Optional, Protocol, cast
+from typing import Any, Optional, Protocol, cast, override
 
 import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
@@ -82,6 +82,12 @@ class RobustXGBClassifier(_ProbabilityMatrixClassesCorrectionMixin, XGBClassifie
 
     Inherits from XGBClassifier, so it works natively with GridSearchCV.
     """
+
+    @override
+    def fit(self, X, y, **kwargs):
+        if getattr(self, "base_score", None) is None:
+            self.set_params(base_score=0.5)
+        return super().fit(X, y, **kwargs)
 
     def predict_proba(self, X, **kwargs):  # type: ignore[override]
         probas = super().predict_proba(X, **kwargs)
