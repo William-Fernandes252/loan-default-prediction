@@ -108,6 +108,30 @@ class DescribeGetParamsForTechnique:
         assert "clf__cost_matrix" in params[0]
         assert "clf__base_estimator__n_estimators" in params[0]
 
+    def it_disables_mlp_early_stopping_for_meta_cost(
+        self, grid_search_trainer: GridSearchModelTrainer
+    ) -> None:
+        params = grid_search_trainer.get_params_for_classifier(
+            model_type=ModelType.MLP,
+            technique=Technique.META_COST,
+            cost_grids=[],
+        )
+
+        assert "clf__base_estimator__early_stopping" in params[0]
+        assert params[0]["clf__base_estimator__early_stopping"] == [False]
+
+    def it_disables_mlp_early_stopping_for_random_under_sampling(
+        self, grid_search_trainer: GridSearchModelTrainer
+    ) -> None:
+        params = grid_search_trainer.get_params_for_classifier(
+            model_type=ModelType.MLP,
+            technique=Technique.RANDOM_UNDER_SAMPLING,
+            cost_grids=[],
+        )
+
+        assert "clf__early_stopping" in params[0]
+        assert params[0]["clf__early_stopping"] == [False]
+
 
 class DescribeTrain:
     def it_adjusts_cv_folds_for_small_minority_class(self) -> None:
