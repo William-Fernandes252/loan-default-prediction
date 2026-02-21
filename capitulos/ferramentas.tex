@@ -84,8 +84,11 @@ Dada a ausência de uma matriz de custos predefinida para os conjuntos de dados,
     \multirow{3}{*}{Random Forest} & Nº de Estimadores & 100, 200 \\
     & Profundidade Máxima & 5, 10, 20 \\
     & Min. Amostras por Folha & 1, 5 \\ \hline
-    \multirow{2}{*}{SVM} & C (Regularização) & 0.1, 1, 10, 100 \\
-    & Kernel & rbf \\ \hline
+    \multirow{5}{*}{SVM} & Loss & log\_loss \\
+    & Alpha (Regularização) & 0.0001, 0.001, 0.01 \\
+    & Penalty & l2, elasticnet \\
+    & Max Iter & 1000, 2000 \\
+    & Tolerância & 0.001 \\ \hline
     \multirow{7}{*}{XGBoost} & Nº de Estimadores & 100, 200 \\
     & Taxa de Aprendizado & 0.01, 0.1 \\
     & Profundidade Máxima & 3, 6, 10 \\
