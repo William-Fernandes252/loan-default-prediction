@@ -50,8 +50,8 @@ class DescribeGetParamsForClassifier:
         )
 
         assert len(params) > 0
-        assert "clf__C" in params[0]
-        assert "clf__kernel" in params[0]
+        assert "clf__loss" in params[0]
+        assert "clf__alpha" in params[0]
 
     def it_returns_random_forest_hyperparameters(
         self, grid_search_trainer: GridSearchModelTrainer

@@ -69,6 +69,16 @@ class DescribeCreateModelWithSVM:
         assert isinstance(result, ImbPipeline)
         assert isinstance(result.named_steps["clf"], SVC)  # type: ignore[union-attr]
 
+    def it_exposes_svc_grid_parameters(self, learner_factory: UnbalancedLearnerFactory) -> None:
+        result = learner_factory.create_model(
+            model_type=ModelType.SVM, technique=Technique.BASELINE, seed=42
+        )
+
+        params = result.named_steps["clf"].get_params()  # type: ignore[union-attr]
+        assert "loss" in params
+        assert "alpha" in params
+        assert "penalty" in params
+
 
 class DescribeCreateModelWithXGBoost:
     def it_creates_xgboost_pipeline(self, learner_factory: UnbalancedLearnerFactory) -> None:

@@ -110,11 +110,11 @@ class GridSearchModelTrainer:
         """Get hyperparameters for the given model type."""
         params: dict[ModelType, dict[str, Any]] = {
             ModelType.SVM: {
-                "clf__C": [0.1, 1, 10, 100],
-                "clf__kernel": ["rbf"],  # Linear can be too slow for large datasets
-                "clf__probability": [True],  # Necessary for some metrics or MetaCost
-                # For CS-SVM, the weight will be injected dynamically or via grid here
-                # If it is Baseline, class_weight is None.
+                "clf__loss": ["log_loss"],
+                "clf__alpha": [1e-4, 1e-3, 1e-2],
+                "clf__penalty": ["l2", "elasticnet"],
+                "clf__max_iter": [1000, 2000],
+                "clf__tol": [1e-3],
             },
             ModelType.RANDOM_FOREST: {
                 "clf__n_estimators": [100, 200],
