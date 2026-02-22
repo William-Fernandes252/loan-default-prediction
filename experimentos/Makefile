@@ -126,6 +126,7 @@ EXECUTION_ID ?=
 SKIP_RESUME ?= false
 EXPERIMENT_CLI ?= experiment run
 compose-experiment-run:
+	LDP_STORAGE_BASE_PATH=/app \
 	LDP_N_JOBS=$(N_JOBS) \
 	LDP_MODELS_N_JOBS=$(MODELS_N_JOBS) \
 	LDP_CV_FOLDS=$(CV_FOLDS) \
