@@ -16,16 +16,20 @@ This directory contains the project documentation built with [MkDocs](https://ww
 You can use the following `make` commands from the root directory to manage the documentation:
 
 - **Build documentation**:
+
   ```bash
   make docs-build
   ```
+
   This will generate the static site in the `site/` directory.
 
 - **Serve documentation**:
+
   ```bash
   make docs-serve
   ```
-  This will start a local development server (usually at http://127.0.0.1:8000) with live-reloading.
+
+  This will start a local development server (usually at <http://127.0.0.1:8000>) with live-reloading.
 
 Alternatively, you can use `uv` directly:
 
