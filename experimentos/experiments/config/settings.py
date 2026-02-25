@@ -160,9 +160,6 @@ class ExperimentSettings(BaseSettings):
     sampler_k_neighbors: Annotated[int, Field(default=3)]
     """Number of neighbors for over-sampling."""
 
-    bagging_estimators: Annotated[int, Field(default=10)]
-    """Number of estimators for bagging (used by cost-sensitive classifiers like Meta-cost)."""
-
     cv_folds: Annotated[int, Field(default=5)]
     """Number of cross-validation folds."""
 

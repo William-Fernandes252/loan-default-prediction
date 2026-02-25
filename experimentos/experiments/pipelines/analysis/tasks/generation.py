@@ -490,7 +490,7 @@ def create_imbalance_impact_task(metric: Metric = Metric.BALANCED_ACCURACY) -> A
 
 
 # Cost-sensitive techniques for comparison analysis
-_COST_SENSITIVE_TECHNIQUES = {Technique.META_COST, Technique.CS_SVM}
+_COST_SENSITIVE_TECHNIQUES = {Technique.CS_SVM}
 _RESAMPLING_TECHNIQUES = {
     Technique.SMOTE,
     Technique.RANDOM_UNDER_SAMPLING,
@@ -505,7 +505,7 @@ def generate_cs_vs_resampling_plot(
     """Generate a bar plot comparing cost-sensitive vs resampling techniques.
 
     Creates a grouped bar chart showing balanced accuracy performance for
-    cost-sensitive methods (MetaCost, CS-SVM) vs resampling methods
+    cost-sensitive methods (CS-SVM) vs resampling methods
     (SMOTE, RUS, SMOTE-Tomek).
 
     Args:

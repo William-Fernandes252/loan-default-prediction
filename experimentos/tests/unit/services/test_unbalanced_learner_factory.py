@@ -13,7 +13,6 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import StandardScaler
 
 from experiments.core.modeling.classifiers import (
-    MetaCostClassifier,
     ModelType,
     Technique,
 )
@@ -134,13 +133,6 @@ class DescribeCreateModelWithSamplingTechniques:
 
         assert "sampler" in result.named_steps  # type: ignore[operator]
         assert isinstance(result.named_steps["sampler"], SMOTETomek)  # type: ignore[union-attr]
-
-    def it_wraps_with_metacost_classifier(self, learner_factory: UnbalancedLearnerFactory) -> None:
-        result = learner_factory.create_model(
-            model_type=ModelType.RANDOM_FOREST, technique=Technique.META_COST, seed=42
-        )
-
-        assert isinstance(result.named_steps["clf"], MetaCostClassifier)  # type: ignore[union-attr]
 
     def it_omits_sampler_for_baseline(self, learner_factory: UnbalancedLearnerFactory) -> None:
         result = learner_factory.create_model(

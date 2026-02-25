@@ -357,10 +357,10 @@ class DescribeExperimentExecutor:
             experiment_executor.execute_experiment(params, config)
 
             # Should have trained for each valid technique with 1 seed
-            # Valid techniques for RF: BASELINE, SMOTE, RANDOM_UNDER_SAMPLING, SMOTE_TOMEK, META_COST
+            # Valid techniques for RF: BASELINE, SMOTE, RANDOM_UNDER_SAMPLING, SMOTE_TOMEK
             # CS_SVM is only for SVM, so should be excluded
             completed = predictions_repository.get_completed_combinations(params.execution_id)
-            assert len(completed) == 5  # 5 techniques * 1 seed
+            assert len(completed) == 4  # 4 techniques * 1 seed
 
         def it_saves_predictions_for_each_combination(
             self,
@@ -417,9 +417,9 @@ class DescribeExperimentExecutor:
 
             experiment_executor.execute_experiment(params, config)
 
-            # 5 techniques * 2 seeds = 10 combinations
+            # 4 techniques * 2 seeds = 8 combinations
             completed = predictions_repository.get_completed_combinations(params.execution_id)
-            assert len(completed) == 10
+            assert len(completed) == 8
 
             # Check both seeds are present
             seeds = {c.seed for c in completed}
@@ -448,9 +448,9 @@ class DescribeExperimentExecutor:
 
             experiment_executor.execute_experiment(params, config)
 
-            # 2 datasets * 5 techniques * 1 seed = 10 combinations
+            # 2 datasets * 4 techniques * 1 seed = 8 combinations
             completed = predictions_repository.get_completed_combinations(params.execution_id)
-            assert len(completed) == 10
+            assert len(completed) == 8
 
             # Check both datasets are present
             datasets = {c.dataset for c in completed}
@@ -479,12 +479,12 @@ class DescribeExperimentExecutor:
 
             experiment_executor.execute_experiment(params, config)
 
-            # SVM has all 6 techniques including CS_SVM
+            # SVM has all 5 techniques including CS_SVM
             completed = predictions_repository.get_completed_combinations(params.execution_id)
             techniques = {c.technique for c in completed}
 
             assert Technique.CS_SVM in techniques
-            assert len(techniques) == 6  # All techniques valid for SVM
+            assert len(techniques) == 5  # All techniques valid for SVM
 
         def it_trains_all_model_types_when_none_excluded(
             self,
@@ -559,7 +559,7 @@ class DescribeExperimentResumption:
 
         executor1.execute_experiment(params, config)
         first_run_count = len(predictions_repository.get_completed_combinations(execution_id))
-        assert first_run_count == 10  # 5 techniques * 2 seeds
+        assert first_run_count == 8  # 4 techniques * 2 seeds
 
         # Track how many pipelines are scheduled in second run
         mock_executor2 = _create_mock_pipeline_executor(predictions_repository)
@@ -653,9 +653,9 @@ class DescribeExperimentResumption:
 
         executor.execute_experiment(params, config)
 
-        # Should have completed the remaining 4 techniques (BASELINE already done)
+        # Should have completed the remaining 3 techniques (BASELINE already done)
         completed = predictions_repository.get_completed_combinations(execution_id)
-        assert len(completed) == 5  # All 5 techniques completed
+        assert len(completed) == 4  # All 4 techniques completed
 
         # The pre-completed one should still be there
         assert pre_completed in completed
@@ -732,7 +732,7 @@ class DescribeExperimentResumption:
 
         is_complete = executor1.is_execution_complete(latest_exec_id, params, config)
 
-        # Should be incomplete (2 out of 10 combinations)
+        # Should be incomplete (2 out of 8 combinations)
         assert is_complete is False
 
         # Step 3: Resume execution
@@ -752,7 +752,7 @@ class DescribeExperimentResumption:
 
         # Should now be complete
         final_completed = predictions_repository.get_completed_combinations(latest_exec_id)
-        assert len(final_completed) == 10  # 5 techniques * 2 seeds
+        assert len(final_completed) == 8  # 4 techniques * 2 seeds
 
         # Verify it's now complete
         is_complete_after = executor2.is_execution_complete(latest_exec_id, params, config)
@@ -792,7 +792,7 @@ class DescribeGetCompletedCount:
         experiment_executor.execute_experiment(params, config)
 
         count = experiment_executor.get_completed_count(params.execution_id)
-        assert count == 5  # 5 techniques * 1 seed
+        assert count == 4  # 4 techniques * 1 seed
 
 
 class DescribeIsExecutionComplete:
@@ -806,7 +806,7 @@ class DescribeIsExecutionComplete:
         """Test that execution is detected as incomplete when combinations remain."""
         execution_id = "partial-execution"
 
-        # Pre-populate with only 2 out of 5 combinations
+        # Pre-populate with only 2 out of 8 combinations
         for seed in [1, 2]:
             predictions_repository.save_predictions(
                 execution_id=execution_id,
@@ -836,7 +836,7 @@ class DescribeIsExecutionComplete:
             "use_gpu": False,
         }
 
-        # Only 2 out of 10 combinations (5 techniques * 2 seeds)
+        # Only 2 out of 8 combinations (4 techniques * 2 seeds)
         is_complete = experiment_executor.is_execution_complete(execution_id, params, config)
         assert is_complete is False
 
@@ -914,7 +914,7 @@ class DescribeIsExecutionComplete:
             "use_gpu": False,
         }
 
-        # Should be complete (15 completed >= 10 expected)
+        # Should be complete (12 completed >= 8 expected)
         is_complete = experiment_executor.is_execution_complete(execution_id, params, config)
         assert is_complete is True
 
@@ -943,7 +943,7 @@ class DescribeExperimentConfig:
 
         # Should use default num_seeds from experiment_settings (2)
         completed = predictions_repository.get_completed_combinations(params.execution_id)
-        assert len(completed) == 10  # 5 techniques * 2 seeds (default)
+        assert len(completed) == 8  # 4 techniques * 2 seeds (default)
 
     def it_overrides_defaults_with_explicit_config(
         self,
@@ -967,7 +967,7 @@ class DescribeExperimentConfig:
 
         # Should use overridden num_seeds (1)
         completed = predictions_repository.get_completed_combinations(params.execution_id)
-        assert len(completed) == 5  # 5 techniques * 1 seed
+        assert len(completed) == 4  # 4 techniques * 1 seed
 
 
 class DescribeValidModelTechniqueCombinations:
@@ -1001,8 +1001,8 @@ class DescribeValidModelTechniqueCombinations:
 
         # CS_SVM should NOT be in the completed techniques (only valid for SVM)
         assert Technique.CS_SVM not in techniques
-        # Other 5 techniques should be present
-        assert len(techniques) == 5
+        # Other 4 techniques should be present
+        assert len(techniques) == 4
 
     def it_includes_all_techniques_for_svm(
         self,
@@ -1030,7 +1030,7 @@ class DescribeValidModelTechniqueCombinations:
         completed = predictions_repository.get_completed_combinations(params.execution_id)
         techniques = {c.technique for c in completed}
 
-        # All 6 techniques should be present for SVM
+        # All 5 techniques should be present for SVM
         assert techniques == set(Technique)
 
 
@@ -1089,8 +1089,8 @@ class DescribePipelineScheduling:
 
         executor.execute_experiment(params, config)
 
-        # 1 dataset * 1 model * 5 techniques * 3 seeds = 15 pipelines
-        assert len(scheduled_count) == 15
+        # 1 dataset * 1 model * 4 techniques * 3 seeds = 12 pipelines
+        assert len(scheduled_count) == 12
 
     def it_creates_pipelines_with_correct_context(
         self,
@@ -1224,7 +1224,7 @@ class DescribeSkipResumeFlag:
         new_exec_combinations = predictions_repository.get_completed_combinations(new_exec_id)
 
         assert len(first_exec_combinations) == 1  # Original incomplete execution
-        assert len(new_exec_combinations) == 5  # New complete execution (5 techniques * 1 seed)
+        assert len(new_exec_combinations) == 4  # New complete execution (4 techniques * 1 seed)
 
         # Verify they are distinct
         assert first_exec_id != new_exec_id
@@ -1258,7 +1258,7 @@ class DescribeSequentialExecution:
         experiment_executor.execute_experiment(params, config)
 
         completed = predictions_repository.get_completed_combinations(params.execution_id)
-        assert len(completed) == 10  # 5 techniques * 2 seeds
+        assert len(completed) == 8  # 4 techniques * 2 seeds
 
         # Check both seeds are present
         seeds = {c.seed for c in completed}
@@ -1267,7 +1267,7 @@ class DescribeSequentialExecution:
         # Check all valid techniques are present
         techniques = {c.technique for c in completed}
         assert Technique.CS_SVM not in techniques  # Only valid for SVM
-        assert len(techniques) == 5
+        assert len(techniques) == 4
 
     def it_saves_predictions_correctly_in_sequential_mode(
         self,
@@ -1365,9 +1365,9 @@ class DescribeSequentialExecution:
 
         executor.execute_experiment(params, config)
 
-        # Should have completed the remaining 4 techniques (BASELINE already done)
+        # Should have completed the remaining 3 techniques (BASELINE already done)
         completed = predictions_repository.get_completed_combinations(execution_id)
-        assert len(completed) == 5  # All 5 techniques completed
+        assert len(completed) == 4  # All 4 techniques completed
 
         # The pre-completed one should still be there
         assert pre_completed in completed

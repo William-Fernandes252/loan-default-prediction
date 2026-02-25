@@ -10,11 +10,11 @@ The core problem addressed is the bias in predictive models caused by the rarity
 
 The project is documented in the following chapters (available in the root directory as LaTeX files):
 
-1.  **Introduction**: Contextualization, problem statement, and objectives.
-2.  **Theoretical Foundation**: Credit risk, machine learning, and imbalanced learning.
-3.  **Tools and Methodology**: Description of the datasets, algorithms, and experimental setup.
-4.  **Results and Discussion**: Analysis of the performance of each strategy.
-5.  **Conclusion**: Final considerations and future work.
+1. **Introduction**: Contextualization, problem statement, and objectives.
+2. **Theoretical Foundation**: Credit risk, machine learning, and imbalanced learning.
+3. **Tools and Methodology**: Description of the datasets, algorithms, and experimental setup.
+4. **Results and Discussion**: Analysis of the performance of each strategy.
+5. **Conclusion**: Final considerations and future work.
 
 ### Key Features
 

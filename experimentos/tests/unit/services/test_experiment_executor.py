@@ -166,12 +166,12 @@ class DescribeExecuteExperiment:
 
         executor.execute_experiment(params, config)
 
-        # Calculate expected: 1 dataset * 4 model types * 6 techniques * 2 seeds
+        # Calculate expected: 1 dataset * 4 model types * techniques * 2 seeds
         # But CS_SVM is only valid for SVM, so:
-        # SVM: 6 techniques * 2 seeds = 12
-        # Other 3 models: 5 techniques each * 2 seeds = 30
-        # Total: 12 + 30 = 42
-        assert mock_pipeline_executor.schedule.call_count == 42
+        # SVM: 5 techniques * 2 seeds = 10
+        # Other 3 models: 4 techniques each * 2 seeds = 24
+        # Total: 10 + 24 = 34
+        assert mock_pipeline_executor.schedule.call_count == 34
 
     def it_starts_pipeline_executor_with_observers(
         self,
@@ -266,8 +266,8 @@ class DescribeExecuteExperiment:
 
         executor.execute_experiment(params, config)
 
-        # Only SVM with 6 techniques * 2 seeds = 12 total, minus 5 completed = 7 scheduled
-        assert mock_pipeline_executor.schedule.call_count == 7
+        # Only SVM with 5 techniques * 2 seeds = 10 total, minus 5 completed = 5 scheduled
+        assert mock_pipeline_executor.schedule.call_count == 5
 
     def it_processes_multiple_datasets(
         self,
@@ -282,8 +282,8 @@ class DescribeExecuteExperiment:
 
         executor.execute_experiment(params, config)
 
-        # 2 datasets * 1 model (SVM) * 6 techniques * 1 seed = 12
-        assert mock_pipeline_executor.schedule.call_count == 12
+        # 2 datasets * 1 model (SVM) * 5 techniques * 1 seed = 10
+        assert mock_pipeline_executor.schedule.call_count == 10
 
     def it_excludes_specified_models(
         self,
@@ -299,8 +299,8 @@ class DescribeExecuteExperiment:
         executor.execute_experiment(params, config)
 
         # 1 dataset * 2 models (SVM + MLP) * techniques * 1 seed
-        # SVM: 6 techniques, MLP: 5 techniques = 11
-        assert mock_pipeline_executor.schedule.call_count == 11
+        # SVM: 5 techniques, MLP: 4 techniques = 9
+        assert mock_pipeline_executor.schedule.call_count == 9
 
 
 class DescribeGetCompletedCount:
@@ -350,7 +350,7 @@ class DescribeIsExecutionComplete:
         )
         config: ExperimentConfig = {"num_seeds": 2}
 
-        # Mock all 12 combinations for SVM (6 techniques * 2 seeds)
+        # Mock all 10 combinations for SVM (5 techniques * 2 seeds)
         completed = {
             ExperimentCombination(Dataset.TAIWAN_CREDIT, ModelType.SVM, tech, seed)
             for tech in Technique
@@ -374,7 +374,7 @@ class DescribeIsExecutionComplete:
         )
         config: ExperimentConfig = {"num_seeds": 2}
 
-        # Mock only 5 completed combinations (out of 12 expected)
+        # Mock only 5 completed combinations (out of 10 expected)
         completed = {
             ExperimentCombination(Dataset.TAIWAN_CREDIT, ModelType.SVM, Technique.BASELINE, 1),
             ExperimentCombination(Dataset.TAIWAN_CREDIT, ModelType.SVM, Technique.BASELINE, 2),
@@ -402,7 +402,7 @@ class DescribeIsExecutionComplete:
         )
         config: ExperimentConfig = {"num_seeds": 3}
 
-        # Mock all combinations for 3 seeds (6 techniques * 3 seeds = 18)
+        # Mock all combinations for 3 seeds (5 techniques * 3 seeds = 15)
         completed = {
             ExperimentCombination(Dataset.TAIWAN_CREDIT, ModelType.SVM, tech, seed)
             for tech in Technique
@@ -451,7 +451,7 @@ class DescribeIsExecutionComplete:
         )
         config: ExperimentConfig = {"num_seeds": 2}
 
-        # Mock all combinations for 2 datasets (2 * 6 techniques * 2 seeds = 24)
+        # Mock all combinations for 2 datasets (2 * 5 techniques * 2 seeds = 20)
         completed = {
             ExperimentCombination(dataset, ModelType.SVM, tech, seed)
             for dataset in [Dataset.TAIWAN_CREDIT, Dataset.LENDING_CLUB]
@@ -527,7 +527,6 @@ class DescribeIsValidCombination:
             Technique.SMOTE,
             Technique.RANDOM_UNDER_SAMPLING,
             Technique.SMOTE_TOMEK,
-            Technique.META_COST,
         ]
 
         for model_type in ModelType:
@@ -614,12 +613,12 @@ class DescribeSequentialExecution:
 
         executor.execute_experiment(params, config)
 
-        # SVM: 6 techniques * 2 seeds = 12 combinations
+        # SVM: 5 techniques * 2 seeds = 10 combinations
         # Each should trigger schedule, start, wait, reset
-        assert mock_pipeline_executor.schedule.call_count == 12
-        assert mock_pipeline_executor.start.call_count == 12
-        assert mock_pipeline_executor.wait.call_count == 12
-        assert mock_pipeline_executor.reset.call_count == 12
+        assert mock_pipeline_executor.schedule.call_count == 10
+        assert mock_pipeline_executor.start.call_count == 10
+        assert mock_pipeline_executor.wait.call_count == 10
+        assert mock_pipeline_executor.reset.call_count == 10
 
     def it_does_not_use_schedule_for_parallel_path_in_sequential_mode(
         self,
@@ -637,10 +636,10 @@ class DescribeSequentialExecution:
         executor.execute_experiment(params, config)
 
         # In sequential mode, start is called once per combination (not once overall)
-        assert mock_pipeline_executor.start.call_count == 6
+        assert mock_pipeline_executor.start.call_count == 5
         # And each start is paired with a wait and reset
-        assert mock_pipeline_executor.wait.call_count == 6
-        assert mock_pipeline_executor.reset.call_count == 6
+        assert mock_pipeline_executor.wait.call_count == 5
+        assert mock_pipeline_executor.reset.call_count == 5
 
     def it_skips_completed_combinations_in_sequential_mode(
         self,
@@ -668,11 +667,11 @@ class DescribeSequentialExecution:
 
         executor.execute_experiment(params, config)
 
-        # 12 total - 5 completed = 7 remaining
-        assert mock_pipeline_executor.schedule.call_count == 7
-        assert mock_pipeline_executor.start.call_count == 7
-        assert mock_pipeline_executor.wait.call_count == 7
-        assert mock_pipeline_executor.reset.call_count == 7
+        # 10 total - 5 completed = 5 remaining
+        assert mock_pipeline_executor.schedule.call_count == 5
+        assert mock_pipeline_executor.start.call_count == 5
+        assert mock_pipeline_executor.wait.call_count == 5
+        assert mock_pipeline_executor.reset.call_count == 5
 
     def it_uses_parallel_by_default(
         self,
@@ -688,7 +687,7 @@ class DescribeSequentialExecution:
         executor.execute_experiment(params, config)
 
         # Parallel mode: schedule is called for all, then start once and wait once
-        assert mock_pipeline_executor.schedule.call_count == 6
+        assert mock_pipeline_executor.schedule.call_count == 5
         assert mock_pipeline_executor.start.call_count == 1
         assert mock_pipeline_executor.wait.call_count == 1
         # reset is NOT called in parallel mode

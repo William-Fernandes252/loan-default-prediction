@@ -154,38 +154,16 @@ class GridSearchModelTrainer:
         if technique == Technique.CS_SVM or (
             technique == Technique.BASELINE
             and model_type in [ModelType.SVM, ModelType.RANDOM_FOREST]
-            and technique != Technique.META_COST
         ):
             if technique == Technique.CS_SVM and model_type == ModelType.SVM:
                 new_params["clf__class_weight"] = cost_matrix
 
-        # 1.1 Handle MLP + RandomUnderSampling
+        # 2. Handle MLP + RandomUnderSampling
         # After RUS inside CV folds, fold-train sets can become very small.
         # MLP with early_stopping=True creates an internal stratified split,
         # which can fail with: "test_size = 1 should be >= number of classes = 2".
         if technique == Technique.RANDOM_UNDER_SAMPLING and model_type == ModelType.MLP:
             new_params["clf__early_stopping"] = [False]
-
-        if technique == Technique.META_COST and model_type == ModelType.MLP:
-            new_params["clf__early_stopping"] = [False]
-
-        # 2. Handle MetaCost
-        if technique == Technique.META_COST:
-            # Start with the cost matrix (parameter of MetaCost itself)
-            meta_cost_params = {"clf__cost_matrix": cost_matrix}
-
-            # Iterate through the base parameters (e.g., learning_rate, hidden_layer_sizes)
-            # and "push" them down into the base_estimator
-            for key, value in new_params.items():
-                if isinstance(key, str) and key.startswith("clf__"):
-                    # Transform: clf__param -> clf__base_estimator__param
-                    new_key = key.replace("clf__", "clf__base_estimator__", 1)
-                    meta_cost_params[new_key] = value
-                else:
-                    # Keep non-classifier params (e.g. sampler params) as is
-                    meta_cost_params[key] = value
-
-            return [meta_cost_params]
 
         return [new_params]
 

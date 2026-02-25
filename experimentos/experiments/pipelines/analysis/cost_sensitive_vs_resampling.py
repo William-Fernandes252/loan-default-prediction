@@ -25,7 +25,7 @@ def perform_cost_sensitive_vs_resampling_comparison(
     """Performs cost-sensitive vs resampling comparison on the model predictions.
 
     This task filters the computed per-seed metrics to isolate Cost-Sensitive techniques
-    (MetaCost, Cost-Sensitive SVM) and Resampling techniques (SMOTE, RUS,
+    (Cost-Sensitive SVM) and Resampling techniques (SMOTE, RUS,
     SMOTE-Tomek), then aggregates and selects the best performing technique from
     each group per model type for comparison.
 
@@ -46,7 +46,7 @@ def perform_cost_sensitive_vs_resampling_comparison(
         )
 
     # 1. Define Groups
-    cs_techniques = [Technique.META_COST, Technique.CS_SVM]
+    cs_techniques = [Technique.CS_SVM]
     resampling_techniques = [
         Technique.SMOTE,
         Technique.RANDOM_UNDER_SAMPLING,
@@ -76,7 +76,7 @@ def perform_cost_sensitive_vs_resampling_comparison(
 
     # 5. Find the Best Performing Technique per Group and Model
     # For a fair comparison, we take the best technique within each group for each model.
-    # e.g., for Random Forest, we compare (Best of SMOTE/RUS) vs (MetaCost)
+    # e.g., for Random Forest, we compare (Best of SMOTE/RUS/SMOTE-Tomek) vs (CS-SVM)
     best_per_group_lf = (
         grouped_lf.sort("g_mean", descending=True)
         .group_by("model_type", "approach")

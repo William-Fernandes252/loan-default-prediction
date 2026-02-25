@@ -44,8 +44,8 @@ def synthetic_training_data() -> TrainingData:
     np.random.shuffle(y)
 
     # Convert to Polars LazyFrames
-    X_df = pl.LazyFrame({f"feature_{i}": X[:, i] for i in range(n_features)})
-    y_df = pl.LazyFrame({"target": y})
+    X_df = pl.DataFrame({f"feature_{i}": X[:, i] for i in range(n_features)})
+    y_df = pl.DataFrame({"target": y})
 
     return TrainingData(X=X_df, y=y_df)
 
@@ -63,8 +63,8 @@ def imbalanced_training_data() -> TrainingData:
     y = np.array([0] * 160 + [1] * 40)
     np.random.shuffle(y)
 
-    X_df = pl.LazyFrame({f"feature_{i}": X[:, i] for i in range(n_features)})
-    y_df = pl.LazyFrame({"target": y})
+    X_df = pl.DataFrame({f"feature_{i}": X[:, i] for i in range(n_features)})
+    y_df = pl.DataFrame({"target": y})
 
     return TrainingData(X=X_df, y=y_df)
 
@@ -232,22 +232,6 @@ class DescribeTrainingExecutor:
             assert isinstance(result, TrainedModel)
             assert result.model is not None
 
-        def it_trains_random_forest_with_meta_cost(
-            self, training_executor: TrainingExecutor
-        ) -> None:
-            params = TrainingParams(
-                dataset=Dataset.TAIWAN_CREDIT,
-                model_type=ModelType.RANDOM_FOREST,
-                technique=Technique.META_COST,
-                n_jobs=1,
-                use_gpu=False,
-            )
-
-            result = training_executor.train_model(params)
-
-            assert isinstance(result, TrainedModel)
-            assert result.model is not None
-
         def it_trains_random_forest_with_cs_svm_technique(
             self, training_executor: TrainingExecutor
         ) -> None:
@@ -278,7 +262,7 @@ class DescribeTrainingExecutor:
             result = training_executor.train_model(params)
 
             # Get test data to predict on
-            X_test = synthetic_training_data.X.collect().to_numpy()[:10]
+            X_test = synthetic_training_data.X.to_numpy()[:10]
             predictions = result.model.predict(X_test)
 
             assert len(predictions) == 10

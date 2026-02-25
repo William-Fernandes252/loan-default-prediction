@@ -11,7 +11,7 @@ This project is part of a Bachelor's thesis in Computer Science focused on **Cre
 The main objective is to perform a comparative evaluation of techniques for handling data imbalance, specifically:
 
 - **Data Resampling**: Under-sampling (RUS), Over-sampling (SMOTE), and Hybrid methods (SMOTE-Tomek).
-- **Cost-Sensitive Learning**: MetaCost and Cost-Sensitive SVM.
+- **Cost-Sensitive Learning**: Cost-Sensitive SVM.
 
 The experiments evaluate these techniques across three distinct datasets (Lending Club, Taiwan Credit, and Corporate Credit) using robust metrics like G-mean and Balanced Accuracy.
 

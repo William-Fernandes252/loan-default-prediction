@@ -96,30 +96,6 @@ class DescribeGetParamsForTechnique:
         assert "clf__class_weight" in params[0]
         assert params[0]["clf__class_weight"] == cost_matrix
 
-    def it_wraps_params_for_metacost(self, grid_search_trainer: GridSearchModelTrainer) -> None:
-        cost_matrix = [np.array([[0, 1], [5, 0]])]
-
-        params = grid_search_trainer.get_params_for_classifier(
-            model_type=ModelType.RANDOM_FOREST,
-            technique=Technique.META_COST,
-            cost_grids=cost_matrix,
-        )
-
-        assert "clf__cost_matrix" in params[0]
-        assert "clf__base_estimator__n_estimators" in params[0]
-
-    def it_disables_mlp_early_stopping_for_meta_cost(
-        self, grid_search_trainer: GridSearchModelTrainer
-    ) -> None:
-        params = grid_search_trainer.get_params_for_classifier(
-            model_type=ModelType.MLP,
-            technique=Technique.META_COST,
-            cost_grids=[],
-        )
-
-        assert "clf__base_estimator__early_stopping" in params[0]
-        assert params[0]["clf__base_estimator__early_stopping"] == [False]
-
     def it_disables_mlp_early_stopping_for_random_under_sampling(
         self, grid_search_trainer: GridSearchModelTrainer
     ) -> None:

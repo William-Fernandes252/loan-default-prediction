@@ -26,12 +26,13 @@ We evaluate the following machine learning algorithms:
 The project compares two main approaches:
 
 ### 1. Resampling Methods
+
 - **Random Under-sampling (RUS)**: Removes majority class samples.
 - **SMOTE (Synthetic Minority Over-sampling Technique)**: Generates synthetic minority samples.
 - **SMOTE-Tomek**: Hybrid method combining SMOTE with Tomek links for cleaning.
 
 ### 2. Cost-Sensitive Learning
-- **MetaCost**: A wrapper that makes any classifier cost-sensitive by relabeling training data.
+
 - **Cost-Sensitive SVM (CSSVM)**: Modifies the SVM objective function to penalize misclassifications of the minority class more heavily.
 
 ## Experimental Design
@@ -42,10 +43,10 @@ To ensure statistical significance and robustness:
 - **Stratified Split**: 70% training and 30% testing, preserving class proportions.
 - **Hyperparameter Optimization**: 5-fold cross-validation using Grid Search on the training set.
 - **Metrics**: We focus on metrics that are robust to imbalance:
-    - **G-mean** (Geometric Mean of Sensitivity and Specificity)
-    - **Balanced Accuracy**
-    - **Recall** (Sensitivity)
-    - **F1-Score**
+  - **G-mean** (Geometric Mean of Sensitivity and Specificity)
+  - **Balanced Accuracy**
+  - **Recall** (Sensitivity)
+  - **F1-Score**
 
 ## Mapping Methodology to Implementation
 

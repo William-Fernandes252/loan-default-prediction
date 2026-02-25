@@ -20,7 +20,6 @@ from sklearn.preprocessing import StandardScaler
 from experiments.core.modeling.classifiers import (
     HAS_CUML,
     Classifier,
-    MetaCostClassifier,
     ModelType,
     Technique,
 )
@@ -39,12 +38,9 @@ class UnbalancedLearnerFactory:
     This factory creates pipelines that include imputation, scaling, optional sampling techniques, and the specified classifier. It supports both CPU and GPU-based estimators, automatically selecting based on availability and configuration.
     """
 
-    def __init__(
-        self, use_gpu: bool = False, sampler_k_neighbors: int = 3, bagging_estimators: int = 10
-    ) -> None:
+    def __init__(self, use_gpu: bool = False, sampler_k_neighbors: int = 3) -> None:
         self._use_gpu = use_gpu
         self._sampler_k_neighbors = sampler_k_neighbors
-        self._bagging_estimators = bagging_estimators
 
         if self._use_gpu and not HAS_CUML:
             raise ImportError("cuML is not available, cannot use GPU-based estimators.")
@@ -127,15 +123,6 @@ class UnbalancedLearnerFactory:
             )
         # Add classifier
         clf = self._get_model_instance(model_type, seed, use_gpu=use_gpu, n_jobs=n_jobs)
-
-        # Wrap with MetaCost if applicable
-        if technique == Technique.META_COST:
-            clf = MetaCostClassifier(
-                base_estimator=clf,
-                random_state=seed,
-                n_jobs=n_jobs,
-                n_estimators=self._bagging_estimators,
-            )
 
         steps.append(("clf", clf))
         return cast(Classifier, ImbPipeline(steps))
