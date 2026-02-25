@@ -12,6 +12,7 @@
 	"latex-workshop.view.pdf.viewer": "tab",
 	"latex-workshop.latex.autoBuild.run": "onSave",
 	"latex-workshop.latex.outDir": "%DIR%/.output",
+	"latex-workshop.latex.auxDir": "%DIR%/.latex",
 	"latex-workshop.formatting.latex": "tex-fmt",
 	"cSpell.words": ["esparsidade"]
 }
