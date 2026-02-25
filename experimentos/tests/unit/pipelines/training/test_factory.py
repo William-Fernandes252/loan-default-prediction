@@ -316,6 +316,29 @@ class DescribePredict:
 
         assert result.message == "Predictions made successfully."
 
+    def it_keeps_trained_model_in_state(self, context: TrainingPipelineContext) -> None:
+        mock_model = MagicMock()
+        mock_model.predict.return_value = pl.Series([0, 1])
+
+        trained_model = TrainedModel(
+            model=mock_model,
+            params={"n_estimators": 100},
+            seed=42,
+        )
+        state: TrainingPipelineState = {
+            "trained_model": trained_model,
+            "data_split": SplitData(
+                X_train=pl.DataFrame({"f": [1]}),  # type: ignore[arg-type]
+                X_test=pl.DataFrame({"f": [2, 3]}),  # type: ignore[arg-type]
+                y_train=pl.DataFrame({"t": [0]}),  # type: ignore[arg-type]
+                y_test=pl.DataFrame({"t": [1, 0]}),  # type: ignore[arg-type]
+            ),
+        }
+
+        result = predict(state, context)
+
+        assert result.state.get("trained_model") == trained_model
+
 
 class DescribeTrainingPipelineFactory:
     @pytest.fixture
