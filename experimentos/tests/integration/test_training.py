@@ -121,6 +121,14 @@ def model_trainer() -> GridSearchModelTrainer:
 
 
 @pytest.fixture
+def simple_trainer():
+    """Fixture providing a simple trainer for fast testing."""
+    from experiments.services.simple_trainer import SimpleModelTrainer
+
+    return SimpleModelTrainer(cost_grids=["balanced"])
+
+
+@pytest.fixture
 def pipeline_executor() -> PipelineExecutor:
     """Fixture providing a real pipeline executor."""
     return PipelineExecutor(max_workers=1)
@@ -459,3 +467,74 @@ class DescribeTrainingPipelineExecution:
         assert predictions.prediction is not None
         assert predictions.target is not None
         assert len(predictions.prediction) == len(predictions.target)
+
+
+class DescribeSimpleModelTrainer:
+    """Integration tests for SimpleModelTrainer."""
+
+    def it_trains_model_with_default_params(
+        self, simple_trainer, data_splitter, synthetic_training_data, classifier_factory
+    ) -> None:
+        """Test that SimpleModelTrainer can train models successfully."""
+        from experiments.core.training.trainers import ModelTrainRequest
+
+        # Split the data
+        split_data = data_splitter.split(synthetic_training_data, seed=42)
+
+        # Create classifier
+        classifier = classifier_factory.create_model(
+            model_type=ModelType.SVM,
+            technique=Technique.BASELINE,
+            seed=42,
+        )
+
+        # Create training request
+        request = ModelTrainRequest(
+            classifier=classifier,
+            model_type=ModelType.SVM,
+            technique=Technique.BASELINE,
+            data=split_data,
+            seed=42,
+        )
+
+        # Train model
+        result = simple_trainer.train(request)
+
+        # Verify trained model
+        assert isinstance(result, TrainedModel)
+        assert result.model is not None
+        assert result.seed == 42
+        assert "clf__alpha" in result.params
+
+        # Verify model can make predictions
+        predictions = result.model.predict(split_data.X_test)
+        assert len(predictions) == len(split_data.y_test)
+        assert all(p in [0, 1] for p in predictions)
+
+    def it_applies_cs_svm_technique(
+        self, simple_trainer, data_splitter, synthetic_training_data, classifier_factory
+    ) -> None:
+        """Test that SimpleModelTrainer applies CS-SVM technique correctly."""
+        from experiments.core.training.trainers import ModelTrainRequest
+
+        split_data = data_splitter.split(synthetic_training_data, seed=42)
+
+        classifier = classifier_factory.create_model(
+            model_type=ModelType.SVM,
+            technique=Technique.CS_SVM,
+            seed=42,
+        )
+
+        request = ModelTrainRequest(
+            classifier=classifier,
+            model_type=ModelType.SVM,
+            technique=Technique.CS_SVM,
+            data=split_data,
+            seed=42,
+        )
+
+        result = simple_trainer.train(request)
+
+        assert result.model is not None
+        assert "clf__class_weight" in result.params
+        assert result.params["clf__class_weight"] == "balanced"

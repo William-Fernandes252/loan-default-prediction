@@ -179,6 +179,15 @@ class ExperimentSettings(BaseSettings):
     ]
     """Cost grids for optimization."""
 
+    use_simple_trainer: Annotated[
+        bool,
+        Field(
+            default=False,
+            description="Use SimpleModelTrainer instead of GridSearchModelTrainer for faster testing",
+        ),
+    ]
+    """Use `SimpleModelTrainer` for fast testing without hyperparameter optimization."""
+
 
 class ResourceSettings(BaseSettings):
     """Resource-related settings."""

@@ -34,6 +34,7 @@ from experiments.services.model_versioning import ModelVersioner, TrainedModelLo
 from experiments.services.predictions_analyzer import PredictionsAnalyzer
 from experiments.services.resource_calculator import ResourceCalculator
 from experiments.services.seed_generator import generate_seed
+from experiments.services.simple_trainer import SimpleModelTrainer
 from experiments.services.stratified_data_splitter import StratifiedDataSplitter
 from experiments.services.training_executor import TrainingExecutor
 from experiments.services.unbalanced_learner_factory import UnbalancedLearnerFactory
@@ -132,6 +133,31 @@ def create_storage(
         raise ValueError(f"Unknown storage provider: {storage_settings.provider}")
 
 
+def _create_model_trainer(settings: LdpSettings) -> Any:
+    """Factory function to create the appropriate trainer based on settings.
+
+    Returns `SimpleModelTrainer` when `use_simple_trainer=True` for fast testing,
+    otherwise returns `GridSearchModelTrainer` for full hyperparameter optimization.
+
+    Args:
+        settings: Application settings.
+
+    Returns:
+        Configured model trainer instance.
+    """
+    if settings.experiment.use_simple_trainer:
+        logger.debug("Using SimpleModelTrainer (fast mode - no hyperparameter optimization)")
+        return SimpleModelTrainer(
+            cost_grids=settings.experiment.cost_grids,
+        )
+
+    logger.debug("Using GridSearchModelTrainer (full hyperparameter optimization)")
+    return GridSearchModelTrainer(
+        cv_folds=settings.experiment.cv_folds,
+        cost_grids=settings.experiment.cost_grids,
+    )
+
+
 class Container(containers.DeclarativeContainer):
     """Main dependency injection container for the experiments application.
 
@@ -195,9 +221,8 @@ class Container(containers.DeclarativeContainer):
     """Factory for creating unbalanced learner classifiers."""
 
     _model_trainer = providers.Singleton(
-        GridSearchModelTrainer,
-        cv_folds=settings.provided.experiment.cv_folds,
-        cost_grids=settings.provided.experiment.cost_grids,
+        _create_model_trainer,
+        settings=settings,
     )
     """Model trainer service for training and hyperparameter tuning."""
 

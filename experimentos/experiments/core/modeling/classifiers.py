@@ -110,13 +110,15 @@ class Technique(enum.StrEnum):
 
 
 class Classifier(Protocol):
-    """Protocol for classifier models, based on scikit-learn."""
+    """Protocol for classifier models, based on Scikit-Learn."""
 
     def fit(self, X: Any, y: Any) -> None: ...
 
     def predict(self, X: Any) -> Any: ...
 
     def predict_proba(self, X: Any) -> Any: ...
+
+    def set_params(self, **params: Any) -> None: ...
 
 
 class ClassifierFactory(Protocol):
