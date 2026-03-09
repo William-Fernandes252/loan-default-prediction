@@ -74,14 +74,14 @@ msgstr "SMOTE"
 msgid "RUS"
 msgstr "RUS"
 
-msgid "SMOTE Tomek"
-msgstr "SMOTE Tomek"
+msgid "SMOTE-Tomek"
+msgstr "SMOTE-Tomek"
 
 msgid "Meta Cost"
 msgstr "Meta Cost"
 
-msgid "CSSVM"
-msgstr "CSSVM"
+msgid "CS-SVM"
+msgstr "CS-SVM"
 
 # Metrics
 msgid "G-Mean"

@@ -12,7 +12,6 @@ import polars as pl
 import seaborn as sns
 
 from experiments.core.analysis.metrics import IMBALANCE_RATIOS, Metric
-from experiments.core.data import Dataset
 from experiments.core.modeling.classifiers import Technique
 from experiments.lib.pipelines.tasks import TaskResult, TaskStatus
 from experiments.pipelines.analysis.pipeline import (
@@ -20,73 +19,14 @@ from experiments.pipelines.analysis.pipeline import (
     AnalysisPipelineState,
     AnalysisPipelineTaskResult,
 )
-
-# Mapping from Dataset enum to translatable display names
-_DATASET_DISPLAY_NAMES: dict[Dataset, str] = {
-    Dataset.CORPORATE_CREDIT_RATING: "Corporate Credit Rating",
-    Dataset.LENDING_CLUB: "Lending Club",
-    Dataset.TAIWAN_CREDIT: "Taiwan Credit",
-}
-
-
-def _translate(context: AnalysisPipelineContext, msgid: str, **kwargs: str) -> str:
-    """Translate a message ID using the context's translator.
-
-    Falls back to the original msgid with parameter interpolation if no
-    translator is available.
-
-    Args:
-        context: The pipeline context with optional translator.
-        msgid: The message identifier to translate.
-        **kwargs: Optional parameters to interpolate.
-
-    Returns:
-        The translated string (or original if no translator).
-    """
-    if context.translator is not None:
-        return context.translator.translate(msgid, **kwargs)
-    # Fallback: interpolate msgid directly
-    if kwargs:
-        return msgid.format(**kwargs)
-    return msgid
-
-
-def _get_dataset_display_name(context: AnalysisPipelineContext, dataset: Dataset) -> str:
-    """Get the translated display name for a dataset.
-
-    Args:
-        context: The pipeline context with optional translator.
-        dataset: The dataset enum value.
-
-    Returns:
-        The translated display name for the dataset.
-    """
-    display_name = _DATASET_DISPLAY_NAMES.get(dataset, dataset.value)
-    return _translate(context, display_name)
-
-
-# Mapping from Metric enum to translatable display names
-_METRIC_DISPLAY_NAMES: dict[Metric, str] = {
-    Metric.BALANCED_ACCURACY: "Balanced Accuracy",
-    Metric.G_MEAN: "G-Mean",
-    Metric.F1_SCORE: "F1 Score",
-    Metric.PRECISION: "Precision",
-    Metric.SENSITIVITY: "Sensitivity",
-}
-
-
-def _get_metric_display_name(context: AnalysisPipelineContext, metric: Metric) -> str:
-    """Get the translated display name for a metric.
-
-    Args:
-        context: The pipeline context with optional translator.
-        metric: The metric enum value.
-
-    Returns:
-        The translated display name for the metric.
-    """
-    display_name = _METRIC_DISPLAY_NAMES.get(metric, metric.value.replace("_", " ").title())
-    return _translate(context, display_name)
+from experiments.pipelines.analysis.tasks.display_labels import (
+    create_plot_display_dataframe,
+    get_dataset_display_name,
+    get_metric_display_name,
+    get_model_type_display_name,
+    get_technique_display_name,
+    translate,
+)
 
 
 def generate_summary_table(
@@ -191,7 +131,7 @@ def generate_tradeoff_plot(
     df: pl.DataFrame = metrics.collect()
 
     # Convert to pandas for seaborn compatibility
-    pdf = df.to_pandas()
+    pdf, technique_column, model_column = create_plot_display_dataframe(df.to_pandas(), context)
 
     # Create the figure
     fig, ax = plt.subplots(figsize=(10, 8))
@@ -205,8 +145,8 @@ def generate_tradeoff_plot(
         data=pdf,
         x=precision_col,
         y=sensitivity_col,
-        hue="technique",
-        style="model_type",
+        hue=technique_column,
+        style=model_column,
         s=100,
         alpha=0.8,
         ax=ax,
@@ -214,21 +154,21 @@ def generate_tradeoff_plot(
 
     # Styling
     ax.set_xlabel(
-        _translate(context, "Precision - Trustworthiness of default prediction"), fontsize=12
+        translate(context, "Precision - Trustworthiness of default prediction"), fontsize=12
     )
     ax.set_ylabel(
-        _translate(context, "Recall (Sensitivity) - Ability to detect defaults"), fontsize=12
+        translate(context, "Recall (Sensitivity) - Ability to detect defaults"), fontsize=12
     )
     ax.set_title(
-        _translate(
+        translate(
             context,
             "Precision-Sensitivity Trade-off - {dataset_name}",
-            dataset_name=_get_dataset_display_name(context, context.dataset),
+            dataset_name=get_dataset_display_name(context, context.dataset),
         ),
         fontsize=14,
     )
     ax.legend(
-        title=_translate(context, "Technique") + " / " + _translate(context, "Model"),
+        title=translate(context, "Technique") + " / " + translate(context, "Model"),
         bbox_to_anchor=(1.05, 1),
         loc="upper left",
     )
@@ -291,7 +231,7 @@ def generate_stability_plot(
     df: pl.DataFrame = per_seed_metrics.collect()
 
     # Convert to pandas for seaborn compatibility
-    pdf = df.to_pandas()
+    pdf, technique_column, model_column = create_plot_display_dataframe(df.to_pandas(), context)
 
     # Sort technique and model_type alphabetically for consistent ordering
     pdf = pdf.sort_values(["technique", "model_type"])
@@ -302,9 +242,9 @@ def generate_stability_plot(
     # Create boxplot with seaborn
     sns.boxplot(
         data=pdf,
-        x="technique",
+        x=technique_column,
         y=metric.value,
-        hue="model_type",
+        hue=model_column,
         palette="viridis",
         showfliers=False,
         linewidth=1.5,
@@ -314,9 +254,9 @@ def generate_stability_plot(
     # Overlay with stripplot for individual points
     sns.stripplot(
         data=pdf,
-        x="technique",
+        x=technique_column,
         y=metric.value,
-        hue="model_type",
+        hue=model_column,
         dodge=True,
         alpha=0.4,
         palette="dark:black",
@@ -326,19 +266,19 @@ def generate_stability_plot(
     )
 
     # Styling
-    metric_display = _get_metric_display_name(context, metric)
+    metric_display = get_metric_display_name(context, metric)
     ax.set_ylabel(metric_display, fontsize=12)
-    ax.set_xlabel(_translate(context, "Handling Technique"), fontsize=12)
+    ax.set_xlabel(translate(context, "Handling Technique"), fontsize=12)
     ax.set_title(
-        _translate(
+        translate(
             context,
             "Stability Analysis: {metric_name} - {dataset_name}",
             metric_name=metric_display,
-            dataset_name=_get_dataset_display_name(context, context.dataset),
+            dataset_name=get_dataset_display_name(context, context.dataset),
         ),
         fontsize=14,
     )
-    ax.legend(title=_translate(context, "Model"), bbox_to_anchor=(1.01, 1), loc="upper left")
+    ax.legend(title=translate(context, "Model"), bbox_to_anchor=(1.01, 1), loc="upper left")
     ax.tick_params(axis="x", rotation=15)
 
     plt.tight_layout()
@@ -413,7 +353,7 @@ def generate_imbalance_impact_plot(
     df = df.sort("technique", "model_type")
 
     # Convert to pandas for seaborn compatibility
-    pdf = df.to_pandas()
+    pdf, technique_column, model_column = create_plot_display_dataframe(df.to_pandas(), context)
 
     # Create the figure
     fig, ax = plt.subplots(figsize=(10, 8))
@@ -426,8 +366,8 @@ def generate_imbalance_impact_plot(
         data=pdf,
         x="imbalance_ratio",
         y=metric_col,
-        hue="technique",
-        style="model_type",
+        hue=technique_column,
+        style=model_column,
         s=100,
         palette="muted",
         alpha=0.7,
@@ -439,22 +379,22 @@ def generate_imbalance_impact_plot(
     ax.set_xscale("log")
 
     # Styling
-    metric_display = _get_metric_display_name(context, metric)
+    metric_display = get_metric_display_name(context, metric)
     ax.set_xlabel(
-        _translate(context, "Imbalance Ratio (Majority/Minority) - Log Scale"), fontsize=12
+        translate(context, "Imbalance Ratio (Majority/Minority) - Log Scale"), fontsize=12
     )
     ax.set_ylabel(f"{metric_display} (Mean)", fontsize=12)
     ax.set_title(
-        _translate(
+        translate(
             context,
             "{metric_name} vs. Imbalance Ratio - {dataset_name}",
             metric_name=metric_display,
-            dataset_name=_get_dataset_display_name(context, context.dataset),
+            dataset_name=get_dataset_display_name(context, context.dataset),
         ),
         fontsize=14,
     )
     ax.legend(
-        title=_translate(context, "Technique") + " / " + _translate(context, "Model"),
+        title=translate(context, "Technique") + " / " + translate(context, "Model"),
         bbox_to_anchor=(1.01, 1),
         loc="upper left",
     )
@@ -537,7 +477,7 @@ def generate_cs_vs_resampling_plot(
     df = df.sort("technique", "model_type")
 
     # Convert to pandas for seaborn compatibility
-    pdf = df.to_pandas()
+    pdf, technique_column, model_column = create_plot_display_dataframe(df.to_pandas(), context)
 
     # Create the figure
     fig, ax = plt.subplots(figsize=(12, 8))
@@ -545,9 +485,9 @@ def generate_cs_vs_resampling_plot(
     # Create bar plot with error bars
     sns.barplot(
         data=pdf,
-        x="technique",
+        x=technique_column,
         y=Metric.BALANCED_ACCURACY.value,
-        hue="model_type",
+        hue=model_column,
         palette="Set2",
         errorbar="sd",
         capsize=0.1,
@@ -555,18 +495,18 @@ def generate_cs_vs_resampling_plot(
     )
 
     # Styling
-    ax.set_ylabel(_translate(context, "Balanced Accuracy"), fontsize=12)
-    ax.set_xlabel(_translate(context, "Technique"), fontsize=12)
+    ax.set_ylabel(translate(context, "Balanced Accuracy"), fontsize=12)
+    ax.set_xlabel(translate(context, "Technique"), fontsize=12)
     ax.set_title(
-        _translate(
+        translate(
             context,
             "Cost-Sensitive vs Resampling Performance - {dataset_name}",
-            dataset_name=_get_dataset_display_name(context, context.dataset),
+            dataset_name=get_dataset_display_name(context, context.dataset),
         ),
         fontsize=14,
     )
     ax.set_ylim(0.0, 1.0)
-    ax.legend(title=_translate(context, "Model"), bbox_to_anchor=(1.01, 1), loc="upper left")
+    ax.legend(title=translate(context, "Model"), bbox_to_anchor=(1.01, 1), loc="upper left")
     ax.tick_params(axis="x", rotation=15)
 
     plt.tight_layout()
@@ -630,6 +570,12 @@ def generate_metrics_heatmap(
     # Sort index alphabetically
     pdf = pdf.sort_index()
 
+    pdf.index = [
+        f"{get_technique_display_name(context, technique)} / "
+        f"{get_model_type_display_name(context, model_type)}"
+        for technique, model_type in (index.split(" / ", 1) for index in pdf.index)
+    ]
+
     # Rename columns for display (remove _mean suffix)
     pdf.columns = [col.replace("_mean", "").replace("_", " ").title() for col in pdf.columns]
 
@@ -654,16 +600,16 @@ def generate_metrics_heatmap(
 
     # Styling
     ax.set_title(
-        _translate(
+        translate(
             context,
             "Metrics Heatmap - {dataset_name}",
-            dataset_name=_get_dataset_display_name(context, context.dataset),
+            dataset_name=get_dataset_display_name(context, context.dataset),
         ),
         fontsize=14,
     )
-    ax.set_xlabel(_translate(context, "Metric"), fontsize=12)
+    ax.set_xlabel(translate(context, "Metric"), fontsize=12)
     ax.set_ylabel(
-        _translate(context, "Technique") + " / " + _translate(context, "Model"), fontsize=12
+        translate(context, "Technique") + " / " + translate(context, "Model"), fontsize=12
     )
 
     plt.tight_layout()

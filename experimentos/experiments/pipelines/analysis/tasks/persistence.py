@@ -16,6 +16,7 @@ from experiments.pipelines.analysis.pipeline import (
     AnalysisPipelineState,
     AnalysisPipelineTaskResult,
 )
+from experiments.pipelines.analysis.tasks.display_labels import create_export_dataframe
 
 
 def save_table_artifact(
@@ -50,7 +51,7 @@ def save_table_artifact(
         )
 
     # Convert Polars DataFrame to pandas for to_latex() support
-    pdf = result_data.to_pandas()
+    pdf = create_export_dataframe(result_data.to_pandas(), context)
 
     # Generate LaTeX table string
     latex_str = pdf.to_latex(
