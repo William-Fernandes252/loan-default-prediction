@@ -12,6 +12,7 @@ class AnalysisArtifactsStorageLayout:
     """Layout for storing analysis artifacts in the storage backend."""
 
     artifacts_key_template: str = "reports/{locale}/{dataset}/{analysis_name}"
+    cross_dataset_key_template: str = "reports/{locale}/cross_dataset/{analysis_name}"
     artifacts_prefix: str = "reports/"
 
     def get_artifact_key(
@@ -33,6 +34,25 @@ class AnalysisArtifactsStorageLayout:
         return self.artifacts_key_template.format(
             locale=locale,
             dataset=dataset.value,
+            analysis_name=analysis_name,
+        )
+
+    def get_cross_dataset_artifact_key(
+        self,
+        analysis_name: str,
+        locale: str = "en_US",
+    ) -> str:
+        """Generate the storage key for a cross-dataset analysis artifact.
+
+        Args:
+            analysis_name: The name of the analysis artifact.
+            locale: The locale for the artifact (e.g., 'en_US', 'pt_BR').
+
+        Returns:
+            str: The storage key for the cross-dataset analysis artifact.
+        """
+        return self.cross_dataset_key_template.format(
+            locale=locale,
             analysis_name=analysis_name,
         )
 
@@ -106,4 +126,37 @@ class AnalysisArtifactsRepository:
             bool: True if the artifact exists, False otherwise.
         """
         key = self._layout.get_artifact_key(dataset, analysis_name, locale=locale)
+        return self._storage.exists(key)
+
+    def save_cross_dataset_artifact(
+        self,
+        analysis_name: str,
+        artifact_data: BinaryIO,
+        locale: str = "en_US",
+    ) -> None:
+        """Saves a cross-dataset analysis artifact.
+
+        Args:
+            analysis_name: The name of the analysis artifact to be saved.
+            artifact_data: The binary data of the artifact.
+            locale: The locale for the artifact (default: 'en_US').
+        """
+        key = self._layout.get_cross_dataset_artifact_key(analysis_name, locale=locale)
+        self._storage.write_bytes(artifact_data.read(), key)
+
+    def cross_dataset_artifact_exists(
+        self,
+        analysis_name: str,
+        locale: str = "en_US",
+    ) -> bool:
+        """Checks if a cross-dataset analysis artifact exists.
+
+        Args:
+            analysis_name: The name of the analysis artifact to check.
+            locale: The locale for the artifact (default: 'en_US').
+
+        Returns:
+            bool: True if the artifact exists, False otherwise.
+        """
+        key = self._layout.get_cross_dataset_artifact_key(analysis_name, locale=locale)
         return self._storage.exists(key)

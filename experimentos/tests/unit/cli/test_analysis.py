@@ -27,6 +27,13 @@ def mock_analyzer() -> MagicMock:
         analysis_type=AnalysisType.SUMMARY_TABLE,
         success=True,
     )
+    analyzer.run_cross_dataset_analysis.return_value = [
+        AnalysisResult(
+            dataset=Dataset.LENDING_CLUB,
+            analysis_type=AnalysisType.CROSS_DATASET_TABLE,
+            success=True,
+        )
+    ]
     return analyzer
 
 
@@ -324,7 +331,7 @@ class DescribeAllCommand:
         result = runner.invoke(analysis_app, ["all", "taiwan_credit"])
 
         assert result.exit_code == 0
-        # Should call run_analysis 6 times (one for each analysis type)
+        # Should call run_analysis 6 times (one for each single-dataset analysis type)
         assert mock_analyzer.run_analysis.call_count == 6
 
         # Verify all analysis types were called
@@ -337,3 +344,79 @@ class DescribeAllCommand:
         assert AnalysisType.IMBALANCE_IMPACT_PLOT in analysis_types_called
         assert AnalysisType.CS_VS_RESAMPLING_PLOT in analysis_types_called
         assert AnalysisType.METRICS_HEATMAP in analysis_types_called
+
+        # Cross-dataset analysis is also called (separate method)
+        mock_analyzer.run_cross_dataset_analysis.assert_called_once()
+
+
+# ============================================================================
+# Tests for cross-dataset command
+# ============================================================================
+
+
+class DescribeCrossDatasetCommand:
+    """Tests for the `analyze cross-dataset` command."""
+
+    def it_generates_cross_dataset_table(
+        self,
+        runner: CliRunner,
+        analysis_app,
+        mock_analyzer: MagicMock,
+    ) -> None:
+        result = runner.invoke(analysis_app, ["cross-dataset"])
+
+        assert result.exit_code == 0
+        mock_analyzer.run_cross_dataset_analysis.assert_called_once_with(
+            technique_filter=None,
+            locale=Locale.PT_BR,
+            force_overwrite=False,
+            execution_id=None,
+        )
+
+    def it_filters_by_technique(
+        self,
+        runner: CliRunner,
+        analysis_app,
+        mock_analyzer: MagicMock,
+    ) -> None:
+        result = runner.invoke(analysis_app, ["cross-dataset", "-t", "smote"])
+
+        assert result.exit_code == 0
+        call_kwargs = mock_analyzer.run_cross_dataset_analysis.call_args.kwargs
+        assert call_kwargs["technique_filter"] == Technique.SMOTE
+
+    def it_passes_force_flag(
+        self,
+        runner: CliRunner,
+        analysis_app,
+        mock_analyzer: MagicMock,
+    ) -> None:
+        result = runner.invoke(analysis_app, ["cross-dataset", "--force"])
+
+        assert result.exit_code == 0
+        call_kwargs = mock_analyzer.run_cross_dataset_analysis.call_args.kwargs
+        assert call_kwargs["force_overwrite"] is True
+
+    def it_passes_locale(
+        self,
+        runner: CliRunner,
+        analysis_app,
+        mock_analyzer: MagicMock,
+    ) -> None:
+        result = runner.invoke(analysis_app, ["cross-dataset", "-l", "en_US"])
+
+        assert result.exit_code == 0
+        call_kwargs = mock_analyzer.run_cross_dataset_analysis.call_args.kwargs
+        assert call_kwargs["locale"] == Locale.EN_US
+
+    def it_passes_execution_id(
+        self,
+        runner: CliRunner,
+        analysis_app,
+        mock_analyzer: MagicMock,
+    ) -> None:
+        result = runner.invoke(analysis_app, ["cross-dataset", "-e", "exec-456"])
+
+        assert result.exit_code == 0
+        call_kwargs = mock_analyzer.run_cross_dataset_analysis.call_args.kwargs
+        assert call_kwargs["execution_id"] == "exec-456"

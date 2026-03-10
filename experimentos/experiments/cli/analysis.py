@@ -344,6 +344,37 @@ def generate_metrics_heatmap(
             )
 
 
+@app.command("cross-dataset")
+def generate_cross_dataset_table(
+    technique: _TechniqueOption = None,
+    force: _ForceOption = False,
+    locale: _LocaleOption = Locale.PT_BR,
+    execution_id: _ExecutionIdOption = None,
+) -> None:
+    """Generate a cross-dataset comparison table.
+
+    Creates a LaTeX table comparing balanced accuracy per algorithm across
+    all datasets for a given technique. When no technique is specified,
+    one table is generated for each technique found in the results.
+    """
+    analyzer = container.predictions_analyzer()
+
+    logger.info("Generating cross-dataset comparison table...")
+
+    results = analyzer.run_cross_dataset_analysis(
+        technique_filter=technique,
+        locale=locale,
+        force_overwrite=force,
+        execution_id=execution_id,
+    )
+
+    for result in results:
+        if result.succeeded():
+            logger.success("Cross-dataset comparison table saved.")
+        else:
+            logger.error(f"Failed to generate cross-dataset table: {result.error_message}")
+
+
 @app.command("all")
 def run_all_analyses(
     dataset: _DatasetArgument = None,
@@ -389,6 +420,9 @@ def run_all_analyses(
     )
     generate_metrics_heatmap(
         dataset=dataset, force=force, gpu=gpu, locale=locale, execution_id=execution_id
+    )
+    generate_cross_dataset_table(
+        technique=None, force=force, locale=locale, execution_id=execution_id
     )
 
 

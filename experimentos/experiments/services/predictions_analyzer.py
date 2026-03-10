@@ -19,7 +19,7 @@ from experiments.core.analysis import Locale
 from experiments.core.analysis.evaluation import ModelResultsEvaluator
 from experiments.core.analysis.metrics import Metric
 from experiments.core.data import Dataset
-from experiments.core.modeling.classifiers import Technique
+from experiments.core.modeling.classifiers import ModelType, Technique
 from experiments.core.predictions.repository import ModelPredictionsRepository
 from experiments.lib.pipelines.execution import PipelineExecutor
 from experiments.pipelines.analysis.base import AnalysisArtifactRepository, ArtifactGenerator
@@ -32,7 +32,8 @@ from experiments.pipelines.analysis.pipeline import AnalysisPipelineContext
 from experiments.pipelines.analysis.stability import StabilityAnalysisPipelineFactory
 from experiments.pipelines.analysis.summary_table import SummaryTablePipelineFactory
 from experiments.pipelines.analysis.tradeoff_plot import TradeoffPlotPipelineFactory
-from experiments.services.translator import create_translator
+from experiments.services.analysis_artifacts_repository import AnalysisArtifactsRepository
+from experiments.services.translator import GettextTranslator, create_translator
 
 
 class AnalysisType(StrEnum):
@@ -44,6 +45,7 @@ class AnalysisType(StrEnum):
     IMBALANCE_IMPACT_PLOT = "imbalance_impact_plot"
     CS_VS_RESAMPLING_PLOT = "cs_vs_resampling_plot"
     METRICS_HEATMAP = "metrics_heatmap"
+    CROSS_DATASET_TABLE = "cross_dataset_table"
 
 
 class AnalysisParams(BaseModel):
@@ -361,3 +363,204 @@ class PredictionsAnalyzer:
         plt.close(result_data)
 
         return buffer
+
+    # --- Cross-dataset analysis (not pipeline-based) ---
+
+    _REAL_DATASETS = [
+        Dataset.LENDING_CLUB,
+        Dataset.TAIWAN_CREDIT,
+        Dataset.CORPORATE_CREDIT_RATING,
+    ]
+
+    def run_cross_dataset_analysis(
+        self,
+        *,
+        technique_filter: Technique | None = None,
+        locale: Locale = Locale.EN_US,
+        force_overwrite: bool = False,
+        execution_id: str | None = None,
+    ) -> list[AnalysisResult]:
+        """Generate cross-dataset comparison tables for balanced accuracy.
+
+        Produces a LaTeX table per technique (or for a single technique if
+        filtered) where rows are model types and columns are datasets.
+        Each cell contains the mean ± std of balanced accuracy.
+
+        Args:
+            technique_filter: If set, only generate a table for this technique.
+            locale: Locale for internationalization.
+            force_overwrite: Whether to overwrite existing artifacts.
+            execution_id: Specific execution ID. If None, uses the latest.
+
+        Returns:
+            List of AnalysisResult, one per generated table.
+        """
+        translator = create_translator(locale)
+        repo = self._analysis_artifacts_repository
+        assert isinstance(repo, AnalysisArtifactsRepository)
+
+        # 1. Gather metrics from every real dataset
+        all_metrics: list[pl.LazyFrame] = []
+        for ds in self._REAL_DATASETS:
+            predictions = (
+                self._predictions_repository.get_predictions_for_execution(ds, execution_id)
+                if execution_id
+                else self._predictions_repository.get_latest_predictions_for_experiment(ds)
+            )
+            if predictions is None:
+                continue
+            metrics_lf = self._results_evaluator.evaluate(predictions)
+            all_metrics.append(metrics_lf.with_columns(pl.lit(ds.value).alias("dataset")))
+
+        if not all_metrics:
+            return [
+                AnalysisResult(
+                    dataset=Dataset.LENDING_CLUB,
+                    analysis_type=AnalysisType.CROSS_DATASET_TABLE,
+                    success=False,
+                    error_message="No predictions found for any dataset.",
+                )
+            ]
+
+        combined_df: pl.DataFrame = pl.concat(all_metrics).collect()
+
+        # 2. Determine techniques to process
+        available_techniques = combined_df["technique"].unique().to_list()
+        if technique_filter is not None:
+            techniques = [technique_filter.value]
+        else:
+            techniques = sorted(available_techniques)
+
+        # 3. Build and save one table per technique
+        results: list[AnalysisResult] = []
+        for technique_val in techniques:
+            artifact_name = f"cross_dataset_comparison_{technique_val}.tex"
+
+            if not force_overwrite and repo.cross_dataset_artifact_exists(
+                artifact_name, locale=locale.value
+            ):
+                results.append(
+                    AnalysisResult(
+                        dataset=Dataset.LENDING_CLUB,
+                        analysis_type=AnalysisType.CROSS_DATASET_TABLE,
+                        success=True,
+                    )
+                )
+                continue
+
+            table_df = self._build_cross_dataset_table(combined_df, technique_val, translator)
+
+            # Generate LaTeX artifact
+            pdf = table_df.to_pandas()
+            technique_display = self._technique_display(technique_val, translator)
+            latex_str = pdf.to_latex(
+                index=False,
+                escape=False,
+                caption=f"Balanced Accuracy — {technique_display}",
+                label=f"tab:cross_dataset_{technique_val}",
+            )
+            artifact_bytes = BytesIO(latex_str.encode("utf-8"))
+
+            repo.save_cross_dataset_artifact(artifact_name, artifact_bytes, locale=locale.value)
+            results.append(
+                AnalysisResult(
+                    dataset=Dataset.LENDING_CLUB,
+                    analysis_type=AnalysisType.CROSS_DATASET_TABLE,
+                    success=True,
+                )
+            )
+
+        return results
+
+    def _build_cross_dataset_table(
+        self,
+        combined_df: pl.DataFrame,
+        technique: str,
+        translator: GettextTranslator,
+    ) -> pl.DataFrame:
+        """Build a cross-dataset comparison table for one technique.
+
+        Rows are model types, columns are datasets.  Each cell is formatted
+        as ``mean ± std`` of balanced accuracy.
+
+        Args:
+            combined_df: Metrics from all datasets with a ``dataset`` column.
+            technique: The technique value to filter by.
+            translator: Translator for display names.
+
+        Returns:
+            A Polars DataFrame ready for LaTeX export.
+        """
+        ba_mean = f"{Metric.BALANCED_ACCURACY}_mean"
+        ba_std = f"{Metric.BALANCED_ACCURACY}_std"
+
+        filtered = combined_df.filter(pl.col("technique") == technique)
+
+        # Format cells as "mean ± std"
+        formatted = filtered.with_columns(
+            (
+                pl.col(ba_mean).round(4).cast(pl.String)
+                + " ± "
+                + pl.col(ba_std).round(4).cast(pl.String)
+            ).alias("cell")
+        )
+
+        # Map display names
+        dataset_display = {
+            ds.value: self._dataset_display(ds, translator) for ds in self._REAL_DATASETS
+        }
+        model_display = {
+            mt.value: self._model_type_display(mt.value, translator) for mt in ModelType
+        }
+
+        formatted = formatted.with_columns(
+            pl.col("dataset").replace_strict(dataset_display).alias("dataset"),
+            pl.col("model_type").replace_strict(model_display).alias("model_type"),
+        )
+
+        # Pivot: rows = model_type, columns = dataset
+        pivoted = formatted.select("model_type", "dataset", "cell").pivot(
+            on="dataset",
+            index="model_type",
+            values="cell",
+        )
+
+        # Reorder columns: model_type first, then datasets in canonical order
+        ordered_ds_cols = [
+            dataset_display[ds.value]
+            for ds in self._REAL_DATASETS
+            if dataset_display[ds.value] in pivoted.columns
+        ]
+        return pivoted.select(
+            pl.col("model_type").alias(translator.translate("Model")),
+            *[pl.col(c) for c in ordered_ds_cols],
+        ).sort(translator.translate("Model"))
+
+    # --- Display-name helpers (reuse existing label maps) ---
+
+    @staticmethod
+    def _dataset_display(ds: Dataset, translator: GettextTranslator) -> str:
+        from experiments.pipelines.analysis.tasks.display_labels import (
+            _DATASET_DISPLAY_NAMES,
+        )
+
+        name = _DATASET_DISPLAY_NAMES.get(ds, ds.value)
+        return translator.translate(name)
+
+    @staticmethod
+    def _model_type_display(model_type: str, translator: GettextTranslator) -> str:
+        from experiments.pipelines.analysis.tasks.display_labels import (
+            _MODEL_TYPE_DISPLAY_NAMES,
+        )
+
+        name = _MODEL_TYPE_DISPLAY_NAMES.get(model_type, model_type.replace("_", " ").title())
+        return translator.translate(name)
+
+    @staticmethod
+    def _technique_display(technique: str, translator: GettextTranslator) -> str:
+        from experiments.pipelines.analysis.tasks.display_labels import (
+            _TECHNIQUE_DISPLAY_NAMES,
+        )
+
+        name = _TECHNIQUE_DISPLAY_NAMES.get(technique, technique.replace("_", " ").title())
+        return translator.translate(name)
