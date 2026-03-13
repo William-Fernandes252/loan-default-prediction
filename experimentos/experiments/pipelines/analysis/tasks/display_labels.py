@@ -119,6 +119,14 @@ def create_export_dataframe(pdf: Any, context: AnalysisPipelineContext) -> Any:
             lambda value: get_model_type_display_name(context, value)
         )
 
+    rename_map: dict[str, str] = {}
+    if "technique" in export_pdf.columns:
+        rename_map["technique"] = translate(context, "Technique")
+    if "model_type" in export_pdf.columns:
+        rename_map["model_type"] = translate(context, "Model")
+    if rename_map:
+        export_pdf = export_pdf.rename(columns=rename_map)
+
     return export_pdf
 
 

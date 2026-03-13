@@ -31,6 +31,7 @@ from experiments.pipelines.analysis.metrics_heatmap import MetricsHeatmapPipelin
 from experiments.pipelines.analysis.pipeline import AnalysisPipelineContext
 from experiments.pipelines.analysis.stability import StabilityAnalysisPipelineFactory
 from experiments.pipelines.analysis.summary_table import SummaryTablePipelineFactory
+from experiments.pipelines.analysis.tasks.display_labels import create_export_dataframe
 from experiments.pipelines.analysis.tradeoff_plot import TradeoffPlotPipelineFactory
 from experiments.services.analysis_artifacts_repository import AnalysisArtifactsRepository
 from experiments.services.translator import GettextTranslator, create_translator
@@ -326,7 +327,7 @@ class PredictionsAnalyzer:
             BytesIO containing the LaTeX table bytes.
         """
         # Convert Polars DataFrame to pandas for to_latex() support
-        pdf = result_data.to_pandas()
+        pdf = create_export_dataframe(result_data.to_pandas(), context)
 
         # Generate LaTeX table string
         latex_str = pdf.to_latex(
