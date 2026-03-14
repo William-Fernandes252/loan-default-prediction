@@ -58,8 +58,6 @@ def save_table_artifact(
         index=False,
         float_format=float_format,
         escape=False,
-        caption=f"Results for {context.dataset.value}",
-        label=f"tab:{context.analysis_name}",
     )
 
     # Convert to bytes

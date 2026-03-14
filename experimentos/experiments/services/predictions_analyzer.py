@@ -334,8 +334,6 @@ class PredictionsAnalyzer:
             index=False,
             float_format="%.4f",
             escape=False,
-            caption=f"Results for {context.dataset.value}",
-            label=f"tab:{context.analysis_name}",
         )
 
         # Convert to bytes
@@ -453,12 +451,9 @@ class PredictionsAnalyzer:
 
             # Generate LaTeX artifact
             pdf = table_df.to_pandas()
-            technique_display = self._technique_display(technique_val, translator)
             latex_str = pdf.to_latex(
                 index=False,
                 escape=False,
-                caption=f"Balanced Accuracy — {technique_display}",
-                label=f"tab:cross_dataset_{technique_val}",
             )
             artifact_bytes = BytesIO(latex_str.encode("utf-8"))
 
