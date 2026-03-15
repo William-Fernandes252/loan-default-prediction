@@ -8,17 +8,90 @@ Dada a natureza desbalanceada dos conjunto de dados, a métrica tradicional de a
 
 A acurácia balanceada é definida como a média aritmética entre a sensibilidade e a especificidade, garantindo que o acerto em ambas as classes (adimplentes e inadimplentes) tenha o mesmo peso na avaliação final do modelo.
 
-\section{Análise de Desempenho por Contexto de Crédito}
+\section{Análise de Desempenho por Contexto de Crédito}\label{sec:analise-por-contexto}
 
 A seguir, são apresentados os resultados obtidos para cada um dos contextos de crédito analisados: crédito pessoal, crédito consignado e cartão de crédito. Para cada contexto, serão discutidos os impactos das técnicas de pré-processamento e balanceamento aplicadas, bem como as diferenças de desempenho entre os modelos testados.
 
-\section{Crédito P2P e Cartões de Crédito (Taiwan Credit e Lending Club)}
+\subsection{Crédito P2P e Cartões de Crédito (Taiwan Credit e Lending Club)}\label{sec:analise-varejo}
 
-Nos conjuntos de dados caracterizados por um alto volume de operações envolvendo atributos de pessoa física, técnicas de re-amostragem como RUS se consolidaram como a estratégia mais eficaz.
+Nos conjuntos de dados caracterizados por um alto volume de operações envolvendo atributos de pessoa física, técnicas de re-amostragem como RUS se consolidaram como a estratégia mais eficaz. Na base de cartões de crédito de Taiwan, o algoritmo XGBoost combinado com RUS atingiu a maior acurácia balanceada média de $0.7108$ seguido de perto pelo \textit{Random Forest} com RUS ($0.7106$)
 
-\begin{table}[H]
+Esse padrão se repetiu no conjunto Lending Club, onde o XGBoost aliado ao RUS obteve o melhor desempenho ($0.6590$ de acurácia balanceada), superando o treinamento base que alcançou apenas $0.5422$. Nesses contextos, as técnicas de sobre-amostragem (SMOTE e SMOTE-Tomek) também apresentaram resultados muito competitivos, com o \textit{Random Forest} alcançando $0.7067$ no conjunto de Taiwan, porém ligeiramente inferiores à redução da classe majoritária. Isso indica que, para distribuições com ruído e sobreposição de classes comuns em perfis de varejo, simplificar a fronteira de decisão removendo exemplos da classe majoritária resulta em uma generalização superior.
+
+\begin{figure}[H]
   \centering
-  {\fontsize{8}{11}\selectfont \input{experimentos/reports/pt_BR/taiwan_credit/summary_table.tex}}
-  \caption{Resultados para o conjunto de dados \textit{Taiwan Credit}}
-  \label{tab:resultados-cssvm}
-\end{table}
+  \includegraphics[width=\linewidth, keepaspectratio]{experimentos/reports/pt_BR/taiwan_credit/cs_vs_resampling_plot.png}
+  \caption{Comparação de desempenho dos algoritmos por técnica no conjunto Taiwan Credit (média de 5 sementes)}
+  \label{fig:comparacao-algoritmos-taiwan}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth, keepaspectratio]{experimentos/reports/pt_BR/lending_club/cs_vs_resampling_plot.png}
+  \caption{Comparação de desempenho dos algoritmos por técnica no conjunto Crédito Corporativo (média de 5 sementes)}
+  \label{fig:comparacao-algoritmos-lc}
+\end{figure}
+
+As Figuras~\ref{fig:comparacao-algoritmos-taiwan} e~\ref{fig:comparacao-algoritmos-lc} mostram a predominância dos algoritmos baseados em árvores (XGBoost e Random Forest) no agrupamento da técnica de subamostragem aleatória (RUS), ratificando sua robustez para este perfil de dados.
+
+\subsection{Avaliação de Crédito Corporativo}\label{sec:analise-corp}
+
+Contrastando fortemente com os cenários de varejo, a análise do risco de crédito corporativo demonstrou que a redução de dados pode ser prejudicial quando a complexidade dos atributos e a representatividade das amostras exigem a retenção máxima de informação.
+
+Neste cenário, o MLP demonstrou uma melhora considerável ao ser combinado com técnicas de sobre-amostragem, como SMOTE e SMOTE-Tomek, alcançando uma acurácia balanceada de $0.8274$ (contra $0.5449$ no treinamento base) e uma sensibilidade de $0.7000$. A aplicação de RUS, embora superior à linha de base, atingiu um máximo de $0.7680$ com SVM. Isso mostra que, no contexto corporativo, a geração de dados sintéticos para enriquecer a representação das instâncias de maior risco é significativamente mais favorável.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth, keepaspectratio]{experimentos/reports/pt_BR/corporate_credit_rating/cs_vs_resampling_plot.png}
+  \caption{Comparação de desempenho dos algoritmos por técnica no conjunto Corporate Credit Rating (média de 5 sementes)}
+  \label{fig:comparacao-algoritmos-corporate}
+\end{figure}
+
+A Figura~\ref{fig:comparacao-algoritmos-corporate} evidencia a discrepância no comportamento entre as famílias de algoritmos neste domínio. O ganho de performance da arquitetura MLP ao receber dados sintéticos (SMOTE) se destaca em relação aos demais classificadores.
+
+\section{Análise do \textit{Trade-off} entre Sensibilidade e Precisão}\label{tradeoff-resultados}
+
+Embora a acurácia balanceada forneça um critério unificado e robusto para o ranqueamento dos modelos, a avaliação do risco de crédito exige uma compreensão de como os erros de classificação se distribuem na prática. Para isso, a análise da dispersão entre a Sensibilidade (capacidade de detectar a inadimplência real) e a Precisão (proporção de acertos ao classificar um cliente como de alto risco) evidencia o desempenho de cada técnica e o custo associado à calibração do modelo.
+
+\subsection{Crédito Pessoal}
+
+Nos contextos de crédito pessoal, Taiwan e Lending Club se observa um \textit{trade-off} (compromisso) marcante e gradual no deslocamento das fronteiras de decisão (Figuras~\ref{fig:trade-off-taiwan} e~\ref{fig:trade-off-lending}).
+
+Os agrupamentos referentes à linha de base (treino sem tratamento de dados) concentram-se caracteristicamente na região inferior direita do espaço amostral. Isto indica que, ao serem treinados com a distribuição original, os modelos adotam uma postura mais conservadora: raramente classificam um cliente como inadimplente (o que gera uma elevada precisão nas raras vezes em que o fazem), mas falham na detecção da grande maioria dos maus pagadores (sensibilidade bastante reduzida).
+
+A aplicação das técnicas de re-amostragem (com destaque para o RUS) provoca uma migração nítida dos pontos para a região superior e à esquerda dos gráficos. A sensibilidade apresenta a maior variação, alcançando a faixa dos $60\%$ a $70\%$, garantindo uma detecção mais confiável do risco. O custo inevitável desta calibração é a diluição da precisão, refletindo o aumento de clientes adimplentes incorretamente classificados como risco potencial (falsos positivos).
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth, keepaspectratio]{experimentos/reports/pt_BR/taiwan_credit/tradeoff_plot.png}
+  \caption{Dispersão do \textit{Trade-off} entre precisão e sensibilidade (Taiwan Credit)}
+  \label{fig:trade-off-taiwan}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth, keepaspectratio]{experimentos/reports/pt_BR/lending_club/tradeoff_plot.png}
+  \caption{Dispersão do \textit{Trade-off} entre precisão e sensibilidade (Lending Club)}
+  \label{fig:trade-off-lending}
+\end{figure}
+
+\subsection{Crédito Corporativo}
+
+O cenário de avaliação de risco corporativo (Corporate Credit Rating) exibe uma dinâmica significativamente mais extrema, evidenciada na Figura~\ref{fig:trade-off-corporate}.
+
+Neste domínio, a incapacidade dos modelos padrão em lidar com o desbalanceamento em espaços de elevada dimensionalidade resulta num colapso total da capacidade preditiva para a classe minoritária. Os pontos referentes aos modelos de linha de base, em especial os baseados em árvores, encontram-se estagnados no eixo inferior (sensibilidade nula). Ao contrário do movimento gradual observado no crédito pessoal, a aplicação de técnicas de geração de dados sintéticos (SMOTE) é decisiva no ajuste da fronteira de decisão. É apenas através desta intervenção que modelos como o \textit{Multilayer Perceptron} (MLP) conseguem saltar para uma zona de viabilidade operacional, atingindo níveis substanciais de sensibilidade.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth, keepaspectratio]{experimentos/reports/pt_BR/corporate_credit_rating/tradeoff_plot.png}
+  \caption{Dispersão do \textit{Trade-off} entre precisão e sensibilidade (Corporate Credit Rating)}
+  \label{fig:trade-off-corporate}
+\end{figure}
+
+Em suma, a análise do \textit{trade-off} corrobora que a escolha do modelo ideal em situações de desbalanceamento nunca é absoluta. Trata-se de uma escolha estratégica baseada no apetite ao risco da instituição financeira, procurando o ponto no gráfico que melhor otimiza o custo de assumir a perda de um crédito concedido face ao custo de oportunidade de negar crédito a um cliente fiável.
+
+\section{Discussão}
+
+Ao comparar os três cenários, confirma-se que a eficácia dos métodos de tratamento de desbalanceamento é inerentemente dependente do domínio dos dados. Enquanto algoritmos baseados em árvores (\textit{Random Forest} e XGBoost) beneficiaram-se amplamente da técnica RUS em conjuntos de dados densos e ruidosos, as redes neurais (MLP) demonstraram alta sinergia com o SMOTE em espaços de menor volume ou maior complexidade, como o crédito corporativo.
+
+Além disso, abordagens baseadas em custo, como o CS-SVM, apresentaram resultados consistentes, alcançando $0.7011$ de acurácia balanceada em Taiwan e $0.6466$ no Lending Club. Contudo, de modo geral, não superaram as técnicas de re-amostragem na tarefa de discriminar a classe minoritária.
