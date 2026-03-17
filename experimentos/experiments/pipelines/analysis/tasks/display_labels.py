@@ -17,6 +17,7 @@ _METRIC_DISPLAY_NAMES: dict[Metric, str] = {
     Metric.F1_SCORE: "F1 Score",
     Metric.PRECISION: "Precision",
     Metric.SENSITIVITY: "Sensitivity",
+    Metric.SPECIFICITY: "Specificity",
 }
 
 _MODEL_TYPE_DISPLAY_NAMES: dict[str, str] = {
@@ -124,6 +125,11 @@ def create_export_dataframe(pdf: Any, context: AnalysisPipelineContext) -> Any:
         rename_map["technique"] = translate(context, "Technique")
     if "model_type" in export_pdf.columns:
         rename_map["model_type"] = translate(context, "Model")
+
+    for metric in Metric:
+        if metric.value in export_pdf.columns:
+            rename_map[metric.value] = get_metric_display_name(context, metric)
+
     if rename_map:
         export_pdf = export_pdf.rename(columns=rename_map)
 

@@ -72,6 +72,28 @@ def generate_summary_table(
     # Materialize the result
     result_df: pl.DataFrame = query.collect()
 
+    metric_columns: list[str] = []
+    formatted_metric_exprs: list[pl.Expr] = []
+    for metric in Metric:
+        mean_col = f"{metric.value}_mean"
+        std_col = f"{metric.value}_std"
+
+        if mean_col in result_df.columns and std_col in result_df.columns:
+            metric_columns.append(metric.value)
+            formatted_metric_exprs.append(
+                pl.struct([pl.col(mean_col), pl.col(std_col)])
+                .map_elements(
+                    lambda row, m=mean_col, s=std_col: f"{row[m]:.4f} ({row[s]:.4f})",
+                    return_dtype=pl.String,
+                )
+                .alias(metric.value)
+            )
+
+    if formatted_metric_exprs:
+        result_df = result_df.with_columns(formatted_metric_exprs).select(
+            ["model_type", "technique", *metric_columns]
+        )
+
     updated_state: AnalysisPipelineState[pl.DataFrame] = {**state, "result_data": result_df}
     return TaskResult(
         updated_state,

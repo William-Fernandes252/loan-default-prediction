@@ -99,6 +99,9 @@ msgstr "Recall"
 msgid "Sensitivity"
 msgstr "Sensitivity"
 
+msgid "Specificity"
+msgstr "Specificity"
+
 msgid "Balanced Accuracy"
 msgstr "Balanced Accuracy"
 
