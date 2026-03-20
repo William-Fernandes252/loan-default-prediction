@@ -454,6 +454,7 @@ def create_imbalance_impact_task(metric: Metric = Metric.BALANCED_ACCURACY) -> A
 # Cost-sensitive techniques for comparison analysis
 _COST_SENSITIVE_TECHNIQUES = {Technique.CS_SVM}
 _RESAMPLING_TECHNIQUES = {
+    Technique.BASELINE,
     Technique.SMOTE,
     Technique.RANDOM_UNDER_SAMPLING,
     Technique.SMOTE_TOMEK,
@@ -467,8 +468,8 @@ def generate_cs_vs_resampling_plot(
     """Generate a bar plot comparing cost-sensitive vs resampling techniques.
 
     Creates a grouped bar chart showing balanced accuracy performance for
-    cost-sensitive methods (CS-SVM) vs resampling methods
-    (SMOTE, RUS, SMOTE-Tomek).
+    cost-sensitive methods (CS-SVM) vs baseline/resampling methods
+    (Baseline, SMOTE, RUS, SMOTE-Tomek).
 
     Args:
         state: The current state containing per_seed_metrics as a LazyFrame.

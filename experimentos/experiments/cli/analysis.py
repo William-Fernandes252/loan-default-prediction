@@ -281,7 +281,8 @@ def generate_cs_vs_resampling_plot(
     """Generate a cost-sensitive vs resampling comparison plot.
 
     Creates a grouped bar chart comparing balanced accuracy for cost-sensitive
-    methods (MetaCost, CS-SVM) vs resampling methods (SMOTE, RUS, SMOTE-Tomek).
+    methods (CS-SVM) vs baseline/resampling methods
+    (Baseline, SMOTE, RUS, SMOTE-Tomek).
     """
     analyzer = container.predictions_analyzer()
 
