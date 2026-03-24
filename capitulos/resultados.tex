@@ -1,6 +1,6 @@
 \chapter{Resultados}\label{cap:resultados}
 
-Neste capítulo, serão discutidos os resultados dos experimentos, onde foi obtida a média das métricas do treinamento para 5 sementes de cada combinação de modelo e técnica utilizada, resultando em 85 execuções com cada uma das três bases de dados utilizadas: 4 técnicas de re-amostragem combinadas com 4 algoritmos, e um algoritmo custo-sensível.
+Neste capítulo, serão discutidos os resultados dos experimentos, onde foi obtida a média das métricas do treinamento para 5 sementes de cada combinação de modelo e técnica utilizada, resultando em 85 execuções com cada uma das três bases de dados utilizadas: 3 técnicas de re-amostragem (SMOTE, RUS, SMOTE-Tomek) e a "Linha de Base", representando o modelo sem tratamento, combinadas com 4 algoritmos, e um algoritmo custo-sensível.
 
 A análise dos resultados está organizada na seguinte forma: a seção \ref{sec:analise-por-contexto} discute o desempenho dos modelos em cada um dos contextos de crédito analisados, destacando as diferenças entre os cenários de crédito pessoal e corporativo; a seção \ref{tradeoff-resultados} explora o \textit{trade-off} entre sensibilidade e precisão, evidenciando as implicações práticas das escolhas de modelo; Por fim, a seção \ref{sec:discussao} sintetiza as principais conclusões obtidas a partir dos resultados experimentais.
 
@@ -14,7 +14,7 @@ As Tabelas~\ref{tab:resultados-taiwan} e~\ref{tab:resultados-lc} apresentam os r
 
 \begin{table}[H]
   \centering
-  \caption{Resultados para o conjunto Taiwan Credit (média de 5 sementes)}
+  \caption{Resultados para o conjunto Taiwan Credit ordenados pela acurácia balanceada (média de 5 sementes)}
   \label{tab:resultados-taiwan}
   \resizebox{\textwidth}{!}{
     \begin{tabular}{llllllll}
@@ -46,7 +46,7 @@ As Tabelas~\ref{tab:resultados-taiwan} e~\ref{tab:resultados-lc} apresentam os r
 
 \begin{table}[H]
   \centering
-  \caption{Resultados para o conjunto Lending Club (média de 5 sementes)}
+  \caption{Resultados para o conjunto Lending Club ordenado pela acurácia balanceada (média de 5 sementes)}
   \label{tab:resultados-lc}
   \resizebox{\textwidth}{!}{
     \begin{tabular}{llllllll}
@@ -101,7 +101,7 @@ Contrastando fortemente com os cenários de varejo, a análise do risco de créd
 
 \begin{table}[H]
   \centering
-  \caption{Resultados para o conjunto Corporate Credit Rating (média e desvio padrão para 5 sementes)}
+  \caption{Resultados para o conjunto Corporate Credit Rating ordenados pela acurácia balanceada (média e desvio padrão para 5 sementes)}
   \label{tab:resultados-corp}
   \resizebox{\textwidth}{!}{
     \begin{tabular}{llllllll}
@@ -171,7 +171,9 @@ A aplicação das técnicas de re-amostragem (com destaque para o RUS) provoca u
 
 O cenário de avaliação de risco corporativo (Corporate Credit Rating) exibe uma dinâmica significativamente mais extrema, evidenciada na Figura~\ref{fig:trade-off-corporate}.
 
-Neste domínio, a incapacidade dos modelos padrão em lidar com o desbalanceamento em espaços de elevada dimensionalidade resulta num colapso total da capacidade preditiva para a classe minoritária. Os pontos referentes aos modelos de linha de base, em especial os baseados em árvores, encontram-se estagnados no eixo inferior (sensibilidade nula). Ao contrário do movimento gradual observado no crédito pessoal, a aplicação de técnicas de geração de dados sintéticos (SMOTE) é decisiva no ajuste da fronteira de decisão. É apenas através desta intervenção que modelos como o \textit{Multilayer Perceptron} (MLP) conseguem saltar para uma zona de viabilidade operacional, atingindo níveis substanciais de sensibilidade.
+Neste domínio, a incapacidade dos modelos padrão em lidar com o alto nível de desbalanceamento, somado a um espaço de elevada dimensionalidade, resulta num colapso total da capacidade preditiva para a classe minoritária. Os pontos referentes aos modelos de linha de base, em especial os baseados em árvores, encontram-se estagnados no eixo inferior (sensibilidade nula). Ao contrário do movimento gradual observado no crédito pessoal, a aplicação de técnicas de geração de dados sintéticos (SMOTE) é decisiva no ajuste da fronteira de decisão. É apenas através desta intervenção que modelos como o \textit{Multilayer Perceptron} (MLP) conseguem saltar para uma zona de viabilidade operacional, atingindo níveis substanciais de sensibilidade. Isso pode ser explicado pela capacidade do SMOTE em gerar amostras representativas da classe minoritária, compensando a falta de dados, que neste caso era mais pronunciada.
+
+Técnicas de sub-amostragem também mostraram eficácia, especialmente quando combinadas com métodos de ensemble. Contudo, a eficácia de qualquer tratamento ou abordagem pode variar dependendo da natureza específica do problema: mesmo com o desequilíbrio entre as classes reduzido após uma sub-amostragem, a quantidade de instâncias positivas ainda não são suficientes para um modelo aprender as relações complexas entre os atributos.
 
 \begin{figure}[H]
   \centering
@@ -180,7 +182,7 @@ Neste domínio, a incapacidade dos modelos padrão em lidar com o desbalanceamen
   \label{fig:trade-off-corporate}
 \end{figure}
 
-Em suma, a análise do \textit{trade-off} corrobora que a escolha do modelo ideal em situações de desbalanceamento nunca é absoluta. Trata-se de uma escolha estratégica baseada no apetite ao risco da instituição financeira, procurando o ponto no gráfico que melhor otimiza o custo de assumir a perda de um crédito concedido face ao custo de oportunidade de negar crédito a um cliente fiável.
+Em suma, a análise do \textit{trade-off} corrobora que a escolha do modelo e técnica ideais em situações de desbalanceamento nunca é absoluta. Trata-se de uma escolha estratégica baseada no apetite ao risco da instituição financeira, procurando o ponto no gráfico que melhor otimiza o custo de assumir a perda de um crédito concedido face ao custo de oportunidade de negar crédito a um cliente fiável.
 
 \section{Discussão}\label{sec:discussao}
 
