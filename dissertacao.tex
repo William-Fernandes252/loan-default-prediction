@@ -1,128 +1,72 @@
-% ---------------------------------------------------------------------------
-% ---------------------------------------------------------------------------
-% Junção de templates encontrados no Overleaf
-% facilitando a vida do aluno de pós da UFABC
-% Modelo LaTex para preparação do documento final de Dissertação de Mestrado
-% ninguém do programa de pós da informação validou se presta
-% ---------------------------------------------------------------------------
-% ---------------------------------------------------------------------------
-
 \documentclass[
-  % -- opções da classe memoir --
-  12pt, % tamanho da fonte
-  openright, % capítulos começam em pág ímpar (insere página vazia caso preciso)
-  twoside, % para impressão em verso e anverso. Oposto a oneside
-  a4paper, % tamanho do papel.
-  % -- opções da classe abntex2 --
-  %chapter=TITLE,      % títulos de capítulos convertidos em letras maiúsculas
-  %section=TITLE,      % títulos de seções convertidos em letras maiúsculas
-  %subsection=TITLE,    % títulos de subseções convertidos em letras maiúsculas
-  %subsubsection=TITLE,  % títulos de subsubseções convertidos em letras maiúsculas
-  % -- opções do pacote babel --
-  english, % idioma adicional para hifenização
-  %french,          % idioma adicional para hifenização
-  %spanish,        % idioma adicional para hifenização
-  brazil % o último idioma é o principal do documento
+  12pt,
+  openright,
+  twoside,
+  a4paper,
+  english,
+  brazil
 ]{abntex2}
 
-% ---------------------
-% Pacotes OBRIGATÓRIOS
-% ---------------------
-\usepackage{lmodern} % Usa a fonte Latin Modern
-\usepackage[T1]{fontenc} % Selecao de codigos de fonte.
+\usepackage{lmodern}
+\usepackage[T1]{fontenc}
 \usepackage[utf8]{
   inputenc
-} % Codificacao do documento (conversão automática dos acentos)
-\usepackage{lastpage} % Usado pela Ficha catalográfica
-\usepackage{indentfirst} % Indenta o primeiro parágrafo de cada seção.
-\usepackage{color} % Controle das cores
-\usepackage{graphicx, graphicx} % Inclusão de gráficos
-\usepackage{epsfig, subfig} % Inclusão de figuras
-\usepackage{microtype} % Melhorias de justificação
-% ---------------------
-
-% ---------------------
-% Pacotes ADICIONAIS
-% ---------------------
-\usepackage{booktabs} % Formatação de tabelas
-\usepackage{float} % Posicionamento de figuras/tabelas
-\usepackage{graphicx} % Permite rotacionar tabelas
-\usepackage{array} % Melhorar o espaçamento entre as linhas das tabelas
-\usepackage{colortbl} % Fornece comandos para alterar a cor das células de uma tabela
-\usepackage{lipsum} % Geração de dummy text
-\usepackage{amsmath, amssymb, mathrsfs, mathabx} % Comandos matemáticos avançados
-\usepackage{setspace} % Para permitir espaçamento simples, 1 1/2 e duplo
-\usepackage{verbatim} % Para poder usar o ambiente "comment"
+}
+\usepackage{lastpage}
+\usepackage{indentfirst}
+\usepackage{color}
+\usepackage{graphicx, graphicx}
+\usepackage{epsfig, subfig}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{graphicx}
+\usepackage{array}
+\usepackage{colortbl}
+\usepackage{lipsum}
+\usepackage{amsmath, amssymb, mathrsfs, mathabx}
+\usepackage{setspace}
+\usepackage{verbatim}
 \usepackage{
   tabularx
-} % Para poder ter tabelas com colunas de largura auto-ajustável
-\usepackage{multirow} % Para mesclar linhas em tabelas
+}
+\usepackage{multirow}
 \usepackage{
   afterpage
-} % Para executar um comando depois do fim da página corrente
-\usepackage{url} % Para formatar URLs (endereços da Web)
-% ---------------------
+}
+\usepackage{url}
+\usepackage[brazilian, hyperpageref]{backref}
+\usepackage[alf]{abntex2cite}
 
-% ---------------------
-% Pacotes de CITAÇÕES
-% ---------------------
-\usepackage[brazilian, hyperpageref]{backref} % Paginas com as citações na bibl
-\usepackage[alf]{abntex2cite} % Citações padrão ABNT (alfa)
-%\usepackage[num]{abntex2cite}        % Citações padrão ABNT (numericas)
-% ---------------------
-
-% Define a cor 'preta' para ser usada no preenchimento das células
 \definecolor{black}{rgb}{0,0,0}
 
-% O tamanho da identação do parágrafo é dado por:
 \setlength{\parindent}{1.3cm}
 
-% Controle do espaçamento entre um parágrafo e outro:
-\setlength{\parskip}{0.2cm} % tente também \onelineskip
+\setlength{\parskip}{0.2cm}
 
-% Data dinâmica no formato "Mês de Ano"
 \newcommand{\mesano}{%
   \ifcase\month\or Janeiro\or Fevereiro\or Março\or Abril\or Maio\or Junho\or
 Julho\or Agosto\or Setembro\or Outubro\or Novembro\or Dezembro\fi\ de \the\year}
 
-% Data da defesa
 \data{\mesano}
 
-% ---------------------
-% Compila o indice
-% ---------------------
 \makeindex
-% ---------------------
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%  INICIO DO DOCUMENTO  %%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{document}
-% Configurações de CITAÇÕES para abntex2
+
 \include{extras/conf_citacoes}
 
-% Inclusão de dados para CAPA e FOLHA DE ROSTO (título, autor, orientador, etc.)
 \include{extras/dados}
 
-% Inclui Configurações de aparência do PDF Final
 \include{extras/conf_pdf}
 
-% Retira espaço extra obsoleto entre as frases.
 \frenchspacing
 
-% ----------------------------------------------------------
-% ELEMENTOS PRÉ-TEXTUAIS (Capa, Resumo, Abstract, etc.)
-% ----------------------------------------------------------
 \pretextual
 
-% Capa
 \include{pretextual/capa}
 
-% Folha de rosto (o * indica que haverá a ficha bibliográfica)
 \imprimirfolhaderosto*
-
-% Imprimir Ficha Catalografica
-% \include{pretextual/catalografica}
 
 % Inserir Folha de Aprovação
 % \include{pretextual/assinaturas}
@@ -162,17 +106,9 @@ Julho\or Agosto\or Setembro\or Outubro\or Novembro\or Dezembro\fi\ de \the\year}
 % Reinicia a contagem do número de páginas
 \setcounter{page}{1}
 
-% Inclui cada capitulo da Dissertação
 \include{capitulos/introducao}
-
-% PARTE - Define a divisão do documento em partes (Não é obrigatório)
-% \part{Fundamentação Teórica}
-% \include{capitulos/referencias}
 \include{capitulos/fundamentacao-teorica}
 \include{capitulos/ferramentas}
-
-% PARTE
-%\part{Resultados}
 \include{capitulos/resultados}
 \include{capitulos/conclusao}
 
