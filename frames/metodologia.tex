@@ -1,0 +1,81 @@
+\begin{frame}{Metodologia}
+  \begin{itemize}
+    \item[$\blacktriangleright$] Conjuntos de dados
+  \end{itemize}
+
+  \vspace{-0.4em}
+  \footnotesize
+  \setlength{\tabcolsep}{3pt}
+  \renewcommand{\arraystretch}{1.15}
+
+  \begin{table}[h]
+    \centering
+    \begin{tabular}{|l|c|c|c|}
+      \hline
+      \textbf{Indicador} & \textbf{Lending Club} & \textbf{Taiwan} & \textbf{Corporate Credit} \\
+      \hline
+      Origem/Tipo & P2P (EUA) & Cartões (PF) & Empresas \\
+      \hline
+      Amostras & 630 mil & 30 mil & 2.029 \\
+      \hline
+      Atributos & 145 & 24 & 31 \\
+      \hline
+      Inadimplentes & 1,1\% & 22\% & 2,8\% \\
+      \hline
+    \end{tabular}
+  \end{table}
+  \normalsize
+\end{frame}
+
+\begin{frame}{Metodologia}
+  \begin{itemize}
+    \item[$\blacktriangleright$] Modelos de aprendizado de máquina
+      \begin{itemize}
+        \item SVM
+        \item Random Forest
+        \item XGBoost
+        \item MLP
+      \end{itemize}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Metodologia}
+  \begin{itemize}
+    \item[$\blacktriangleright$] Estratégias para lidar com desbalanceamento de dados
+      \begin{itemize}
+        \item SMOTE (oversampling)
+        \item RUS (under-sampling)
+        \item SMOTE-Tomek (híbrido)
+        \item CS-SVM (sensível a custos)
+      \end{itemize}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Metodologia}
+  \begin{itemize}
+    \item[$\blacktriangleright$] Métricas de desempenho
+      \begin{itemize}
+        \item Acurácia balanceada
+        \item F1-score
+        \item G-mean
+        \item Precisão
+        \item Sensibilidade
+      \end{itemize}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Metodologia}
+  \begin{itemize}
+    \item[$\blacktriangleright$] Experimentos
+      \begin{itemize}
+        \item Validação cruzada estratificada
+        \item Separação dos dados em conjuntos de treinamento e teste
+          \begin{itemize}
+            \item Treinamento: 70\%
+            \item Teste: 30\%
+          \end{itemize}
+        \item Busca em grade para otimização de hiper-parâmetros
+        \item Média de 5 sementes para cada combinação de modelo e estratégia, totalizando 85 experimentos por conjunto de dados.
+      \end{itemize}
+  \end{itemize}
+\end{frame}

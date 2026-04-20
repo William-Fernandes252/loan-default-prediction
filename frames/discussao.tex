@@ -1,0 +1,37 @@
+\begin{frame}{Discussão}
+  \begin{itemize}
+    \item[$\blacktriangleright$] Análise por contexto de crédito
+      \begin{itemize}
+        \item \textbf{Crédito Pessoal}
+          \begin{itemize}
+            \item Técnicas de re-amostragem, especialmente o RUS, apresentaram desempenho superior.
+            \item Random Forest e XGBoost foram os modelos mais eficazes
+          \end{itemize}
+        \item \textbf{Crédito Corporativo}
+          \begin{itemize}
+            \item SMOTE se destacou como a técnica mais eficaz
+            \item Desempenho geral foi baixo, devido ao pequeno número de amostras e à alta dimensionalidade dos dados.
+          \end{itemize}
+      \end{itemize}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Discussão}
+  \begin{itemize}
+    \item[$\blacktriangleright$] Desempenho Custo-sensível vs Re-amostragem
+      \begin{itemize}
+        \item Em geral, as estratégias de re-amostragem (RUS, SMOTE e SMOTE-Tomek) apresentaram desempenho superior em comparação com o CS-SVM.
+        \item O CS-SVM mostrou-se competitivo em alguns casos, mas não conseguiu superar consistentemente as técnicas de re-amostragem.
+      \end{itemize}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Discussão}
+  \begin{itemize}
+    \item[$\blacktriangleright$] \textit{Trade-off} entre Precisão e Sensibilidade
+      \begin{itemize}
+        \item As técnicas de re-amostragem, especialmente o RUS, tendem a melhorar a sensibilidade às classes minoritárias, mas isso pode ocorrer às custas da precisão.
+        \item O CS-SVM apresentou um equilíbrio mais favorável entre precisão e sensibilidade em alguns casos, mas não foi suficiente para superar as técnicas de re-amostragem.
+      \end{itemize}
+  \end{itemize}
+\end{frame}
