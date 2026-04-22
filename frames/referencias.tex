@@ -1,4 +1,4 @@
-\setbeamertemplate{bibliography item}{\insertbiblabel}
+\setbeamertemplate{bibliography item}{}
 \setbeamercolor{bibliography item}{fg=black}
 \setbeamercolor{bibliography entry author}{fg=black}
 \setbeamercolor{bibliography entry title}{fg=black}
@@ -6,6 +6,6 @@
 \setbeamercolor{bibliography entry note}{fg=black}
 
 \begin{frame}[allowframebreaks, plain]{Referências}
-  \bibliographystyle{plain}
+  % \bibliographystyle{plain} is numeric. Removed, since abntex2cite automatically handles it when using alf option.
   \bibliography{bibliografia}
 \end{frame}
