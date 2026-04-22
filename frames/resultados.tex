@@ -4,6 +4,10 @@
     \item[$\blacktriangleright$] Métricas de desempenho
       \begin{itemize}
         \item Lending Club
+          \begin{itemize}
+            \item[$\checkmark$] Melhor combinação: XGBoost + RUS ($66\%$ de acurácia balanceada)
+            \item[$\checkmark$] Todas as técnicas superaram a linha de base
+          \end{itemize}
       \end{itemize}
   \end{itemize}
 
@@ -64,6 +68,10 @@
     \item[$\blacktriangleright$] Métricas de desempenho
       \begin{itemize}
         \item Taiwan Credit
+          \begin{itemize}
+            \item[$\checkmark$] Melhor combinação: XGBoost + RUS ($71\%$ de acurácia balanceada)
+            \item[$\checkmark$] Todas as técnicas superaram a linha de base
+          \end{itemize}
       \end{itemize}
   \end{itemize}
 
@@ -124,6 +132,10 @@
     \item[$\blacktriangleright$] Métricas de desempenho
       \begin{itemize}
         \item Corporate Credit Rating
+          \begin{itemize}
+            \item[$\checkmark$] Melhor combinação: MLP + SMOTE ($83\%$ de acurácia balanceada)
+            \item[$\checkmark$] Modelos de \textit{ensemble} com técnicas de re-amostragem não superaram a linha de base
+          \end{itemize}
       \end{itemize}
   \end{itemize}
 
@@ -182,18 +194,47 @@
   \vspace{-0.4em}
   \centering
   \includegraphics[width=0.92\textwidth,keepaspectratio]{experimentos/reports/pt_BR/lending_club/cs_vs_resampling_plot.png}
+
+  \fontsize{8pt}{11pt}{
+    \begin{itemize}
+      \item[$\checkmark$] Técnicas de re-amostragem superaram CS-SVM em todos os modelos
+      \item[$\checkmark$] Diferença mais acentuada para SVM, mas também presente em Random Forest e MLP
+    \end{itemize}
+  }
 \end{frame}
 
 \begin{frame}{Resultados}
   \vspace{-0.4em}
   \centering
   \includegraphics[width=0.92\textwidth,keepaspectratio]{experimentos/reports/pt_BR/taiwan_credit/cs_vs_resampling_plot.png}
+
+  \fontsize{8pt}{11pt}{
+    \begin{itemize}
+      \item[$\checkmark$] Semelhante ao Lending Club, mas com diferença mais acentuada para SVM
+    \end{itemize}
+  }
 \end{frame}
 
 \begin{frame}{Resultados}
   \vspace{-0.4em}
   \centering
   \includegraphics[width=0.92\textwidth,keepaspectratio]{experimentos/reports/pt_BR/corporate_credit_rating/cs_vs_resampling_plot.png}
+
+  \fontsize{8pt}{11pt}{
+    \begin{itemize}
+      \item[$\checkmark$] CS-SVM superou algumas técnicas, mas não as combinações com MLP
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}{Resultados}
+  \begin{itemize}
+    \item[$\blacktriangleright$] Trade-off entre sensibilidade e especificidade
+      \begin{itemize}
+        \item Em todos os experimentos, técnicas de re-amostragem melhoraram a sensibilidade, em troca de uma redução na precisão
+        \item Modelos passaram a evitar risco, acusando mais falsos positivos (classificando mais clientes como inadimplentes)
+      \end{itemize}
+  \end{itemize}
 \end{frame}
 
 \begin{frame}{Resultados}
