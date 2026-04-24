@@ -98,7 +98,7 @@ Dada a ausência de uma matriz de custos predefinida para os conjuntos de dados,
 
 \section{Métricas de Avaliação}\label{sec:metricas}
 
-Os modelos resultantes dos experimentos foram avaliados por meio das métricas de acurácia balanceada, \textit{G-mean}, sensibilidade (revocação), precisão, \textit{F1-score}. Tais métricas foram escolhidas por serem robustas ao desbalanceamento de classes~\cite{Namvar2018,Wei2025}, permitindo uma avaliação mais fidedigna da capacidade dos classificadores em identificar corretamente a classe de interesse (minoritária).
+A avaliação do desempenho dos modelos baseou-se em métricas robustas ao desbalanceamento de classes, especificamente: acurácia balanceada, G-mean, sensibilidade, especificidade, precisão e F1-score~\cite{Namvar2018}. A sensibilidade e a precisão são particularmente relevantes para o contexto de risco de crédito, pois refletem, respectivamente, a capacidade do modelo de identificar corretamente os inadimplentes e a proporção de previsões positivas que são realmente corretas~\cite{Wei2025}. Dado que o equilíbrio entre ambas é frequentemente afetado por estratégias de tratamento de dados, onde o aumento da sensibilidade pode levar a uma redução na precisão, utilizou-se o F1-score para verificar o equilíbrio entre essas métricas.
 
 \section{Código-fonte dos Experimentos}
 
