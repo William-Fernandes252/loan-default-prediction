@@ -121,54 +121,13 @@ Para lidar com as limitações das técnicas de re-amostragem não heurísticas,
 
 Embora seja altamente eficaz em reduzir o viés de aprendizado causado pelo desbalanceamento sem descartar um número significativo de amostras, atuando diretamente na sobreposição de classes, o \textit{Tomek Links} demonstra algumas dificuldades na prática. Em cenários onde a classe minoritária é extremamente escassa, por exemplo, está técnica é pouco efetiva, pois o número de \textit{links} encontrados é muito baixo para causar um impacto relevante~\cite{Pereira2020}. A dependência da métrica de distância também pode ser problemática, pois eleva consideravelmente o custo computacional do treinamento e, em conjuntos de dados de alta dimensionalidade, a definição de distância torna-se distorcida, o que pode levar a uma identificação imprecisa dos \textit{links}~\cite{Carvalho2025}.
 
-SMOTE é um método de sobre-amostragem que introduz uma abordagem baseada em interpolação para gerar novas instâncias da classe minoritária~\cite{Chawla2002}. Ao invés de criar exemplos totalmente aleatórios, esta técnica cria amostras sintéticas a partir da combinação de instâncias próximas, o que contribui para uma modelagem mais robusta e representativa da classe minoritária, além de melhorar a capacidade de generalização dos modelos preditivos. Inicialmente, o método agrupa as amostras positivas utilizando, por exemplo, o algoritmo \textit{k-Nearest Neighbors} (k-NN). Em seguida, para cada nova amostra a ser gerada, duas instâncias \(x_{1}\) e \(x_{2}\) pertencentes ao mesmo grupo são selecionadas, e a instância sintética é obtida por meio da interpolação \(x = x_{1} + \lambda \bigtimes (x_{1} - x_{2})\), onde \(\lambda\) é um número aleatório no intervalo \([0, 1]\). O pseudocódigo do algoritmo SMOTE é apresentado no Algoritmo~\ref{alg:smote}.
-
-\begin{algorithm}[H]
-  \caption{SMOTE (\textit{Synthetic Minority Over-sampling Technique})}
-  \label{alg:smote}
-  \begin{algorithmic}[1]
-    \Require $T$: conjunto de amostras da classe minoritária; $N$: porcentagem de sobre-amostragem; $k$: número de vizinhos mais próximos
-    \Ensure $S_{syn}$: conjunto de amostras sintéticas geradas
-    \State $S_{syn} \gets \emptyset$
-    \State $N \gets \lfloor N / 100 \rfloor$ \Comment{Define o fator de replicação por amostra}
-    \For{\textbf{cada} $x_i \in T$}
-    \State Compute os $k$ vizinhos mais próximos de $x_i$
-    \For{$j = 1$ \textbf{até} $N$}
-    \State Selecione aleatoriamente um vizinho $\hat{x}_{i}$ dentre os $k$ vizinhos
-    \State $\lambda \gets \text{rand}(0, 1)$ \Comment{Gera um número aleatório entre 0 e 1}
-    \State $x_{new} \gets x_i + \lambda \times (\hat{x}_{i} - x_i)$ \Comment{Interpolação geométrica}
-    \State $S_{syn} \gets S_{syn} \cup \{x_{new}\}$
-    \EndFor
-    \EndFor
-    \State \Return $S_{syn}$
-  \end{algorithmic}
-\end{algorithm}
+SMOTE é um método de sobre-amostragem que introduz uma abordagem baseada em interpolação para gerar novas instâncias da classe minoritária~\cite{Chawla2002}. Ao invés de criar exemplos totalmente aleatórios, esta técnica cria amostras sintéticas a partir da combinação de instâncias próximas, o que contribui para uma modelagem mais robusta e representativa da classe minoritária, além de melhorar a capacidade de generalização dos modelos preditivos. Inicialmente, o método agrupa as amostras positivas utilizando, por exemplo, o algoritmo \textit{k-Nearest Neighbors} (k-NN). Em seguida, para cada nova amostra a ser gerada, duas instâncias \(x_{1}\) e \(x_{2}\) pertencentes ao mesmo grupo são selecionadas, e a instância sintética é obtida por meio da interpolação \(x = x_{1} + \lambda \bigtimes (x_{1} - x_{2})\), onde \(\lambda\) é um número aleatório no intervalo \([0, 1]\).
 
 Apesar de o SMOTE ter se mostrado eficaz na redução do viés de aprendizado causado pelo desbalanceamento e ser amplamente utilizado em diferentes domínios de aplicação, a sua versão original apresenta falhas em alguns cenários de dados, as quais podem comprometer a capacidade de generalização do modelo. A existência de pequenos aglomerados e \textit{outliers}, por exemplo, propicia a criação de instâncias dentro de regiões predominadas pela classe majoritária, efetivamente multiplicando o ruído no espaço amostral~\cite{Fernndez2018}. Algumas adaptações desta técnica foram desenvolvidas para levar em consideração as características específicas do conjunto de dados, como a distribuição das classes e a presença de ruído.
 
 O \textit{Adaptive Synthetic Sampling} (ADASYN) é uma alternativa ao SMOTE para sobre-amostragem. Nessa abordagem, a distribuição das instâncias majoritárias é utilizada para se definir o número ideal de amostras sintéticas a serem geradas para cada amostra da classe minoritária, com o objetivo de reduzir o viés introduzido pelo desbalanceamento e, ao mesmo tempo, otimizar a precisão das decisões~\cite{He2008}. O Borderline-SMOTE é outra adaptação do SMOTE, que se concentra na geração de amostras sintéticas apenas para as instâncias da classe minoritária que estão próximas à fronteira de decisão, ou seja, aquelas que são mais propensas a serem classificadas incorretamente~\cite{Han2005}. Essa abordagem tem como objetivo reforçar a fronteira entre as classes, melhorando a capacidade de generalização do modelo.
 
-Em bases de dados desbalanceadas, é comum que aglomerados da classe minoritária não sejam bem definidos devido a presença de elementos da classe majoritária. O contrário, onde instâncias negativas se encontram isoladas em uma parte do espaço amostral dominada por instâncias negativas, também é frequente na prática, inclusive após o uso de sobre-amostragem. O risco de \textit{over-fitting} aumenta em ambos os casos~\cite{Batista2004}. Para se atingir uma separação mais bem-definida entre as classes, uma combinação de técnicas de sobre-amostragem e sub-amostragem podem ser aplicadas, com a primeira servindo para aumentar a representatividade da classe minoritária, e a segunda para limpar o conjunto de dados, removendo redundâncias e reforçando fronteiras~\cite{Pereira2020}. SMOTE-Tomek e SMOTE-ENN são exemplos de técnicas híbridas, que adicionam uma fase de pós-processamento ao SMOTE, utilizando respectivamente \textit{Tomek links} e \textit{Edited Nearest Neighbor} (ENN). O pseudocódigo do algoritmo SMOTE-Tomek é apresentado no Algoritmo~\ref{alg:smotetomek}.
-
-\begin{algorithm}[H]
-  \caption{SMOTE-TomekLinks (Abordagem Híbrida)}
-  \label{alg:smotetomek}
-  \begin{algorithmic}[1]
-    \Require $D$: conjunto de dados original desbalanceado
-    \Ensure $D_{final}$: conjunto de dados balanceado e limpo
-    \State $D_{smote} \gets \text{SMOTE}(D)$ \Comment{Aplica a sobreamostragem na classe minoritária}
-    \State $T_{links} \gets \emptyset$
-    \For{\textbf{cada} par de amostras $(x_i, x_j) \in D_{smote}$}
-    \If{$x_i$ e $x_j$ pertencem a classes distintas}
-    \If{$x_i$ é o vizinho mais próximo de $x_j$ \textbf{e} $x_j$ é o vizinho mais próximo de $x_i$}
-    \State $T_{links} \gets T_{links} \cup \{x_i, x_j\}$ \Comment{Identifica o Tomek Link}
-    \EndIf
-    \EndIf
-    \EndFor
-    \State $D_{final} \gets D_{smote} \setminus \{x \in T_{links} \mid \text{classe}(x) = \text{Majoritária}\}$ \Comment{Remove as amostras majoritárias do par}
-    \State \Return $D_{final}$
-  \end{algorithmic}
-\end{algorithm}
+Em bases de dados desbalanceadas, é comum que aglomerados da classe minoritária não sejam bem definidos devido a presença de elementos da classe majoritária. O contrário, onde instâncias negativas se encontram isoladas em uma parte do espaço amostral dominada por instâncias negativas, também é frequente na prática, inclusive após o uso de sobre-amostragem. O risco de \textit{over-fitting} aumenta em ambos os casos~\cite{Batista2004}. Para se atingir uma separação mais bem-definida entre as classes, uma combinação de técnicas de sobre-amostragem e sub-amostragem podem ser aplicadas, com a primeira servindo para aumentar a representatividade da classe minoritária, e a segunda para limpar o conjunto de dados, removendo redundâncias e reforçando fronteiras~\cite{Pereira2020}. SMOTE-Tomek e SMOTE-ENN são exemplos de técnicas híbridas, que adicionam uma fase de pós-processamento ao SMOTE, utilizando respectivamente \textit{Tomek links} e \textit{Edited Nearest Neighbor} (ENN).
 
 A eficácia das técnicas heurísticas corrobora a tese de Carvalho, Pinho e Brás~(\citeyear{Carvalho2025}) de que a taxa de desbalanceamento, por si só, não é a principal responsável pela degradação do desempenho preditivo dos classificadores. O impacto real vem de fatores que surgem a partir do desbalanceamento, como a sobreposição de classes, quando instâncias de classes distintas compartilham características muito semelhantes; pequenos disjuntos, quando o conceito de uma classe está fragmentado em grupos pequenos e isolados; e ruído, quando instâncias são rotuladas de forma incorreta ou apresentam valores atípicos. Os autores, portanto, defendem que soluções baseadas em re-amostragem devem adotar perspectivas baseadas nos dados, ou seja, considerar as características específicas do conjunto de dados para a escolha da técnica mais adequada, ao invés de apenas buscar o equilíbrio entre as proporções das classes.
 
@@ -186,32 +145,7 @@ Os algoritmos de aprendizado sensível ao custo podem ser categorizados entre ap
 
 Um outro exemplo de algoritmo de aprendizagem direta é o \textit{Cost-sensitive Support Vector Machine} (CS-SVM). Ele é uma extensão do SVM tradicional, projetado para lidar com cenários onde os custos de erro ou probabilidades das classes são desequilibrados~\cite{Iranmehr2019}. Diferente de abordagens anteriores, como a movimentação de fronteira (BM-SVM) ou penalidades enviesadas (BP-SVM), o CS-SVM funciona através da modificação da própria função de perda (\textit{hinge loss}), que passa a ser derivada de princípios de elicitação de probabilidade, implementando a regra de decisão de Bayes custo-sensível. Com isso, diferente do SVM padrão, que busca uma margem igual para ambas as classes, o CS-SVM impõe uma margem maior para uma classe de preferência. Por exemplo, em casos de maior custo para falsos negativos, o modelo garante uma margem unitária para a classe positiva e uma margem reduzida para a negativa. Além disso, este algoritmo introduz uma regularização de norma \(L_1\) específica para a classe de menor custo, o que ajuda a balancear o número de vetores de suporte, evitando que a classe majoritária domine a definição do hiperplano de decisão, e consequentemente, o desempenho do modelo. Com isso, Iranmehr, Masnadi-Shirazi e Vasconcelos~(\citeyear{Iranmehr2019}) mostraram que o CS-SVM apresenta um desempenho superior, em termos de métricas como AUC, quando comparado a técnicas de re-amostragem como o SMOTE em diversos conjuntos de dados desbalanceados.
 
-Proposto por Domingos (\citeyear{Domingos1999}), o \textit{MetaCost} é um método genérico de meta-aprendizado que permite adicionar um procedimento de minimização de custo a qualquer classificador, independentemente do formato de sua saída. A flexibilidade e a simplicidade de sua implementação fazem com que o algoritmo se destaque entre os demais~\cite{FernndezCs2018, Wang2018}. O processo de treinamento utilizando o \textit{MetaCost} é dividido em duas partes. Primeiro, $m$ subconjuntos são criados a partir do conjunto de dados de treinamento original. Esses conjuntos são utilizados para treinar um classificador-base. Cada classificador gera probabilidades de classe para cada instância, ou apenas o rótulo, quando não suporta probabilidades~\cite{Araf2024}. Em seguida, para cada exemplo original, é calculada a média das predições dos classificadores-base (ou a votação por maioria), que é usada para determinar o custo esperado de classificá-lo em cada classe, multiplicando-se esse resultado pela matriz de custos. O rótulo da instância é modificado para a classe que minimiza o custo. Com o conjunto de treinamento re-rotulado, um classificador final é treinado com os exemplos atualizados. Esse modelo definitivo torna-se sensível a custos e apresenta um desempenho superior em relação aos classificadores treinados com os dados originais~\cite{Chen2021}. O Algoritmo~\ref{alg:metacost} apresenta um pseudocódigo do processo de treinamento utilizando o \textit{MetaCost}.
-
-\begin{algorithm}[H]
-  \caption{MetaCost (Meta-aprendizado Sensível a Custos)}
-  \label{alg:metacost}
-  \begin{algorithmic}[1]
-    \Require $S$: conjunto de treinamento original; $L$: algoritmo de classificação base; $C$: matriz de custos; $m$: número de iterações/reamostragens
-    \Ensure $M_{final}$: classificador final treinado
-    \For{$i = 1$ \textbf{até} $m$}
-    \State $S_i \gets \text{reamostra com reposição de } S$ \Comment{Bootstrap}
-    \State $M_i \gets \text{treinar modelo } L \text{ utilizando } S_i$
-    \EndFor
-    \For{\textbf{cada} $x \in S$}
-    \For{\textbf{cada} classe $j$}
-    \State $P(j \mid x) \gets \text{média das probabilidades de predição dos } m \text{ modelos } M_i(x)$
-    \EndFor
-    \For{\textbf{cada} classe $i$}
-    \State $R(i \mid x) \gets \sum_j P(j \mid x) \times C(i, j)$ \Comment{Calcula o risco/custo esperado}
-    \EndFor
-    \State $y_{novo} \gets \arg\min_i R(i \mid x)$ \Comment{Classe que minimiza o custo}
-    \State Atualiza o rótulo de $x$ em $S$ para $y_{novo}$
-    \EndFor
-    \State $M_{final} \gets \text{treinar modelo } L \text{ utilizando o conjunto } S \text{ rerrotulado}$
-    \State \Return $M_{final}$
-  \end{algorithmic}
-\end{algorithm}
+Proposto por Domingos (\citeyear{Domingos1999}), o \textit{MetaCost} é um método genérico de meta-aprendizado que permite adicionar um procedimento de minimização de custo a qualquer classificador, independentemente do formato de sua saída. A flexibilidade e a simplicidade de sua implementação fazem com que o algoritmo se destaque entre os demais~\cite{FernndezCs2018, Wang2018}. O processo de treinamento utilizando o \textit{MetaCost} é dividido em duas partes. Primeiro, $m$ subconjuntos são criados a partir do conjunto de dados de treinamento original. Esses conjuntos são utilizados para treinar um classificador-base. Cada classificador gera probabilidades de classe para cada instância, ou apenas o rótulo, quando não suporta probabilidades~\cite{Araf2024}. Em seguida, para cada exemplo original, é calculada a média das predições dos classificadores-base (ou a votação por maioria), que é usada para determinar o custo esperado de classificá-lo em cada classe, multiplicando-se esse resultado pela matriz de custos. O rótulo da instância é modificado para a classe que minimiza o custo. Com o conjunto de treinamento re-rotulado, um classificador final é treinado com os exemplos atualizados. Esse modelo definitivo torna-se sensível a custos e apresenta um desempenho superior em relação aos classificadores treinados com os dados originais~\cite{Chen2021}.
 
 \section{Trabalhos Relacionados}
 
